@@ -1,7 +1,4 @@
-# AVEO
 # Aveo Protocol - MVP técnico para Crypto World's Fair
-
-**Status:** proposta de implementação para Bruno e Caio, 29/09/2026. Não há código Aveo no repositório consultado. **Destino:** repositório próprio do Caio, a ser informado por ele; não usar `contursi-labs`. **Prazo interno:** demo pronta até 10/10, revisão em 11/10 e submissão, se autorizada por Bruno, em 12/10. O prazo oficial de inscrição individual e submissão é 12/10/2026, 23h59 PDT (13/10, 03h59 em São Paulo). Este documento não inscreve ninguém nem autoriza publicar dados reais.
 
 ## 1. O que demonstrar
 
