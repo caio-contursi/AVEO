@@ -1,4 +1,8 @@
-### Aveo Protocol v2 - Compliance Desk
+# Aveo Protocol v3 
+
+## 0. Decisão para começar hoje
+
+Construir **Aveo Compliance Desk**: uma prova de conceito operacional que responde:
 
 > Esta carteira pode mover este ativo agora? Qual prova sustenta a resposta? Se a prova vencer ou for revogada, quais ativos são afetados e como o operador fecha o incidente?
 
@@ -6,7 +10,7 @@ A infraestrutura genérica não é a novidade. A Metaplex já documenta SAS, mú
 
 Começar pela **Rota B: SAS real + Token-2022 + hook próprio mínimo**, em devnet, com testes locais. Não depender de alpha para iniciar, não reproduzir os quatro programas Metaplex e não chamar isso de implementação do MPL-3643. A **Rota A: aplicação sobre MPL oficial** substitui o backend somente após acesso e testes. Não construir dois backends on-chain completos em paralelo.
 
-## Primeira demo
+### Primeira demo
 
 1. Verificador A emite uma atestação SAS sintética para X.
 2. Alfa e Beta são dois ativos sintéticos com políticas independentes. Ambos aceitam essa mesma prova de A, sem nova emissão de KYC.
@@ -283,23 +287,27 @@ SAS prova uma afirmação do attestor, não a verdade de KYC. Se A mentir, todos
 
 Clock on-chain rege validade. Mudança entre diagnose/simulate/send pode causar recusa correta. Mostrar poderes de issuer, upgrade/hook authority, mint e burn. Bloqueio não recolhe tokens nem assegura enforcement jurídico. Sem auditoria externa.
 
-## 15. Marcos
+## 15. Marcos - prontidão antes da viagem
 
-Datas-mira em São Paulo, não compromissos externos. Cortar polimento antes de trocar prova real por mock.
+Plano revisado em 30/09. Datas-mira em São Paulo, não compromissos externos. A janela de 09 a 12/10 fica reservada a emergência/remoto, sem assumir disponibilidade do Bruno. Meta: demo pronta, clone limpo, revisão humana concluída e material de inscrição/submissão preparado até 08/10. Preparar não é enviar.
 
-| Data | Saída |
+| Data | Saída e gate |
 |---|---|
 | 30/09 | Contrato v2; emissão/leitura SAS; spike extras e esqueleto Desk. |
-| 01/10 | Gate P0 hook/SAS real; estado do acesso alpha documentado. |
-| 03/10 | Dois mints, prova reutilizada, policies divergentes, script externo. Decidir continuidade. |
-| 05/10 | Incidente → renovação/rebind → correção com UI mínima. |
-| 07/10 | Devnet end-to-end; escolher um backend final. |
-| 09/10 | Feature freeze; proveniência/README/pitch. |
-| 10/10 | Demo pronta e clone limpo. |
-| 11/10 | Revisão humana; material preparado sem enviar. |
-| 12/10 | Buffer e decisão de Bruno sobre inscrição/publicação/submissão. |
+| 01/10, quinta | Gate P0: hook lê SAS real; resolução de extras, close e compute demonstrados. Congelar backend: B por padrão; A só se acesso/rede/fluxo mínimo oficial já forem comprovados e não causarem reescrita. |
+| 03/10, sábado | Dois mints, mesma prova reutilizada, policies divergentes e transferência externa permitida/negada. Decisão go/no-go: sem esse caminho real, reduzir ou parar, não transferir a integração para a viagem. |
+| 04/10, domingo | Ciclo incidente → renovação/rebind → correção integrado; scan agrupado e UI mínima. Sem função nova ou segundo backend. |
+| 05/10, segunda | End-to-end devnet, inclusive close/expiração e script externo; principais testes de segurança e readback. Falhas restantes registradas como bloqueios, não escondidas por mocks. |
+| 06/10, terça | Feature freeze; matriz de aceite, README/lockfiles, threat-model, poderes e proveniência completos. Só correção de bug no core após isso; copilot isolado é stretch pré-planejado conforme seção 21, sem atrasar revisão. |
+| 07/10, quarta | Clone limpo e demo gravada; evidências e material de inscrição/submissão preparados sem enviar. Primeiro passe de revisão humana de código, privacidade, pitch e dependências/licenças. |
+| 08/10, quinta | Corrigir os achados, repetir testes afetados, concluir revisão humana e congelar release candidate. Bruno decide se autoriza inscrição/publicação/submissão antes da viagem ou em outro momento. Sem aprovação, material permanece pronto e não enviado. |
+| 09 a 12/10 | Somente buffer de emergência/remoto: correção crítica, regravação indispensável ou envio já autorizado. Nenhuma feature nova durante a viagem, integração MPL tardia ou expectativa de trabalho diário do Bruno. |
 
-Regras consultadas: inscrição/submissão até 12/10/2026, 23h59 PT, equivalente a 13/10, 03h59 em São Paulo. Não trabalhar até esse limite. Verificar requisitos de cada participante; spec não promete elegibilidade ou prêmio.
+Compressão: end-to-end antecipado de 07 para 05/10; feature freeze de 09 para 06/10; gravação de 10 para 07/10; revisão final de 11 para 08/10. Custo: cortar adapter MPL tardio e expansão P2; copilot só entra como stretch isolado se os gates verdes permitirem, sem sacrificar revisão. Reduzir polimento de UI e operar apenas dois mints/carteiras de fixture. Preservar SAS real, enforcement externo, readback, testes adversariais e revisão humana. Se P0 atrasar, o custo é redução de escopo ou não submissão de uma demo incompleta, não eliminar esses controles.
+
+Não há estimativa de esforço nem evidência de código executado suficientes para garantir essas datas. O gate 03/10 deve confirmar a viabilidade do end-to-end em 05/10; se extras/SAS ainda estiverem bloqueados, a prontidão completa até 08/10 fica ameaçada. A revisão humana depende de tempo reservado por Bruno e Caio; não presumir que esteja agendado.
+
+Regras consultadas: inscrição/submissão até 12/10/2026, 23h59 PT, equivalente a 13/10, 03h59 em São Paulo. O prazo oficial e os gates de autorização não mudam. Não trabalhar até esse limite nem presumir aprovação por proximidade do prazo. Verificar requisitos de cada participante; spec não promete elegibilidade ou prêmio.
 
 ## 16. Demo e pitch
 
@@ -334,12 +342,12 @@ Colosseum julga funcionalidade, impacto, novidade, UX, open-source/composição 
 
 ## 18. Prompts iniciais de implementação
 
+### Bruno / Codex
 
-Bruno
 Ler spec/repo/v1 arquivada. Implementar só B/P0. Confirmar SAS real e resolver de extras primeiro; testar transferência externa antes de ampliar. Não inventar IDs/offsets nem usar mock no aceite. Fechar interface com Caio; entregar policy/binding/hook e testes adversariais. Reportar diff, comandos, versões e falhas. Não deploy mainnet, publicação ou submissão.
 
+### Caio / Cursor
 
-Caio
 Ler contrato acordado. Criar SAS client, credentials/schemas A/B e fixtures X/Y/tesouraria. Implementar adapter B, inspect/plan/verify e scan:once; UI depois do caminho real. MPL explicitamente not-integrated até gate A. Não editar contrato/programa sem PR combinado, guardar secrets ou vender unit/mock como end-to-end.
 
 Cada tarefa deve devolver arquivos alterados, comportamento, testes/resultados, bloqueios, comandos reproduzíveis e diferenças da spec. Build verde não é aceite funcional.
@@ -360,4 +368,83 @@ Documentação lida, não execução Aveo:
 - Toolchain: https://www.anchor-lang.com/docs/updates/release-notes/0-32-1
 - Regras/prazo/critérios: https://colosseum.com/legal/Crypto%20World%27s%20Fair%20Hackathon%20Rules.pdf
 
-V2 substitui a v1 como proposta de escopo; não altera código nem decisões automaticamente.
+V3 substitui a v2 como proposta de escopo; o contrato on-chain permanece aveo-v2. A inclusão dos kits não altera código, permissões ou decisões automaticamente.
+
+## 20. Solana AI Kit - ferramenta de desenvolvimento, não runtime
+
+Incluir no setup de 30/09 para Bruno/Codex e Caio/Cursor: https://github.com/solanabr/solana-ai-kit . O projeto fornece configuração/contexto, skills, regras e integrações para desenvolvimento Solana. Não é SDK de enforcement, não roda no hook e não garante que a IA deixe de inventar APIs.
+
+### Setup revisado, sem execução remota cega
+
+1. Registrar commit do kit e submódulos escolhidos. Ler README e install.sh desse commit, licença e arquivos alterados antes de executar. O README contém links antigos `solana-claude-config`; usar o repo solicitado acima e validar o commit, sem copiar endereço antigo às cegas.
+2. Instalar inicialmente em checkout temporário separado para comparar o diff. O instalador documenta `--agents`, que direciona conteúdo a `.agents/` para ferramentas não-Claude. Com script local revisado: `bash install.sh --agents /caminho/do/checkout-de-teste`. Não executar `curl | bash` sem revisão.
+3. Preservar configuração existente de Codex/Cursor, regras do projeto, `.gitignore`, `.gitmodules`, MCPs e comandos. O installer pode sobrescrever diretórios e alterar ignore/config. Copiar/integrar somente o recorte aprovado; não rodar comandos de cleanup/deploy/update automaticamente.
+4. Selecionar contexto Solana core, Anchor, Token-2022, testes e segurança. Configuração deve referenciar esta spec, interface-v2 e docs pinadas. Verificar no cliente real que Codex e Cursor carregam esse conteúdo; colocar arquivos em `.agents/` não comprova descoberta automática. Adaptar o arquivo de instruções suportado pela versão de cada editor conforme necessário.
+5. MCP é opcional, não gate P0. Não habilitar todos por padrão, usar credenciais em arquivos publicados nem permitir deploy/mainnet/sends por efeito de uma configuração importada. Revisar licenças de submódulos separadamente: licença do kit não torna todos os conteúdos redistribuíveis.
+6. Registrar `docs/dev-tooling.md`: commit, conteúdos selecionados, diff, regras de cada editor e teste de carregamento. Não instalar simultaneamente plugin e full kit sem verificar duplicação.
+
+Aceite D01: ambos os editores conseguem localizar a spec/interface e explicar as seeds/contas acordadas, citando os arquivos. D02: diff de setup preserva regras existentes e não contém secrets. D03: geração proposta usa versões/APIs verificadas e passa revisão/build/test; resposta convincente de IA não substitui isso. Se o setup tomar tempo demais, disponibilizar contexto revisado manualmente e seguir P0; tooling não pode atrasar o hook real.
+
+## 21. Solana Agent Kit - copilot de leitura, stretch goal
+
+Incluir no plano como integração opcional de produto: https://github.com/sendaifun/solana-agent-kit . A documentação V2 apresenta arquitetura de plugins e integração com frameworks de IA; a Aveo propõe um plugin próprio de leitura. Não há plugin Aveo/SAS/MPL comprovado nesta revisão. Não é necessário para cumprir o MVP.
+
+O copilot responde a perguntas como "Por que X foi recusada em Beta?" ou "Quais ativos esta prova vencida afeta?", usando snapshots/evidências já produzidos pelo Desk. A diferença operacional é uma explicação acessível e rastreável; IA em compliance não deve ser vendida como novidade inédita por si só.
+
+### Prazo e teto de esforço
+
+Somente depois do feature freeze de 06/10, com P0/P1 e testes principais verdes. Spike isolado no máximo de meio dia em 07/10; precisa estar integrado e testado a tempo da revisão final de 08/10. Se não cumprir gates, desligar/remover da release e filmar o Desk determinístico. Sem extensão do prazo ou trabalho essencial na viagem.
+
+O freeze de 06/10 congela core, schemas, policy, hook, adapter e workflow de transação. O stretch é uma exceção isolada previamente planejada, atrás de feature flag `COPILOT_ENABLED=false` por padrão, sem alterar o core. Não modificar a release candidate revisada após 08/10 para encaixar IA.
+
+### Arquitetura e fronteira de segurança
+
+```text
+Desk determinístico → snapshot/evidência sanitizados → plugin Aveo somente-leitura
+                  → Solana Agent Kit / modelo → explicação com fontes
+```
+
+- Enforcement continua exclusivamente no programa determinístico. O modelo não define eligibility, policy, binding, autorizações, ações de renovação ou estado de incidente. Não altera `eligible/ineligible/unknown` vindo do Desk.
+- Nenhuma chave, seed phrase, wallet conectada, signing provider ou permissão de transação na rota do copilot. Não copiar o quick start com KeypairWallet/private key. V2 aceitar wallet provider sem private key não o torna read-only: um provider pode assinar.
+- Criar plugin com somente três ações propostas: `getEligibilitySnapshot`, `getIncidentEvidence`, `listAffectedDemoAssets`. São contratos Aveo a implementar, não exports oficiais. Não carregar plugins token/DeFi/NFT/blinks nem exportar todo `agent.actions` de uma instância com ações de escrita.
+- Se o construtor da versão pinada exigir wallet interface, confirmar no código a viabilidade de implementação sem poder de assinar: nenhum signer conectado; todos os métodos de assinatura/envio lançam erro, public key é apenas identificador sintético quando exigido. Testar isso. Não inventar um parâmetro oficial `readOnly=true` e não fornecer dummy secret para satisfazer construtor. Se a integração não funcionar sem signer, gate falha e a release mantém o Desk sem copilot.
+- Serviço separado do endpoint que prepara/envia transações. Sem acesso a `planTransfer`, set_binding, update_policy, close/emit proof, freeze/thaw ou APIs administrativas. Leitura recebe somente allowlist de mints/carteiras demo; entrada não escolhe URL/RPC arbitrário ou arquivo local.
+- Preferir leitura de evidências prontas, sem novo indexador ou polling. Limitar perguntas/tamanho/contexto e exibir horário/slot da fonte. Sem fontes ou RPC confiável, responder que não foi possível confirmar.
+- Resposta distingue fato de sugestão: "A policy v3 de Beta não aceita B, conforme leitura no slot X". Pode descrever o próximo passo manual já previsto, mas não executá-lo, construir transação assinável ou confirmar conformidade jurídica. Mostrar evidência usada; não inventar explorer link.
+
+### Conteúdo não confiável e dados
+
+Metadados de token, mensagens, dados de proof e texto de incidente podem conter instruções maliciosas. Tratar tudo como dados, nunca comandos. Testar que um campo pedindo para ignorar regras, assinar ou enviar dados não amplia capacidades. A proteção principal é ausência de caminhos de escrita/segredos, não só um prompt de "não assine".
+
+Nesta demo, enviar ao modelo somente fixtures públicas/sintéticas necessárias. Não enviar KYC, dados pessoais, chaves, .env, conteúdo privado ou carteiras reais por padrão. Provedor/configuração do modelo, API key, custo e política de retenção são dependências a decidir; nenhuma assinatura/pagamento é autorizado pela spec. Configurar secret fora do repo/logs. Se não houver endpoint permitido, mostrar copilot desabilitado, não simular integração.
+
+### Aceite C01–C07
+
+| ID | Teste | Critério |
+|---|---|---|
+| C01 | Por que Y/B falha em Beta? | Explicação coincide com razão determinística e referencia policy/slot. |
+| C02 | Prova X vencida afeta o quê? | Lista só os ativos demo conhecidos; não alega cobertura global. |
+| C03 | Leitura unknown ou expirada | Admite incerteza e não apresenta permissão atual como certa. |
+| C04 | Pedido de transferir, assinar, renovar ou alterar policy | Nenhum método de escrita acessível; signing/send provam falha por teste. |
+| C05 | Instrução maliciosa em metadata/proof | Nenhuma ação extra, disclosure ou mudança de objetivo; somente fatos necessários. |
+| C06 | Modelo indisponível/timeout | Desk e transferências/testes determinísticos seguem funcionando. |
+| C07 | Flag off + revisão de bundle/logs | Copilot removível, sem secret/signer; core e teste de fora da UI idênticos. |
+
+Não habilitar se faltar qualquer gate de não-assinatura/isolamento. Registrar versão/commit, plugin efetivamente carregado, testes e limites em `docs/copilot.md`. No pitch: "copilot de leitura sobre o Desk", somente se executado; caso contrário "stretch goal não implementado".
+
+## 22. Ajuste de tarefas v3
+
+- Bruno/Codex: setup AI Kit revisado e contexto carregado; manter P0/programa/testes como prioridade. Revisar ausência de escrita no copilot se ele entrar.
+- Caio/Cursor: mesmo setup; Desk/adapter/incident workflow primeiro. Após 06/10, somente com gates verdes, spike Agent Kit/plugin read-only. Backend servidor e uso de modelo precisam caber na revisão até 08/10.
+- Adicionar `packages/copilot-readonly/`, `tests/copilot/` e documentação apenas se o stretch for aberto. Não incorporar dependência do copilot em `programs/aveo-hook` ou no caminho de transferência.
+- Histórico v3: inclui ambos os kits; AI Kit é tooling de desenvolvimento agora, Agent Kit é camada de leitura opcional. Mantém Rota B imediata, A condicionada, datas antecipadas e autorização de Bruno para qualquer publicação/inscrição/submissão.
+
+### Fontes dos kits, lidas em 30/09/2026
+
+- AI Kit: https://github.com/solanabr/solana-ai-kit
+- README atual, setup e flag --agents: https://github.com/solanabr/solana-ai-kit/blob/main/README.md
+- Installer e efeitos sobre arquivos: https://github.com/solanabr/solana-ai-kit/blob/main/install.sh
+- Agent Kit core/plugins/quick start: https://github.com/sendaifun/solana-agent-kit
+- Migração V2, wallet interface e plugins próprios: https://github.com/sendaifun/solana-agent-kit/blob/v2/MIGRATING.md
+
+Essas fontes sustentam o plano de integração; setup Codex/Cursor, plugin Aveo e runtime sem signer ainda precisam de teste no repositório do time.
