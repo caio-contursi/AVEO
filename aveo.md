@@ -334,12 +334,12 @@ Colosseum julga funcionalidade, impacto, novidade, UX, open-source/composição 
 
 ## 18. Prompts iniciais de implementação
 
-### Bruno / Codex
 
+Bruno
 Ler spec/repo/v1 arquivada. Implementar só B/P0. Confirmar SAS real e resolver de extras primeiro; testar transferência externa antes de ampliar. Não inventar IDs/offsets nem usar mock no aceite. Fechar interface com Caio; entregar policy/binding/hook e testes adversariais. Reportar diff, comandos, versões e falhas. Não deploy mainnet, publicação ou submissão.
 
-### Caio / Cursor
 
+Caio
 Ler contrato acordado. Criar SAS client, credentials/schemas A/B e fixtures X/Y/tesouraria. Implementar adapter B, inspect/plan/verify e scan:once; UI depois do caminho real. MPL explicitamente not-integrated até gate A. Não editar contrato/programa sem PR combinado, guardar secrets ou vender unit/mock como end-to-end.
 
 Cada tarefa deve devolver arquivos alterados, comportamento, testes/resultados, bloqueios, comandos reproduzíveis e diferenças da spec. Build verde não é aceite funcional.
