@@ -11,7 +11,7 @@ Contrato entre equipes: [`docs/interface-v2.md`](docs/interface-v2.md).
 
 | Parte | Estado |
 |---|---|
-| `programs/aveo-hook` | Compila. `init_policy` e `update_policy` implementados; `execute` **recusa toda transferência** até o gate P0 |
+| `programs/aveo-hook` | `init_policy`, `update_policy`, `init_extra_metas`, `set_binding` e `execute` (SAS real, extra metas, fail-closed). Aceite P0 ainda exige transferência on-chain |
 | `packages/contracts` | Tipos e erros compartilhados (TypeScript) |
 | `packages/backend-mpl` | Esqueleto que responde `BackendNotIntegrated` |
 | `packages/sas-client`, `packages/backend-aveo`, `app`, `scripts`, `tests` | Vazios |
