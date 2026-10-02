@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+# chaves e manifests gerados pelos scripts de desenvolvimento (nunca versionar)
+.dev/
