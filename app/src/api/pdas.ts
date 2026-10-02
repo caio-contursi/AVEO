@@ -1,4 +1,5 @@
 // Endereços derivados (PDAs) do aveo-hook e do SAS, com as mesmas seeds do programa.
+import { sasNameSeed } from '@aveo/sas-client'
 import { getAddressEncoder, getProgramDerivedAddress, type Address, type ReadonlyUint8Array } from '@solana/kit'
 import { SAS_PROGRAM_ID, SEEDS } from './constants'
 
@@ -22,12 +23,12 @@ export const findBindingPda = (programId: Address, mint: Address, wallet: Addres
 export const findExtraAccountMetasPda = (programId: Address, mint: Address) =>
   pda(programId, [SEEDS.extraAccountMetas, encodeAddress(mint)])
 
-/** Igual a SasCredential::derive_address no hook: seeds com o nome inteiro. */
+/** Igual a SasCredential::derive_address: só os 32 primeiros bytes do nome, como o sas-lib. */
 export const findSasCredentialPda = (authority: Address, name: ReadonlyUint8Array) =>
-  pda(SAS_PROGRAM_ID, [SEEDS.sasCredential, encodeAddress(authority), name])
+  pda(SAS_PROGRAM_ID, [SEEDS.sasCredential, encodeAddress(authority), sasNameSeed(name)])
 
 export const findSasSchemaPda = (credential: Address, name: ReadonlyUint8Array, version: number) =>
-  pda(SAS_PROGRAM_ID, [SEEDS.sasSchema, encodeAddress(credential), name, new Uint8Array([version])])
+  pda(SAS_PROGRAM_ID, [SEEDS.sasSchema, encodeAddress(credential), sasNameSeed(name), new Uint8Array([version])])
 
 export const findSasAttestationPda = (credential: Address, schema: Address, nonce: Address) =>
   pda(SAS_PROGRAM_ID, [SEEDS.sasAttestation, encodeAddress(credential), encodeAddress(schema), encodeAddress(nonce)])

@@ -13,7 +13,9 @@ pub mod state;
 pub mod token_accounts;
 
 use crate::constants::*;
-use crate::eligibility::{load_binding, load_policy, require_live_eligibility};
+use crate::eligibility::{
+    load_binding, load_policy, require_live_eligibility, require_presented_proof,
+};
 use crate::errors::AveoError;
 use crate::extra_metas::{extra_account_meta_list_size, init_extra_account_meta_list};
 use crate::state::{EligibilityBinding, IssuerPolicy, PolicyArgs};
@@ -104,7 +106,11 @@ pub mod aveo_hook {
         );
 
         let subject = ctx.accounts.subject_wallet.key();
-        require_live_eligibility(
+        // Pair acceptance and required facts are enforced by `execute`, not here.
+        // Otherwise a wallet the policy rejects can never create the binding PDA,
+        // and a transfer outside the UI fails in the Token-2022 client
+        // (missing extra account) instead of ProviderPairNotAllowed / RequiredFactMissing.
+        require_presented_proof(
             policy,
             &subject,
             &ctx.accounts.credential.to_account_info(),
@@ -218,7 +224,7 @@ pub struct UpdatePolicy<'info> {
         mut,
         seeds = [POLICY_SEED, policy.mint.as_ref()],
         bump = policy.bump,
-        has_one = issuer_authority @ AveoError::PolicyMissingOrInactive,
+        has_one = issuer_authority @ AveoError::UnauthorizedIssuer,
     )]
     pub policy: Account<'info, IssuerPolicy>,
     /// CHECK: compared against policy.issuer_authority via has_one
@@ -234,7 +240,7 @@ pub struct InitExtraMetas<'info> {
     #[account(
         seeds = [POLICY_SEED, mint.key().as_ref()],
         bump = policy.bump,
-        has_one = issuer_authority @ AveoError::PolicyMissingOrInactive,
+        has_one = issuer_authority @ AveoError::UnauthorizedIssuer,
     )]
     pub policy: Account<'info, IssuerPolicy>,
     /// CHECK: compared against policy.issuer_authority via has_one

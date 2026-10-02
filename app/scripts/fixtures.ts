@@ -213,7 +213,9 @@ async function main() {
   }
   log('Contas de token criadas, 1000 de cada ativo na tesouraria, mint authority removida')
 
-  // Bindings: cada carteira assina o vínculo da própria prova
+  // Bindings: cada carteira assina o vínculo da própria prova em cada ativo.
+  // O set_binding aceita a prova mesmo quando a policy recusa o par ou um fato;
+  // o execute é quem devolve 6005 / 6012 numa transferência fora da UI.
   const verifierOf = new Map(proofs.map((p) => [p.subject.address, p.verifier]))
   const bind = async (holder: KeyPairSigner, asset: (typeof assets)[number]) => {
     const verifier = verifierOf.get(holder.address)!

@@ -7,6 +7,14 @@
   },
   "scripts": {
     "build:program": "cargo build-sbf --tools-version v1.53 && anchor idl build -o target/idl/aveo_hook.json",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
+    "fixtures": "pnpm --filter @aveo/app fixtures",
+    "scenario": "pnpm --filter @aveo/app scenario",
+    "scan:once": "pnpm --filter @aveo/app scan:once",
+    "dev": "pnpm --filter @aveo/app dev"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

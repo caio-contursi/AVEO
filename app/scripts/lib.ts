@@ -1,5 +1,4 @@
-// Utilitários dos scripts de desenvolvimento (somente localnet). Substituem, para testar o front,
-// os scripts de bootstrap e cenário que o plano do time prevê em scripts/ (F2) e que ainda não existem.
+// Utilitários dos scripts de desenvolvimento (somente localnet): fixtures, scenario e scan:once.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

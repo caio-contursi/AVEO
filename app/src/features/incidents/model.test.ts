@@ -44,6 +44,20 @@ describe('scan:once', () => {
     expect(findings).toEqual([])
   })
 
+  it('prova que a política nunca aceitou não abre incidente', () => {
+    const { findings } = findIncidents(
+      [snap(BETA, 'wallet-y', 'ineligible', 'ProviderPairNotAllowed', 'proof-y'), snap(BETA, 'wallet-z', 'ineligible', 'RequiredFactMissing', 'proof-z')],
+      {},
+    )
+    expect(findings).toEqual([])
+  })
+
+  it('par removido depois de elegível abre PROVIDER_REMOVED', () => {
+    const watched = { [`${ALFA}:${X}`]: PROOF }
+    const { findings } = findIncidents([snap(ALFA, X, 'ineligible', 'ProviderPairNotAllowed', PROOF)], watched)
+    expect(findings).toMatchObject([{ type: 'PROVIDER_REMOVED', proof: PROOF }])
+  })
+
   it('leitura desconhecida só abre READ_UNVERIFIABLE para vínculo já visto', () => {
     expect(findIncidents([snap(ALFA, X, 'unknown', 'ReadUnverifiable')], {}).findings).toEqual([])
     const watched = findIncidents([snap(ALFA, X, 'eligible', undefined, PROOF)], {}).watched

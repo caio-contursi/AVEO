@@ -250,10 +250,19 @@ describe('contas SAS codificadas pelo sas-lib', () => {
 })
 
 describe('PDAs do SAS', () => {
-  it('coincidem com o sas-lib para nomes de até 32 bytes', async () => {
+  it('coincidem com o sas-lib, inclusive no prefixo de 32 bytes', async () => {
     const name = 'aveo-verificador-a'
     const [credential] = await deriveCredentialPda({ authority: addr(1), name })
     expect(await findSasCredentialPda(addr(1), new TextEncoder().encode(name))).toBe(credential)
+
+    // sas-lib 1.0.10 documenta o prefixo de 32 bytes, mas rejeita a string inteira.
+    // O hook e o Desk cortam; o endereço tem de bater com o sas-lib chamado no prefixo.
+    const longName = 'verifier-name-that-is-definitely-longer-than-32-bytes'
+    const prefix = longName.slice(0, 32)
+    const [longCredential] = await deriveCredentialPda({ authority: addr(1), name: prefix })
+    expect(await findSasCredentialPda(addr(1), new TextEncoder().encode(longName))).toBe(longCredential)
+    const [longSchema] = await deriveSchemaPda({ credential: longCredential, name: prefix, version: 1 })
+    expect(await findSasSchemaPda(longCredential, new TextEncoder().encode(longName), 1)).toBe(longSchema)
 
     const [schema] = await deriveSchemaPda({ credential, name: 'aveo-eligibility-v2', version: 1 })
     expect(await findSasSchemaPda(credential, new TextEncoder().encode('aveo-eligibility-v2'), 1)).toBe(schema)
@@ -264,11 +273,12 @@ describe('PDAs do SAS', () => {
 })
 
 describe('erros on-chain', () => {
-  it('seguem a ordem estável 6000–6014 do contrato', () => {
+  it('seguem a ordem estável 6000–6015 do contrato', () => {
     expect(onchainErrorFromCode(6000)).toBe('NotTransferContext')
     expect(onchainErrorFromCode(6003)).toBe('BindingMissing')
     expect(onchainErrorFromCode(6013)).toBe('AttestationExpired')
     expect(onchainErrorFromCode(6014)).toBe('MissingExtraAccounts')
-    expect(onchainErrorFromCode(6015)).toBeUndefined()
+    expect(onchainErrorFromCode(6015)).toBe('UnauthorizedIssuer')
+    expect(onchainErrorFromCode(6016)).toBeUndefined()
   })
 })

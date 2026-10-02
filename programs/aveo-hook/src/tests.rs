@@ -4,7 +4,7 @@ use crate::extra_metas::{
     extra_account_meta_list_size, extra_account_metas, init_extra_account_meta_list,
 };
 use crate::payload::EligibilityPayload;
-use crate::sas::{SasAttestation, SasCredential, SasSchema};
+use crate::sas::{sas_name_seed, SasAttestation, SasCredential, SasSchema};
 use crate::state::{EligibilityBinding, IssuerPolicy, ProviderPair};
 use anchor_lang::prelude::*;
 use anchor_lang::{AccountDeserialize, AccountSerialize, Discriminator};
@@ -21,7 +21,7 @@ fn encode_vec_u8(bytes: &[u8]) -> Vec<u8> {
 }
 
 #[test]
-fn error_codes_are_stable_6000_through_6014() {
+fn error_codes_are_stable_6000_through_6014_and_append_6015() {
     let names = [
         "NotTransferContext",
         "PolicyMissingOrInactive",
@@ -38,10 +38,12 @@ fn error_codes_are_stable_6000_through_6014() {
         "RequiredFactMissing",
         "AttestationExpired",
         "MissingExtraAccounts",
+        "UnauthorizedIssuer",
     ];
-    assert_eq!(names.len(), 15);
+    assert_eq!(names.len(), 16);
     assert_eq!(AveoError::NotTransferContext as u32, 0);
     assert_eq!(AveoError::MissingExtraAccounts as u32, 14);
+    assert_eq!(AveoError::UnauthorizedIssuer as u32, 15);
 }
 
 #[test]
@@ -225,6 +227,55 @@ fn sas_parsers_follow_official_layouts() {
                 cred_pda.as_ref(),
                 schema_pda.as_ref(),
                 nonce.as_ref()
+            ],
+            &SAS_PROGRAM_ID
+        )
+        .0
+    );
+}
+
+#[test]
+fn sas_name_seed_uses_the_first_32_bytes_like_sas_lib() {
+    let short = b"verifier-a";
+    assert_eq!(sas_name_seed(short), short);
+
+    let long = b"verifier-name-that-is-definitely-longer-than-32-bytes";
+    assert!(long.len() > 32);
+    assert_eq!(sas_name_seed(long), &long[..32]);
+
+    let authority = test_pubkey(1);
+    let mut cred = vec![SAS_CREDENTIAL_DISCRIMINATOR];
+    cred.extend_from_slice(authority.as_ref());
+    cred.extend(encode_vec_u8(long));
+    cred.extend_from_slice(&0u32.to_le_bytes());
+    let credential = SasCredential::try_from_bytes(&cred).unwrap();
+    assert_eq!(credential.name, long);
+    assert_eq!(
+        credential.derive_address(),
+        Pubkey::find_program_address(
+            &[SAS_CREDENTIAL_SEED, authority.as_ref(), &long[..32]],
+            &SAS_PROGRAM_ID
+        )
+        .0
+    );
+
+    let mut schema_bytes = vec![SAS_SCHEMA_DISCRIMINATOR];
+    schema_bytes.extend_from_slice(credential.derive_address().as_ref());
+    schema_bytes.extend(encode_vec_u8(long));
+    schema_bytes.extend(encode_vec_u8(b"demo"));
+    schema_bytes.extend(encode_vec_u8(&AVEO_ELIGIBILITY_V2_LAYOUT));
+    schema_bytes.extend(encode_vec_u8(&[]));
+    schema_bytes.push(0);
+    schema_bytes.push(1);
+    let schema = SasSchema::try_from_bytes(&schema_bytes).unwrap();
+    assert_eq!(
+        schema.derive_address(),
+        Pubkey::find_program_address(
+            &[
+                SAS_SCHEMA_SEED,
+                schema.credential.as_ref(),
+                &long[..32],
+                &[schema.version],
             ],
             &SAS_PROGRAM_ID
         )

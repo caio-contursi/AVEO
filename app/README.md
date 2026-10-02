@@ -165,7 +165,7 @@ A camada `src/api` implementa o contrato `EligibilityBackend` / `RenewBindingCap
 
 ## Limites e mocks
 
-- **Histórico de incidentes (MOCK).** Fica no `localStorage` deste navegador (`src/features/incidents/store.ts`), no lugar do SQLite do `backend-aveo`, que ainda não existe. A tela mostra o selo "MOCK".
-- **inspect/plan/verify rodam no navegador**, sobre a rede real, porque `packages/backend-aveo` está vazio.
+- **Histórico de incidentes no navegador.** A tela guarda o ciclo no `localStorage` deste navegador (`src/features/incidents/store.ts`). O comando `pnpm scan:once` grava o mesmo tipo de histórico em SQLite (`app/.dev/incidents.sqlite`, via `packages/backend-aveo`). Nenhum dos dois autoriza transferência.
+- **inspect/plan/verify rodam no navegador**, sobre a rede real. A regra de quais mints entram numa renovação e o que vira incidente está em `packages/backend-aveo`. A criação de provas SAS usa o `sas-lib`, com o corte de nome de 32 bytes em `packages/sas-client`.
 - **Fixtures e scenario** são só para localnet, com carteiras sintéticas. As chaves nunca vão para o build.
 - Rede local não tem explorador: a evidência mostra a assinatura sem link.

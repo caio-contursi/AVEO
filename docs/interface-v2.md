@@ -64,7 +64,7 @@ Tamanho da conta = `8 + EligibilityBinding::INIT_SPACE` (170).
 | `init_policy` | mint authority atual | cria IssuerPolicy; issuer_authority = signer; `sas_program_id` = SAS oficial |
 | `update_policy` | issuer_authority | altera pares/requisitos/active; incrementa policy_version; não muda SAS ID |
 | `init_extra_metas` | issuer_authority | cria ExtraAccountMetaList oficial |
-| `set_binding` | subject_wallet | cria/atualiza binding após validar SAS; não grava `eligible=true` |
+| `set_binding` | subject_wallet | cria/atualiza binding após validar SAS, titular, domínio e validade; não exige par aceito nem fatos da policy (isso é o `execute`); não grava `eligible=true` |
 | `execute` | (Token-2022, via CPI; discriminator SPL Execute) | valida origem e destino; somente leitura |
 
 `PolicyArgs`: `proof_domain`, `pairs`, `require_kyc`, `require_accredited`, `active`. Sem `sas_program_id`.
@@ -115,7 +115,10 @@ Validade = `Attestation.expiry` (expiry 0 é recusado).
 6012 RequiredFactMissing
 6013 AttestationExpired
 6014 MissingExtraAccounts
+6015 UnauthorizedIssuer
 ```
+
+`6000`–`6014` não são reordenados. `6015` é só para `update_policy` e `init_extra_metas` quando o signer não é o `issuer_authority` gravado.
 
 ## 7. Erros do Desk
 

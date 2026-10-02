@@ -106,7 +106,11 @@ impl SasCredential {
 
     pub fn derive_address(&self) -> Pubkey {
         Pubkey::find_program_address(
-            &[SAS_CREDENTIAL_SEED, self.authority.as_ref(), self.name.as_ref()],
+            &[
+                SAS_CREDENTIAL_SEED,
+                self.authority.as_ref(),
+                sas_name_seed(&self.name),
+            ],
             &SAS_PROGRAM_ID,
         )
         .0
@@ -157,7 +161,7 @@ impl SasSchema {
             &[
                 SAS_SCHEMA_SEED,
                 self.credential.as_ref(),
-                self.name.as_ref(),
+                sas_name_seed(&self.name),
                 &[self.version],
             ],
             &SAS_PROGRAM_ID,
@@ -221,6 +225,15 @@ impl SasAttestation {
     pub fn payload(&self) -> Result<EligibilityPayload> {
         EligibilityPayload::decode(&self.data)
     }
+}
+
+/// SAS PDA seeds cannot exceed 32 bytes. sas-lib 1.0.10 documents that only the
+/// first 32 bytes of a credential or schema name are used (`dist/src/pdas.js`).
+/// Passing the full name makes `find_program_address` fail, so a valid proof
+/// would be rejected. Truncate here; sas-lib itself still requires the prefix.
+pub fn sas_name_seed(name: &[u8]) -> &[u8] {
+    let end = name.len().min(32);
+    &name[..end]
 }
 
 /// Validate SAS accounts against the official owner/PDA/layout rules and the

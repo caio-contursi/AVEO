@@ -53,7 +53,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const queryClient = useQueryClient()
   const { patch } = useIncidentStore()
   const { loading, candidates, clockUnix } = useCandidates(incident)
-  const [plans, setPlans] = useState<{ mint: string; plan: DeskPlan }[]>([])
+  const [plans, setPlans] = useState<{ key: string; title: string; plan: DeskPlan }[]>([])
   const [busy, setBusy] = useState<'prepare' | 'sign' | 'verify'>()
   const [actionError, setActionError] = useState<unknown>()
 
@@ -72,14 +72,28 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     setBusy('prepare')
     setActionError(undefined)
     try {
+      const groups = new Map<string, { proof: ProofRow; mints: string[] }>()
+      for (const item of rebindable) {
+        const existing = groups.get(item.proof.address)
+        if (existing) existing.mints.push(item.mint)
+        else groups.set(item.proof.address, { proof: item.proof, mints: [item.mint] })
+      }
       const built = await Promise.all(
-        rebindable.map(async ({ mint, proof }) => ({
-          mint,
-          plan: await backend.planRenewBinding({ cluster: ctx.cluster, mint, wallet: incident.wallet, attestation: proof.address }),
+        [...groups.values()].map(async ({ proof, mints }) => ({
+          key: proof.address,
+          title: mints.map((mint) => labelFor(deployment, mint)).join(' + '),
+          plan: await backend.planRenewBinding({
+            cluster: ctx.cluster,
+            mint: mints[0]!,
+            mints,
+            wallet: incident.wallet,
+            attestation: proof.address,
+          }),
         })),
       )
       setPlans(built)
-      patch(incident.id, (i) => markPrepared(i, built.length, now()))
+      const assetCount = [...groups.values()].reduce((count, group) => count + group.mints.length, 0)
+      patch(incident.id, (i) => markPrepared(i, assetCount, now()))
     } catch (error) {
       setActionError(error)
     } finally {
@@ -87,7 +101,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     }
   }
 
-  // Um set_binding por ativo: o contrato de renovação é por mint.
+  // Uma transação por prova: Alfa e Beta com a mesma atestação assinam juntos.
   const sign = async () => {
     if (!connected || !isSigner) return
     setBusy('sign')
@@ -193,8 +207,8 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
 
           {plans.length > 0 && (
             <div className="box">
-              {plans.map(({ mint, plan }) => (
-                <SimulationSummary key={mint} plan={plan} title={labelFor(deployment, mint)} />
+              {plans.map(({ key, title, plan }) => (
+                <SimulationSummary key={key} plan={plan} title={title} />
               ))}
               <div className="actions">
                 <button type="button" className="primary" disabled={signable.length === 0 || !isSigner || busy !== undefined} onClick={() => void sign()}>
