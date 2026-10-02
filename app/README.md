@@ -37,6 +37,8 @@ Interface em português e inglês (seletor no topo). Todas as telas têm estados
 
 O ambiente Docker baixa e guarda cerca de 5 GB (Agave 2.3.0, platform-tools v1.53, build do programa) na pasta `AVEO_DEV_HOME`. O padrão é `~/.aveo-dev`. No Windows, aponte para um disco com espaço, por exemplo `E:\aveo-dev`.
 
+No Windows, `setx AVEO_DEV_HOME "E:\aveo-dev"` grava a variável, mas ela só vale para terminais abertos depois. No VS Code, só depois de reiniciar o próprio VS Code. Sem a variável, `solana:validator` avisa e para.
+
 ## Instalação
 
 Na raiz do repositório (o `app/` é membro do workspace pnpm):
