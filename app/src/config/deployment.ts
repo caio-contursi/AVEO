@@ -93,7 +93,17 @@ export async function fetchDeployment(url: string): Promise<Deployment> {
   }
   if (response.status === 404) throw new DeploymentError('not-found', `deployment manifest not found at ${url}`)
   if (!response.ok) throw new DeploymentError('network', `HTTP ${response.status} at ${url}`)
-  return parseDeployment(await response.json())
+  // Servidores de SPA devolvem o index.html no lugar de um arquivo ausente.
+  if (!(response.headers.get('content-type') ?? '').includes('json')) {
+    throw new DeploymentError('not-found', `no JSON manifest at ${url} (got ${response.headers.get('content-type') ?? 'no content-type'})`)
+  }
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch (error) {
+    throw new DeploymentError('invalid', `manifest at ${url} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return parseDeployment(body)
 }
 
 export function hexToBytes(hex: string): Uint8Array {
