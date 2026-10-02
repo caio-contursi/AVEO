@@ -1,0 +1,12 @@
+{
+  "name": "aveo",
+  "private": true,
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:program": "cargo build-sbf --tools-version v1.53 && anchor idl build -o target/idl/aveo_hook.json",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
