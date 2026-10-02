@@ -52,8 +52,14 @@ export async function runPlan(
     return { error: reason }
   }
   options.onSent?.(signature)
-  const evidence = await backend.verifyOutcome({ cluster: ctx.cluster, plan, signature, balancesBefore: options.balancesBefore })
-  return { signature, evidence }
+  try {
+    const evidence = await backend.verifyOutcome({ cluster: ctx.cluster, plan, signature, balancesBefore: options.balancesBefore })
+    return { signature, evidence }
+  } catch (error) {
+    // Já foi enviada: sem leitura não dá para dizer que falhou nem que confirmou.
+    const message = error instanceof Error ? error.message : String(error)
+    return { signature, evidence: { status: 'unknown', signature, logs: [], error: { code: 'ConfirmationUnknown', message } } }
+  }
 }
 
 /** Estado de execução de um plano com a carteira conectada. Nunca reenvia sozinho. */
