@@ -91,7 +91,7 @@ Todos os comandos rodam a partir de `app/` (ou com `pnpm --filter @aveo/app <scr
    pnpm solana:validator
    ```
 
-   `pnpm solana:logs` acompanha os logs e `pnpm solana:stop` derruba o validador. Cada `solana:validator` começa de um ledger limpo.
+   `pnpm solana:logs` acompanha os logs e `pnpm solana:stop` derruba o validador. Cada `solana:validator` começa de um ledger limpo, gravado em `AVEO_DEV_HOME/ledger`. O RocksDB do validador cresce rápido (cerca de 2 GB em 40 minutos), então pare o validador quando não estiver usando.
 
 3. Crie o cenário da spec: verificadores A e B, provas de tesouraria, X, Y e Z, mints Alfa e Beta com políticas e bindings, e as transferências iniciais.
 
@@ -100,6 +100,8 @@ Todos os comandos rodam a partir de `app/` (ou com `pnpm --filter @aveo/app <scr
    ```
 
    Gera `app/.dev/deployment.json` (endereços) e `app/.dev/wallets.json` (chaves das carteiras sintéticas). Os dois ficam fora do git. Por padrão, a prova de X vale 20 minutos; mude com `pnpm fixtures --x-ttl 600` (segundos).
+
+   Se o Desk já estiver aberto, recarregue a página depois dos fixtures. O histórico de incidentes começa vazio a cada nova geração.
 
 4. Inicie o Desk:
 
