@@ -1,0 +1,106 @@
+#!/usr/bin/env node
+// Ambiente local da Solana para testar o front contra o backend real (aveo-hook + SAS + Token-2022).
+// Não faz parte do backend: o repositório é montado somente para leitura e nada nele é alterado.
+//
+// Uso (a partir de app/):
+//   node dev/solana/docker.mjs image       constrói a imagem
+//   node dev/solana/docker.mjs build       instala o Agave e compila o aveo-hook
+//   node dev/solana/docker.mjs validator   sobe o validador local em http://127.0.0.1:8899
+//   node dev/solana/docker.mjs logs        acompanha os logs do validador
+//   node dev/solana/docker.mjs stop        derruba o validador
+//
+// AVEO_DEV_HOME define onde ficam toolchain, cache e build (padrão: ~/.aveo-dev).
+import { spawnSync } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const here = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(here, '../../..')
+const devHome = path.resolve(process.env.AVEO_DEV_HOME ?? path.join(homedir(), '.aveo-dev'))
+const image = 'aveo-dev-solana:local'
+const container = 'aveo-validator'
+const rpcUrl = 'http://127.0.0.1:8899'
+
+function docker(args, { allowFailure = false, quiet = false } = {}) {
+  const result = spawnSync('docker', args, { stdio: quiet ? 'ignore' : 'inherit' })
+  if (result.error) {
+    console.error('Docker não encontrado. Instale e inicie o Docker antes.')
+    process.exit(1)
+  }
+  if (result.status !== 0 && !allowFailure) process.exit(result.status ?? 1)
+  return result.status === 0
+}
+
+function mounts() {
+  mkdirSync(path.join(devHome, 'cache'), { recursive: true })
+  return [
+    '-v', `${devHome}:/opt/aveo-dev`,
+    '-v', `${path.join(devHome, 'cache')}:/root/.cache/solana`,
+    '-v', `${repoRoot}:/src:ro`,
+  ]
+}
+
+function ensureImage() {
+  if (!docker(['image', 'inspect', image], { allowFailure: true, quiet: true })) {
+    docker(['build', '-t', image, here])
+  }
+}
+
+async function waitForRpc(timeoutMs = 120_000) {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getHealth' }),
+      })
+      const body = await response.json()
+      if (body.result === 'ok') return true
+    } catch {
+      // validador ainda subindo
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+  }
+  return false
+}
+
+const command = process.argv[2]
+switch (command) {
+  case 'image':
+    docker(['build', '-t', image, here])
+    break
+  case 'build':
+    ensureImage()
+    docker(['run', '--rm', ...mounts(), image, 'bash', '-c', '/usr/local/bin/aveo/setup.sh && /usr/local/bin/aveo/build-program.sh'])
+    break
+  case 'validator': {
+    ensureImage()
+    docker(['rm', '-f', container], { allowFailure: true, quiet: true })
+    docker([
+      'run', '-d', '--name', container,
+      '--ulimit', 'nofile=1000000:1000000',
+      '-p', '8899:8899', '-p', '8900:8900',
+      ...mounts(), image, '/usr/local/bin/aveo/run-validator.sh',
+    ])
+    console.log(`Aguardando o validador em ${rpcUrl}…`)
+    if (await waitForRpc()) {
+      console.log('Validador pronto.')
+    } else {
+      console.error('O validador não respondeu a tempo. Veja: node dev/solana/docker.mjs logs')
+      process.exit(1)
+    }
+    break
+  }
+  case 'logs':
+    docker(['logs', '-f', '--tail', '50', container])
+    break
+  case 'stop':
+    docker(['rm', '-f', container], { allowFailure: true })
+    break
+  default:
+    console.log('Comandos: image | build | validator | logs | stop')
+    process.exit(command ? 1 : 0)
+}
