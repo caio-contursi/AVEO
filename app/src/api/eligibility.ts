@@ -62,7 +62,7 @@ export function checkPolicy(ctx: ApiContext, mint: Address, account: RawAccount 
 export function checkMint(ctx: ApiContext, account: RawAccount | null): Check<null> {
   const mismatch = (detail: string) => fail<null>(reason('MintMismatch', detail))
   if (!account || account.owner !== TOKEN_2022_PROGRAM_ID) return mismatch('mint is not a Token-2022 mint')
-  let extensions: { __kind: string; programId?: Address | { __option: string } }[]
+  let extensions: { __kind: string; programId?: unknown }[]
   try {
     const mint = getMintDecoder().decode(account.data)
     extensions = (unwrapOption(mint.extensions) ?? []) as typeof extensions
@@ -71,8 +71,11 @@ export function checkMint(ctx: ApiContext, account: RawAccount | null): Check<nu
   }
   const forbidden = ['PermanentDelegate', 'ConfidentialTransferMint', 'ConfidentialTransferFee']
   if (extensions.some((ext) => forbidden.includes(ext.__kind))) return mismatch('mint has a forbidden extension')
-  const hook = extensions.find((ext) => ext.__kind === 'TransferHook') as { programId: unknown } | undefined
-  const programId = hook ? unwrapOption(hook.programId as Parameters<typeof unwrapOption>[0]) : null
+  const hook = extensions.find((ext) => ext.__kind === 'TransferHook')
+  // O decoder entrega o programId como endereço simples; aceitamos também a forma Option por segurança.
+  const raw = hook?.programId
+  const programId =
+    typeof raw === 'string' ? raw : raw && typeof raw === 'object' && '__option' in raw ? unwrapOption(raw as Parameters<typeof unwrapOption>[0]) : null
   if (programId !== ctx.programId) return mismatch('mint transfer hook is not aveo-hook')
   return pass(null)
 }
