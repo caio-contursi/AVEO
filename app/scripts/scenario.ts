@@ -150,9 +150,8 @@ async function main() {
   }
 }
 
-main()
-  .then(() => process.exit(process.exitCode ?? 0))
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : error)
-    process.exit(1)
-  })
+// Sem process.exit: no Windows, encerrar com conexões abertas derruba o Node 24 (libuv).
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})

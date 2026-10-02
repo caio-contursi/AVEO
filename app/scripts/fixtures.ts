@@ -277,11 +277,10 @@ async function main() {
   }
 
   console.log(`\nManifest: ${DEPLOYMENT_FILE}\nCarteiras sintéticas: ${WALLETS_FILE}`)
-  await new Promise((resolve) => setTimeout(resolve, 200))
-  process.exit(0)
 }
 
+// Sem process.exit: no Windows, encerrar com conexões abertas derruba o Node 24 (libuv).
 main().catch((error) => {
   console.error(error)
-  process.exit(1)
+  process.exitCode = 1
 })
