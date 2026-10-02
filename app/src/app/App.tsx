@@ -43,9 +43,23 @@ function InvalidEnv({ issues }: { issues: string[] }) {
   )
 }
 
+function NotIntegrated() {
+  const { t } = useI18n()
+  return (
+    <main className="app">
+      <Card title={t('config.title')}>
+        <ErrorState title={t('config.notIntegrated')}>
+          <p className="small">{t('config.notIntegratedHelp')}</p>
+        </ErrorState>
+      </Card>
+    </main>
+  )
+}
+
 export function App() {
   if (!envResult.ok) return <InvalidEnv issues={envResult.issues} />
   const env = envResult.env
+  if (env.VITE_BACKEND === 'mpl3643') return <NotIntegrated />
   return (
     <QueryClientProvider client={queryClient}>
       <DeskProvider env={env}>

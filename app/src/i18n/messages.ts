@@ -20,6 +20,8 @@ const pt = {
 
   'config.title': 'Configuração',
   'config.invalidEnv': 'Variáveis de ambiente inválidas',
+  'config.notIntegrated': 'Backend MPL3643 não integrado',
+  'config.notIntegratedHelp': 'A rota A fica not-integrated até o gate A (acesso, versões e testes oficiais). O pacote packages/backend-mpl só responde BackendNotIntegrated. Use VITE_BACKEND=aveo-sas-hook.',
   'config.deploymentMissing': 'Manifest de deploy não encontrado',
   'config.deploymentInvalid': 'Manifest de deploy inválido',
   'config.deploymentHelp': 'Em localnet, suba o validador e gere os fixtures: pnpm solana:validator e depois pnpm fixtures (veja o README).',
@@ -258,6 +260,8 @@ const en: Record<MessageKey, string> = {
 
   'config.title': 'Configuration',
   'config.invalidEnv': 'Invalid environment variables',
+  'config.notIntegrated': 'MPL3643 backend not integrated',
+  'config.notIntegratedHelp': 'Route A stays not-integrated until gate A (official access, versions and tests). The packages/backend-mpl package only answers BackendNotIntegrated. Use VITE_BACKEND=aveo-sas-hook.',
   'config.deploymentMissing': 'Deployment manifest not found',
   'config.deploymentInvalid': 'Invalid deployment manifest',
   'config.deploymentHelp': 'On localnet, start the validator and generate fixtures: pnpm solana:validator, then pnpm fixtures (see the README).',

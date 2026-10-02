@@ -7,7 +7,8 @@ const envSchema = z.object({
   VITE_COMMITMENT: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
   VITE_AVEO_PROGRAM_ID: z.string().trim().optional(),
   VITE_DEPLOYMENT_URL: z.string().trim().min(1).default('/dev/deployment.json'),
-  VITE_BACKEND: z.enum(['aveo-sas-hook', 'mock']).default('aveo-sas-hook'),
+  // mpl3643 fica not-integrated até o gate A (spec v3): o Desk só mostra o aviso.
+  VITE_BACKEND: z.enum(['aveo-sas-hook', 'mpl3643']).default('aveo-sas-hook'),
   VITE_ENABLE_DEV_WALLETS: z
     .enum(['true', 'false'])
     .default('false')
