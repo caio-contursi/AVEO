@@ -2,7 +2,8 @@
 # Sobe um solana-test-validator com:
 #  - aveo-hook compilado localmente, carregado no endereço declarado no programa (declare_id!);
 #  - SAS e Token-2022 copiados da devnet, para usar os mesmos binários oficiais da rede.
-# O ledger é recriado a cada execução (--reset).
+# O ledger é recriado a cada execução (--reset) e fica em $DEV_HOME/ledger, fora do disco do Docker:
+# o RocksDB do validador cresce rápido (cerca de 2 GB em 40 minutos de uso).
 set -euo pipefail
 
 AVEO_HOOK_ID="ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33"
@@ -26,7 +27,7 @@ done
 
 exec solana-test-validator \
   --reset \
-  --ledger /tmp/aveo-ledger \
+  --ledger "$DEV_HOME/ledger" \
   --bind-address 0.0.0.0 \
   --rpc-port 8899 \
   --bpf-program "$AVEO_HOOK_ID" "$out/aveo_hook.so" \
