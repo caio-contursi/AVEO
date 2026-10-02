@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router'
-import { EmptyState } from '../components/ui'
 import { RequireDeployment } from './RequireDeployment'
 import { AssetsPage } from '../features/assets/AssetsPage'
+import { IncidentsPage } from '../features/incidents/IncidentsPage'
 import { StatusPage } from '../features/status/StatusPage'
 import { TransferPage } from '../features/transfer/TransferPage'
 
@@ -23,6 +23,13 @@ export const routes: RouteObject[] = [
       </RequireDeployment>
     ),
   },
-  { path: 'incidentes', element: <EmptyState /> },
+  {
+    path: 'incidentes',
+    element: (
+      <RequireDeployment>
+        <IncidentsPage />
+      </RequireDeployment>
+    ),
+  },
   { path: 'rede', element: <StatusPage /> },
 ]
