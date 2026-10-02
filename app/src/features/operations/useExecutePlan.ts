@@ -1,6 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
+import type { TransactionSigner } from '@solana/kit'
 import { useCallback, useState } from 'react'
-import type { DeskEvidence, DeskPlan } from '../../api/backend'
+import type { AveoSasHookBackend, DeskEvidence, DeskPlan } from '../../api/backend'
+import type { ApiContext } from '../../api/context'
 import type { DiagnosticReason } from '../../api/diagnostics'
 import { failureReason } from '../../api/errors'
 import { signAndSend } from '../../api/transactions'
@@ -28,10 +30,33 @@ function logsOf(error: unknown): string[] {
   return []
 }
 
+export type RunResult = { signature: string; evidence: DeskEvidence } | { error: DiagnosticReason }
+
 /**
- * Assina com a carteira conectada, envia e verifica com leitura nova.
- * Nunca reenvia sozinho: se a confirmação for desconhecida, o estado fica "unknown" na evidência.
+ * Assina um plano, envia e verifica com leitura nova. Um envio recusado devolve o motivo;
+ * uma confirmação desconhecida fica como status "unknown" na evidência, sem reenvio.
  */
+export async function runPlan(
+  ctx: ApiContext,
+  backend: AveoSasHookBackend,
+  signer: TransactionSigner,
+  plan: DeskPlan,
+  options: { balancesBefore?: bigint[]; onSent?: (signature: string) => void } = {},
+): Promise<RunResult> {
+  let signature: string
+  try {
+    signature = await signAndSend(ctx, plan.request, signer, plan.simulation.unitsConsumed)
+  } catch (error) {
+    const logs = logsOf(error)
+    const reason = logs.length > 0 ? failureReason(error, logs, ctx.programId) : { code: 'SimulationFailed' as const, message: error instanceof Error ? error.message : String(error) }
+    return { error: reason }
+  }
+  options.onSent?.(signature)
+  const evidence = await backend.verifyOutcome({ cluster: ctx.cluster, plan, signature, balancesBefore: options.balancesBefore })
+  return { signature, evidence }
+}
+
+/** Estado de execução de um plano com a carteira conectada. Nunca reenvia sozinho. */
 export function useExecutePlan() {
   const { ctx, backend } = useReadyDesk()
   const { connected } = useWallet()
@@ -42,20 +67,17 @@ export function useExecutePlan() {
     async (plan: DeskPlan, options: { balancesBefore?: bigint[] } = {}): Promise<DeskEvidence | undefined> => {
       if (!connected) return undefined
       setState({ phase: 'signing' })
-      let signature: string
-      try {
-        signature = await signAndSend(ctx, plan.request, connected.signer, plan.simulation.unitsConsumed)
-      } catch (error) {
-        const logs = logsOf(error)
-        const reason = logs.length > 0 ? failureReason(error, logs, ctx.programId) : { code: 'SimulationFailed' as const, message: error instanceof Error ? error.message : String(error) }
-        setState({ phase: 'error', error: reason })
+      const result = await runPlan(ctx, backend, connected.signer, plan, {
+        ...options,
+        onSent: (signature) => setState({ phase: 'verifying', signature }),
+      })
+      if ('error' in result) {
+        setState({ phase: 'error', error: result.error })
         return undefined
       }
-      setState({ phase: 'verifying', signature })
-      const evidence = await backend.verifyOutcome({ cluster: ctx.cluster, plan, signature, balancesBefore: options.balancesBefore })
-      setState({ phase: 'done', signature, evidence })
+      setState({ phase: 'done', signature: result.signature, evidence: result.evidence })
       await queryClient.invalidateQueries()
-      return evidence
+      return result.evidence
     },
     [backend, connected, ctx, queryClient],
   )
