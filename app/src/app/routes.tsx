@@ -3,6 +3,7 @@ import { EmptyState } from '../components/ui'
 import { RequireDeployment } from './RequireDeployment'
 import { AssetsPage } from '../features/assets/AssetsPage'
 import { StatusPage } from '../features/status/StatusPage'
+import { TransferPage } from '../features/transfer/TransferPage'
 
 /** Telas do Desk. Cada módulo entra aqui no próprio commit. */
 export const routes: RouteObject[] = [
@@ -14,7 +15,14 @@ export const routes: RouteObject[] = [
       </RequireDeployment>
     ),
   },
-  { path: 'transferencia', element: <EmptyState /> },
+  {
+    path: 'transferencia',
+    element: (
+      <RequireDeployment>
+        <TransferPage />
+      </RequireDeployment>
+    ),
+  },
   { path: 'incidentes', element: <EmptyState /> },
   { path: 'rede', element: <StatusPage /> },
 ]
