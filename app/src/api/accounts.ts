@@ -23,9 +23,11 @@ function toRpcError(error: unknown): DeskError {
   return new DeskError('ReadUnverifiable', message)
 }
 
+export type RpcReader = Pick<ApiContext, 'rpc' | 'commitment'>
+
 /** Lê várias contas numa única chamada, para que todas venham do mesmo slot. */
 export async function readAccounts(
-  ctx: ApiContext,
+  ctx: RpcReader,
   addresses: Address[],
   minContextSlot?: number,
 ): Promise<AccountsRead> {
@@ -56,7 +58,7 @@ export async function readAccounts(
   }
 }
 
-export async function readAccount(ctx: ApiContext, address: Address): Promise<{ slot: number; account: RawAccount | null }> {
+export async function readAccount(ctx: RpcReader, address: Address): Promise<{ slot: number; account: RawAccount | null }> {
   const { slot, accounts } = await readAccounts(ctx, [address])
   return { slot, account: accounts[0] ?? null }
 }

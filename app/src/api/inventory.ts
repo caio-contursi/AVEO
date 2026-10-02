@@ -1,10 +1,11 @@
 // Leituras de apoio para as telas: estado da rede, políticas, provas e saldos dos ativos da demo.
 import { getMintDecoder, getTokenDecoder } from '@solana-program/token-2022'
+import { getSysvarClockDecoder } from '@solana/sysvars'
 import { unwrapOption, type Address } from '@solana/kit'
 import type { DeploymentAsset } from '../config/deployment'
 import { readAccounts, rpcCall } from './accounts'
 import { decodeEligibilityBinding, type IssuerPolicy } from './codecs'
-import { SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from './constants'
+import { SAS_PROGRAM_ID, SYSVAR_CLOCK_ID, TOKEN_2022_PROGRAM_ID } from './constants'
 import type { ApiContext } from './context'
 import type { DiagnosticReason } from './diagnostics'
 import { checkPolicy } from './eligibility'
@@ -18,7 +19,7 @@ export interface NetworkStatus {
   programs: { id: Address; label: string; deployed: boolean; executable: boolean }[]
 }
 
-export async function readNetworkStatus(ctx: ApiContext): Promise<NetworkStatus> {
+export async function readNetworkStatus(ctx: Pick<ApiContext, 'rpc' | 'commitment' | 'programId'>): Promise<NetworkStatus> {
   const version = await rpcCall(() => ctx.rpc.getVersion().send())
   const programs = [
     { id: ctx.programId, label: 'aveo-hook' },
@@ -117,6 +118,12 @@ export async function readHoldings(ctx: ApiContext): Promise<{ slot: number; hol
       return { mint: asset.mint, wallet: wallet.address, amount }
     }),
   }
+}
+
+export async function readClockUnix(ctx: Pick<ApiContext, 'rpc' | 'commitment'>): Promise<{ slot: number; unix: number }> {
+  const { slot, accounts } = await readAccounts(ctx, [SYSVAR_CLOCK_ID])
+  if (!accounts[0]) throw new Error('clock sysvar unreadable')
+  return { slot, unix: Number(getSysvarClockDecoder().decode(accounts[0].data).unixTimestamp) }
 }
 
 export interface ProofRow extends ProofCandidate {
