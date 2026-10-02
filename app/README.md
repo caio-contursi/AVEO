@@ -35,7 +35,7 @@ Interface em português e inglês (seletor no topo). Todas as telas têm estados
 | pnpm | 10.x | workspace (`corepack enable` ou `npx pnpm@10.33.3`) |
 | Docker | Desktop ou Engine | validador local com o `aveo-hook` (não precisa de Rust nem Solana no host) |
 
-O ambiente Docker baixa e guarda cerca de 4 GB (Agave 2.3.0, platform-tools v1.53, build do programa) na pasta `AVEO_DEV_HOME`. O padrão é `~/.aveo-dev`. No Windows, aponte para um disco com espaço, por exemplo `E:\aveo-dev`.
+O ambiente Docker baixa e guarda cerca de 5 GB (Agave 2.3.0, platform-tools v1.53, build do programa) na pasta `AVEO_DEV_HOME`. O padrão é `~/.aveo-dev`. No Windows, aponte para um disco com espaço, por exemplo `E:\aveo-dev`.
 
 ## Instalação
 
