@@ -11,7 +11,7 @@
 //
 // AVEO_DEV_HOME define onde ficam toolchain, cache e build (padrão: ~/.aveo-dev).
 import { spawnSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,6 +42,26 @@ function mounts() {
   ]
 }
 
+// setx só vale para terminais abertos depois (no VS Code, depois de reiniciá-lo): sem a variável,
+// o padrão ~/.aveo-dev fica vazio e o validador não teria o que carregar.
+function requireBuild() {
+  const program = path.join(devHome, 'out', 'aveo_hook.so')
+  if (existsSync(program)) return
+  console.error(`Programa compilado não encontrado em ${program}.`)
+  if (process.env.AVEO_DEV_HOME) {
+    console.error('Rode antes: pnpm solana:build')
+  } else {
+    console.error('AVEO_DEV_HOME não está definido neste terminal, então foi usado o padrão ~/.aveo-dev.')
+    console.error('Defina a variável com a pasta das ferramentas (ex.: E:\\aveo-dev) num terminal novo, ou rode pnpm solana:build.')
+  }
+  process.exit(1)
+}
+
+function containerRunning() {
+  const result = spawnSync('docker', ['inspect', '-f', '{{.State.Running}}', container], { encoding: 'utf8' })
+  return result.status === 0 && result.stdout.trim() === 'true'
+}
+
 function ensureImage() {
   if (!docker(['image', 'inspect', image], { allowFailure: true, quiet: true })) {
     docker(['build', '-t', image, here])
@@ -51,6 +71,7 @@ function ensureImage() {
 async function waitForRpc(timeoutMs = 120_000) {
   const started = Date.now()
   while (Date.now() - started < timeoutMs) {
+    if (!containerRunning()) return 'exited'
     try {
       const response = await fetch(rpcUrl, {
         method: 'POST',
@@ -73,10 +94,12 @@ switch (command) {
     docker(['build', '-t', image, here])
     break
   case 'build':
+    console.log(`Pasta das ferramentas (AVEO_DEV_HOME): ${devHome}`)
     ensureImage()
     docker(['run', '--rm', ...mounts(), image, 'bash', '-c', '/usr/local/bin/aveo/setup.sh && /usr/local/bin/aveo/build-program.sh'])
     break
   case 'validator': {
+    requireBuild()
     ensureImage()
     docker(['rm', '-f', container], { allowFailure: true, quiet: true })
     docker([
@@ -86,8 +109,13 @@ switch (command) {
       ...mounts(), image, '/usr/local/bin/aveo/run-validator.sh',
     ])
     console.log(`Aguardando o validador em ${rpcUrl}…`)
-    if (await waitForRpc()) {
+    const ready = await waitForRpc()
+    if (ready === true) {
       console.log('Validador pronto.')
+    } else if (ready === 'exited') {
+      console.error('O validador parou ao iniciar. Últimas linhas do log:')
+      docker(['logs', '--tail', '20', container], { allowFailure: true })
+      process.exit(1)
     } else {
       console.error('O validador não respondeu a tempo. Veja: node dev/solana/docker.mjs logs')
       process.exit(1)
