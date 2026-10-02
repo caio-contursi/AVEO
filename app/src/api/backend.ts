@@ -1,6 +1,6 @@
 // Backend B do Desk (aveo-sas-hook) implementado no front, sobre o RPC: inspect, plan e verify.
 // Segue o contrato EligibilityBackend / RenewBindingCapable de @aveo/contracts (spec v3, seção 7).
-// O pacote packages/backend-aveo previsto no plano está vazio; ver docs/backend-pendencias.md.
+// O pacote packages/backend-aveo previsto no plano está vazio.
 import type {
   Capability,
   EligibilityBackend,

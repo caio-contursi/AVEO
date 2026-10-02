@@ -169,5 +169,3 @@ A camada `src/api` implementa o contrato `EligibilityBackend` / `RenewBindingCap
 - **inspect/plan/verify rodam no navegador**, sobre a rede real, porque `packages/backend-aveo` está vazio.
 - **Fixtures e scenario** são só para localnet, com carteiras sintéticas. As chaves nunca vão para o build.
 - Rede local não tem explorador: a evidência mostra a assinatura sem link.
-
-Pendências encontradas no backend (sem correção, por regra): [`docs/backend-pendencias.md`](../docs/backend-pendencias.md).

@@ -1,5 +1,5 @@
 // MOCK ISOLADO: histórico de incidentes no localStorage deste navegador.
-// Substitui o SQLite previsto em packages/backend-aveo, que está vazio (docs/backend-pendencias.md).
+// Substitui o SQLite previsto em packages/backend-aveo, que está vazio.
 // Só guarda o que o Desk já leu da rede; nenhuma decisão de elegibilidade sai daqui.
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useReadyDesk } from '../../app/desk'

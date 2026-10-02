@@ -1,6 +1,6 @@
 // Manifest de deploy: quais mints, verificadores e carteiras a demo usa.
 // O plano do time prevê config/deployments.devnet.json (F2), que ainda não existe; este é o formato
-// que o front espera (ver docs/backend-pendencias.md). Em localnet, o script de fixtures gera o arquivo.
+// que o front espera. Em localnet, o script de fixtures gera o arquivo.
 import { isAddress, type Address } from '@solana/kit'
 import { z } from 'zod'
 

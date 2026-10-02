@@ -87,7 +87,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     }
   }
 
-  // Um set_binding por ativo: o contrato de renovação é por mint (docs/backend-pendencias.md).
+  // Um set_binding por ativo: o contrato de renovação é por mint.
   const sign = async () => {
     if (!connected || !isSigner) return
     setBusy('sign')
