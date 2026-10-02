@@ -68,9 +68,3 @@ tests/client/           testes do Desk
 docs/                   planos, interface, threat model
 config/                 manifests de deploy (sem secrets)
 ```
-
-## Regras
-
-- Nunca versionar chaves, `.env` ou seed phrases.
-- Nunca inventar program ID, offset ou versão de SDK: registrar a fonte em `docs/`.
-- Mudanças em `docs/interface-v2.md` ou `programs/` só por PR aprovado pelo líder.
