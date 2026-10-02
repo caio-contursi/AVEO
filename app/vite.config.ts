@@ -42,6 +42,17 @@ function devFixtures(): Plugin {
 export default defineConfig({
   plugins: [react(), devFixtures()],
   server: { port: 5173, strictPort: true },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router', '@tanstack/react-query'],
+          solana: ['@solana/kit', '@solana/sysvars', '@solana-program/token-2022', '@solana-program/system', '@solana-program/compute-budget'],
+          wallet: ['@solana/react', '@wallet-standard/react'],
+        },
+      },
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
