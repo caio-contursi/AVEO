@@ -117,7 +117,7 @@ const pt = {
 
   'detail.title': '{wallet} em {asset}',
   'detail.read': 'Leitura no slot {slot} ({commitment}), relógio da rede {clock}. O diagnóstico explica; quem decide é o hook, na hora da transferência.',
-  'detail.proof': 'Prova usada',
+  'detail.proof': 'Prova vinculada',
   'detail.noProof': 'Nenhuma prova lida',
   'detail.reasons': 'Motivos',
   'detail.allGood': 'Todos os requisitos atendidos nesta leitura',
@@ -362,7 +362,7 @@ const en: Record<MessageKey, string> = {
 
   'detail.title': '{wallet} in {asset}',
   'detail.read': 'Read at slot {slot} ({commitment}), network clock {clock}. The diagnosis explains; the hook decides at transfer time.',
-  'detail.proof': 'Proof in use',
+  'detail.proof': 'Bound proof',
   'detail.noProof': 'No proof read',
   'detail.reasons': 'Reasons',
   'detail.allGood': 'All requirements met in this read',
