@@ -187,6 +187,17 @@ export function checkPayload(
   }
 }
 
+/**
+ * Por que a política de um ativo não aceitaria esta prova, na ordem do hook (par aceito, depois fatos).
+ * A validade fica de fora: quem chama mostra a validade à parte. `undefined` = aceita.
+ */
+export function policyRejection(policy: IssuerPolicy, wallet: Address, attestation: SasAttestation): DiagnosticReason | undefined {
+  if (!policy.pairs.some((p) => p.credential === attestation.credential && p.schema === attestation.schema)) {
+    return reason('ProviderPairNotAllowed', 'verifier not accepted')
+  }
+  return checkPayload(policy, wallet, attestation, 0).reasons.find((r) => r.code !== 'AttestationExpired')
+}
+
 function clockFrom(account: RawAccount | null): number | undefined {
   if (!account) return undefined
   try {
