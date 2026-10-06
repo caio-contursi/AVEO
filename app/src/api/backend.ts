@@ -19,6 +19,7 @@ import { decodeSasAttestation, type PolicyArgs } from './codecs'
 import type { ApiContext } from './context'
 import type { DeskSnapshot, DiagnosticReason } from './diagnostics'
 import { inspectEligibility } from './eligibility'
+import { withDiagnosticParams } from './explain'
 import {
   PlanBlockedError,
   confirmSignature,
@@ -68,7 +69,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
     const base = { backend: this.id, requiredSigners: [requiredSignerOf(request)], summary, diagnostics, request }
     try {
       const { simulation, transaction } = await planRequest(this.ctx, request)
-      return { ...base, transaction, simulation }
+      return { ...base, transaction, simulation: { ...simulation, error: withDiagnosticParams(simulation.error, base) } }
     } catch (error) {
       if (error instanceof PlanBlockedError) {
         return { ...base, transaction: '', simulation: { ok: false, logs: [], error: error.reason }, blocked: error.reason }
@@ -137,7 +138,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
       signature: input.signature,
       slot: confirmation.slot,
       logs: confirmation.logs,
-      error: confirmation.error,
+      error: withDiagnosticParams(confirmation.error, plan),
     }
     if (confirmation.status === 'unknown') return evidence
 
