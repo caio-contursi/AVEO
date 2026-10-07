@@ -712,6 +712,10 @@ dl.kv dd {
   flex-wrap: wrap;
 }
 
+.detail-close {
+  margin-left: auto;
+}
+
 /* Transferência e evidência */
 
 .simulation {

@@ -121,6 +121,7 @@ const pt = {
   'assets.noProofs': 'Nenhuma prova encontrada para as carteiras do manifest.',
 
   'detail.title': '{wallet} em {asset}',
+  'detail.close': 'Fechar',
   'detail.read': 'Leitura no slot {slot} ({commitment}), relógio da rede {clock}. O diagnóstico explica; quem decide é o hook, na hora da transferência.',
   'detail.proof': 'Prova vinculada',
   'detail.noProof': 'Nenhuma prova lida',
@@ -373,6 +374,7 @@ const en: Record<MessageKey, string> = {
   'assets.noProofs': 'No proofs found for the manifest wallets.',
 
   'detail.title': '{wallet} in {asset}',
+  'detail.close': 'Close',
   'detail.read': 'Read at slot {slot} ({commitment}), network clock {clock}. The diagnosis explains; the hook decides at transfer time.',
   'detail.proof': 'Bound proof',
   'detail.noProof': 'No proof read',
