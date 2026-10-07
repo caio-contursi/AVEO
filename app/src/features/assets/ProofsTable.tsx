@@ -82,7 +82,7 @@ export function ProofsTable() {
                       b.rejection ? (
                         <span
                           key={b.mint}
-                          className="chip off"
+                          className="chip rejected"
                           title={describeReason(i18n, {
                             ...b.rejection,
                             params: { asset: b.label, verifier: labelFor(deployment, p.attestation.credential), ...b.rejection.params },

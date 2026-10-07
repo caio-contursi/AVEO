@@ -331,6 +331,12 @@ code,
   color: var(--muted);
 }
 
+/* Vinculada mas recusada pela política: um aviso, não um fato riscado. */
+.chip.rejected {
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+
 .addr {
   background: var(--surface-2);
   border-radius: 6px;
