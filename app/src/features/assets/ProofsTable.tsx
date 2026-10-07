@@ -23,7 +23,7 @@ export function ProofsTable() {
 
   return (
     <div className="table-wrap">
-      <table>
+      <table className="stack-sm">
         <thead>
           <tr>
             <th>{t('assets.wallet')}</th>
@@ -50,47 +50,59 @@ export function ProofsTable() {
             const accepted = bindings.filter((b) => !b.rejection)
             return (
               <tr key={p.address} className={expired ? 'dim' : ''}>
-                <td>{labelFor(deployment, p.wallet)}</td>
-                <td>{labelFor(deployment, p.attestation.credential)}</td>
-                <td>
-                  {p.payload ? (
-                    <>
-                      <span className={`chip ${p.payload.kycPass ? '' : 'off'}`}>
-                        {t('fact.kyc')} {p.payload.kycPass ? t('assets.yes') : t('assets.no')}
-                      </span>
-                      <span className={`chip ${p.payload.accreditedPass ? '' : 'off'}`}>
-                        {t('fact.accredited')} {p.payload.accreditedPass ? t('assets.yes') : t('assets.no')}
-                      </span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
+                <td data-label={t('assets.wallet')}>
+                  <div className="td-value">{labelFor(deployment, p.wallet)}</div>
                 </td>
-                <td className={expired ? 'bad-text' : ''}>{formatExpiry(t, p.attestation.expiry, now)}</td>
-                <td>
-                  {p.boundTo.length === 0 && <span className="muted small">{t('assets.notBound')}</span>}
-                  {bindings.map((b) =>
-                    b.rejection ? (
-                      <span
-                        key={b.mint}
-                        className="chip off"
-                        title={describeReason(i18n, {
-                          ...b.rejection,
-                          params: { asset: b.label, verifier: labelFor(deployment, p.attestation.credential), ...b.rejection.params },
-                        })}
-                      >
-                        {t('assets.boundNotAccepted', { asset: b.symbol })}
-                      </span>
+                <td data-label={t('assets.verifier')}>
+                  <div className="td-value">{labelFor(deployment, p.attestation.credential)}</div>
+                </td>
+                <td data-label={t('assets.facts')}>
+                  <div className="td-value">
+                    {p.payload ? (
+                      <>
+                        <span className={`chip ${p.payload.kycPass ? '' : 'off'}`}>
+                          {t('fact.kyc')} {p.payload.kycPass ? t('assets.yes') : t('assets.no')}
+                        </span>
+                        <span className={`chip ${p.payload.accreditedPass ? '' : 'off'}`}>
+                          {t('fact.accredited')} {p.payload.accreditedPass ? t('assets.yes') : t('assets.no')}
+                        </span>
+                      </>
                     ) : (
-                      <span key={b.mint} className="chip">
-                        {b.symbol}
-                      </span>
-                    ),
-                  )}
-                  {accepted.length > 1 && <Badge tone="accent">{t('assets.shared')}</Badge>}
+                      '—'
+                    )}
+                  </div>
                 </td>
-                <td>
-                  <Address value={p.address} short />
+                <td data-label={t('assets.validity')} className={expired ? 'bad-text' : ''}>
+                  <div className="td-value">{formatExpiry(t, p.attestation.expiry, now)}</div>
+                </td>
+                <td data-label={t('assets.usedBy')}>
+                  <div className="td-value">
+                    {p.boundTo.length === 0 && <span className="muted small">{t('assets.notBound')}</span>}
+                    {bindings.map((b) =>
+                      b.rejection ? (
+                        <span
+                          key={b.mint}
+                          className="chip off"
+                          title={describeReason(i18n, {
+                            ...b.rejection,
+                            params: { asset: b.label, verifier: labelFor(deployment, p.attestation.credential), ...b.rejection.params },
+                          })}
+                        >
+                          {t('assets.boundNotAccepted', { asset: b.symbol })}
+                        </span>
+                      ) : (
+                        <span key={b.mint} className="chip">
+                          {b.symbol}
+                        </span>
+                      ),
+                    )}
+                    {accepted.length > 1 && <Badge tone="accent">{t('assets.shared')}</Badge>}
+                  </div>
+                </td>
+                <td data-label={t('assets.account')}>
+                  <div className="td-value">
+                    <Address value={p.address} short />
+                  </div>
                 </td>
               </tr>
             )

@@ -891,4 +891,35 @@ summary {
     flex-wrap: wrap;
     gap: 4px;
   }
+
+  /* Tabela em cartões: cada linha vira um bloco, com o nome do campo ao lado do valor. */
+  table.stack-sm thead {
+    display: none;
+  }
+
+  table.stack-sm,
+  table.stack-sm tbody,
+  table.stack-sm tr {
+    display: block;
+    width: 100%;
+  }
+
+  table.stack-sm tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.stack-sm td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: none;
+  }
+
+  table.stack-sm td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+  }
 }
