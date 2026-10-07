@@ -18,6 +18,10 @@ const pt = {
   'state.retry': 'Tentar de novo',
   'state.empty': 'Nada por aqui ainda.',
 
+  'copy.label': 'Copiar {value}',
+  'copy.done': 'Copiado',
+  'copy.failed': 'Não deu para copiar: selecione o texto e copie à mão',
+
   'config.title': 'Configuração',
   'config.invalidEnv': 'Variáveis de ambiente inválidas',
   'config.notIntegrated': 'Backend MPL3643 não integrado',
@@ -263,6 +267,10 @@ const en: Record<MessageKey, string> = {
   'state.error': 'Could not read',
   'state.retry': 'Try again',
   'state.empty': 'Nothing here yet.',
+
+  'copy.label': 'Copy {value}',
+  'copy.done': 'Copied',
+  'copy.failed': 'Could not copy: select the text and copy it by hand',
 
   'config.title': 'Configuration',
   'config.invalidEnv': 'Invalid environment variables',
