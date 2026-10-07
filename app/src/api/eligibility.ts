@@ -187,6 +187,17 @@ export function checkPayload(
   }
 }
 
+/**
+ * Por que a política de um ativo não aceitaria esta prova, na ordem do hook (par aceito, depois fatos).
+ * A validade fica de fora: quem chama mostra a validade à parte. `undefined` = aceita.
+ */
+export function policyRejection(policy: IssuerPolicy, wallet: Address, attestation: SasAttestation): DiagnosticReason | undefined {
+  if (!policy.pairs.some((p) => p.credential === attestation.credential && p.schema === attestation.schema)) {
+    return reason('ProviderPairNotAllowed', 'verifier not accepted')
+  }
+  return checkPayload(policy, wallet, attestation, 0).reasons.find((r) => r.code !== 'AttestationExpired')
+}
+
 function clockFrom(account: RawAccount | null): number | undefined {
   if (!account) return undefined
   try {
@@ -231,6 +242,37 @@ async function bindingHints(ctx: ApiContext, policy: IssuerPolicy, mint: Address
     }),
   )
   return hints
+}
+
+/**
+ * Lê a prova de um vínculo só para exibi-la. Se a leitura ou a checagem do SAS falhar,
+ * a prova não aparece, e o veredito continua o que o hook decidiria.
+ */
+async function boundProofForDisplay(
+  ctx: ApiContext,
+  binding: EligibilityBinding,
+  wallet: Address,
+  policy: IssuerPolicy,
+  clockUnix: number,
+  minContextSlot: number,
+): Promise<{ slot: number; extra: Pick<DeskSnapshot, 'proof' | 'expiresAt'> } | undefined> {
+  try {
+    const { slot, accounts } = await readAccounts(ctx, [binding.credential, binding.schema, binding.attestation], minContextSlot)
+    const [credentialAccount, schemaAccount, attestationAccount] = accounts
+    const sas = await checkSas(binding, credentialAccount ?? null, schemaAccount ?? null, attestationAccount ?? null)
+    if (!sas.ok) return undefined
+    const { proof } = checkPayload(policy, wallet, sas.value, clockUnix)
+    if (!proof) return undefined
+    return {
+      slot,
+      extra: {
+        proof: { ...proof, attestation: binding.attestation, credential: binding.credential, schema: binding.schema },
+        expiresAt: new Date(Number(sas.value.expiry) * 1000).toISOString(),
+      },
+    }
+  } catch {
+    return undefined
+  }
 }
 
 /** Diagnóstico completo de uma carteira num ativo. Nunca devolve "eligible" sem ler tudo com sucesso. */
@@ -278,9 +320,12 @@ export async function inspectEligibility(ctx: ApiContext, mint: Address, wallet:
     const b = binding.value
     const sourceAccounts = { ...base.sourceAccounts, credential: b.credential, schema: b.schema, attestation: b.attestation }
     if (!policy.value.pairs.some((p) => p.credential === b.credential && p.schema === b.schema)) {
+      // O hook para aqui. A prova vinculada é lida só para mostrar qual é, sem somar motivos.
+      const shown = await boundProofForDisplay(ctx, b, wallet, policy.value, clockUnix, first.slot)
       return done(
         [reason('ProviderPairNotAllowed', 'verifier not accepted', { params: { asset: assetLabel(ctx, mint), verifier: verifierLabel(ctx, b.credential) } })],
-        { policyVersion, sourceAccounts },
+        { policyVersion, sourceAccounts, ...shown?.extra },
+        shown?.slot ?? first.slot,
       )
     }
 

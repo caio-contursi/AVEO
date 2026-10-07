@@ -1,4 +1,5 @@
 // Regras do scan:once e do ciclo de incidentes (spec v3, seção 8). Funções puras; o armazenamento fica em store.ts.
+import { isStandingPolicyRejection } from '@aveo/backend-aveo'
 import type { Incident, IncidentType } from '@aveo/contracts'
 import type { DeskEvidence } from '../../api/backend'
 import type { DeskSnapshot, DiagnosticReason, ReasonCode } from '../../api/diagnostics'
@@ -81,6 +82,11 @@ export function findIncidents(snapshots: DeskSnapshot[], watched: Record<string,
     if (!primary) continue
     if (snapshot.verdict === 'ineligible' && primary.code === 'BindingMissing') {
       delete next[key]
+      continue
+    }
+    // Vínculo de uma prova que a política nunca aceitou (T02/T03) é diagnóstico.
+    // Vira incidente só se a carteira já tinha sido elegível nesse ativo (T08).
+    if (snapshot.verdict === 'ineligible' && isStandingPolicyRejection(primary.code, watched[key] !== undefined)) {
       continue
     }
     const proof = snapshot.verdict === 'unknown' ? watched[key] : (bound ?? watched[key])

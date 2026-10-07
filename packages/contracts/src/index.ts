@@ -20,6 +20,7 @@ export const ONCHAIN_ERRORS = [
   'RequiredFactMissing',
   'AttestationExpired',
   'MissingExtraAccounts',
+  'UnauthorizedIssuer',
 ] as const;
 export type OnchainError = (typeof ONCHAIN_ERRORS)[number];
 
@@ -127,13 +128,21 @@ export interface EligibilityBackend {
   verifyOutcome(input: VerifyInput): Promise<OperationEvidence>;
 }
 
+export interface RenewBindingInput {
+  cluster: Cluster;
+  /** Kept for existing callers. Ignored when `mints` is non-empty. */
+  mint: string;
+  /**
+   * One unsigned transaction with one `set_binding` per mint.
+   * A shared proof that covers Alfa and Beta is signed once.
+   */
+  mints?: readonly string[];
+  wallet: string;
+  attestation: string;
+}
+
 export interface RenewBindingCapable {
-  planRenewBinding(input: {
-    cluster: Cluster;
-    mint: string;
-    wallet: string;
-    attestation: string;
-  }): Promise<UnsignedPlan>;
+  planRenewBinding(input: RenewBindingInput): Promise<UnsignedPlan>;
 }
 
 export type IncidentType =

@@ -5,6 +5,7 @@ import type { AveoSasHookBackend, DeskEvidence, DeskPlan } from '../../api/backe
 import type { ApiContext } from '../../api/context'
 import type { DiagnosticReason } from '../../api/diagnostics'
 import { failureReason } from '../../api/errors'
+import { withDiagnosticParams } from '../../api/explain'
 import { signAndSend } from '../../api/transactions'
 import { useReadyDesk } from '../../app/desk'
 import { useWallet } from '../../wallet/context'
@@ -49,7 +50,7 @@ export async function runPlan(
   } catch (error) {
     const logs = logsOf(error)
     const reason = logs.length > 0 ? failureReason(error, logs, ctx.programId) : { code: 'SimulationFailed' as const, message: error instanceof Error ? error.message : String(error) }
-    return { error: reason }
+    return { error: withDiagnosticParams(reason, plan) }
   }
   options.onSent?.(signature)
   try {

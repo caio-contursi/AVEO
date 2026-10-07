@@ -31,6 +31,8 @@ PDAs (`program/src/constants.rs` e [helpers](https://attest.solana.com/docs/help
 | Schema | `["schema", credential, name, version_u8]` |
 | Attestation | `["attestation", credential, schema, nonce]` |
 
+`name` na seed é no máximo 32 bytes. O comentário do sas-lib 1.0.10 diz que só os primeiros 32 bytes entram na seed; a função em si rejeita um nome maior. O hook corta para 32 bytes, então um nome longo gravado na conta ainda deriva o endereço documentado. Quem chama o sas-lib precisa passar esse prefixo.
+
 Parsers on-chain espelham `try_from_bytes` do programa oficial (owner = SAS,
 PDA conferida, schema pausado recusado, signer tem de estar na lista viva da
 credential). `Attestation.token_account` não é usado como sujeito: o sujeito

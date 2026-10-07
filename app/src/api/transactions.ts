@@ -50,7 +50,8 @@ export type PlanRequest =
     }
   | {
       kind: 'set-binding'
-      mint: Address
+      /** One instruction per mint, same signature. */
+      mints: Address[]
       wallet: Address
       credential: Address
       schema: Address
@@ -101,16 +102,18 @@ export async function tokenAccountsFor(mint: Address, owners: Address[]): Promis
 export async function buildInstructions(ctx: ApiContext, request: PlanRequest, signer: TransactionSigner): Promise<Instruction[]> {
   switch (request.kind) {
     case 'set-binding':
-      return [
-        await getSetBindingInstruction({
-          programId: ctx.programId,
-          subject: signer,
-          mint: request.mint,
-          credential: request.credential,
-          schema: request.schema,
-          attestation: request.attestation,
-        }),
-      ]
+      return Promise.all(
+        request.mints.map((mint) =>
+          getSetBindingInstruction({
+            programId: ctx.programId,
+            subject: signer,
+            mint,
+            credential: request.credential,
+            schema: request.schema,
+            attestation: request.attestation,
+          }),
+        ),
+      )
     case 'update-policy':
       return [await getUpdatePolicyInstruction({ programId: ctx.programId, authority: signer, mint: request.mint, args: request.args })]
     case 'transfer': {

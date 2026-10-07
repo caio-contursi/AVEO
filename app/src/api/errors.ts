@@ -1,4 +1,4 @@
-// Tradução de falhas de transação para os códigos estáveis do contrato (6000–6014 e erros do Desk).
+// Tradução de falhas de transação para os códigos estáveis do contrato (6000–6015 e erros do Desk).
 import { onchainErrorFromCode } from '@aveo/contracts'
 import type { Address } from '@solana/kit'
 import { reason, type DiagnosticReason } from './diagnostics'

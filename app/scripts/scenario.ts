@@ -1,6 +1,5 @@
 // Ações de cenário da demo, executadas FORA do Desk. SOMENTE DESENVOLVIMENTO / LOCALNET.
-// Fazem o papel dos scripts previstos para a frente F2 (emissão e fechamento de provas, transferência
-// fora da UI), que ainda não existem no repositório.
+// Emissão, fechamento e transferência sem a interface. O hook é quem aceita ou recusa.
 //
 //   pnpm --filter @aveo/app scenario status
 //   pnpm --filter @aveo/app scenario issue <carteira> [--verifier A|B] [--ttl segundos] [--kyc true|false] [--accredited true|false]

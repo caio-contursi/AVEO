@@ -1,6 +1,5 @@
-// MOCK ISOLADO: histórico de incidentes no localStorage deste navegador.
-// Substitui o SQLite previsto em packages/backend-aveo, que está vazio.
-// Só guarda o que o Desk já leu da rede; nenhuma decisão de elegibilidade sai daqui.
+// Histórico de incidentes deste navegador. O scan:once grava o mesmo ciclo em SQLite
+// (packages/backend-aveo). Nenhum dos dois autoriza transferência.
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useReadyDesk } from '../../app/desk'
 import { EMPTY_STORE, type DeskIncident, type IncidentStoreData } from './model'

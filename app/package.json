@@ -19,10 +19,13 @@
     "solana:logs": "node dev/solana/docker.mjs logs",
     "solana:stop": "node dev/solana/docker.mjs stop",
     "fixtures": "tsx scripts/fixtures.ts",
-    "scenario": "tsx scripts/scenario.ts"
+    "scenario": "tsx scripts/scenario.ts",
+    "scan:once": "tsx scripts/scan-once.ts"
   },
   "dependencies": {
+    "@aveo/backend-aveo": "workspace:*",
     "@aveo/contracts": "workspace:*",
+    "@aveo/sas-client": "workspace:*",
     "@solana-program/compute-budget": "^0.19.0",
     "@solana-program/system": "^0.15.0",
     "@solana-program/token-2022": "^0.19.0",

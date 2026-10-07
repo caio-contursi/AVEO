@@ -56,7 +56,10 @@ pub fn load_binding(
     Ok(binding)
 }
 
-pub fn require_live_eligibility(
+/// `set_binding`: the wallet presents a live SAS proof for itself.
+/// Does not check whether the policy accepts the pair or the required facts.
+/// Those are decided by `execute`, so a transfer outside the UI reaches the hook.
+pub fn require_presented_proof(
     policy: &IssuerPolicy,
     subject: &Pubkey,
     credential_info: &AccountInfo,
@@ -67,11 +70,6 @@ pub fn require_live_eligibility(
     expected_attestation: &Pubkey,
     clock: &Clock,
 ) -> Result<SasAttestation> {
-    require!(
-        policy.allows(expected_credential, expected_schema),
-        AveoError::ProviderPairNotAllowed
-    );
-
     let (_credential, _schema, attestation) = load_and_check_sas(
         credential_info,
         schema_info,
@@ -96,6 +94,39 @@ pub fn require_live_eligibility(
         payload.proof_domain == policy.proof_domain,
         AveoError::ProofDomainMismatch
     );
+    Ok(attestation)
+}
+
+/// `execute`: presented proof, plus the policy's allowed pair and required facts.
+pub fn require_live_eligibility(
+    policy: &IssuerPolicy,
+    subject: &Pubkey,
+    credential_info: &AccountInfo,
+    schema_info: &AccountInfo,
+    attestation_info: &AccountInfo,
+    expected_credential: &Pubkey,
+    expected_schema: &Pubkey,
+    expected_attestation: &Pubkey,
+    clock: &Clock,
+) -> Result<SasAttestation> {
+    require!(
+        policy.allows(expected_credential, expected_schema),
+        AveoError::ProviderPairNotAllowed
+    );
+
+    let attestation = require_presented_proof(
+        policy,
+        subject,
+        credential_info,
+        schema_info,
+        attestation_info,
+        expected_credential,
+        expected_schema,
+        expected_attestation,
+        clock,
+    )?;
+
+    let payload = attestation.payload()?;
     if policy.require_kyc && !payload.kyc_pass {
         return err!(AveoError::RequiredFactMissing);
     }

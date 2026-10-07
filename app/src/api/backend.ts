@@ -1,12 +1,14 @@
 // Backend B do Desk (aveo-sas-hook) implementado no front, sobre o RPC: inspect, plan e verify.
 // Segue o contrato EligibilityBackend / RenewBindingCapable de @aveo/contracts (spec v3, seção 7).
 // O pacote packages/backend-aveo previsto no plano está vazio.
+import { AVEO_BACKEND_CAPABILITIES, renewalMints } from '@aveo/backend-aveo'
 import type {
   Capability,
   EligibilityBackend,
   InspectInput,
   OperationEvidence,
   RenewBindingCapable,
+  RenewBindingInput,
   TransferInput,
   UnsignedPlan,
   VerifyInput,
@@ -17,6 +19,7 @@ import { decodeSasAttestation, type PolicyArgs } from './codecs'
 import type { ApiContext } from './context'
 import type { DeskSnapshot, DiagnosticReason } from './diagnostics'
 import { inspectEligibility } from './eligibility'
+import { withDiagnosticParams } from './explain'
 import {
   PlanBlockedError,
   confirmSignature,
@@ -55,7 +58,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
   }
 
   capabilities(): readonly Capability[] {
-    return ['transfer', 'renew-binding'] // a rota B nunca expõe refreeze
+    return AVEO_BACKEND_CAPABILITIES
   }
 
   inspect(input: InspectInput): Promise<DeskSnapshot> {
@@ -66,7 +69,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
     const base = { backend: this.id, requiredSigners: [requiredSignerOf(request)], summary, diagnostics, request }
     try {
       const { simulation, transaction } = await planRequest(this.ctx, request)
-      return { ...base, transaction, simulation }
+      return { ...base, transaction, simulation: { ...simulation, error: withDiagnosticParams(simulation.error, base) } }
     } catch (error) {
       if (error instanceof PlanBlockedError) {
         return { ...base, transaction: '', simulation: { ok: false, logs: [], error: error.reason }, blocked: error.reason }
@@ -91,18 +94,26 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
     )
   }
 
-  async planRenewBinding(input: { cluster: string; mint: string; wallet: string; attestation: string }): Promise<DeskPlan> {
-    const mint = address(input.mint)
+  async planRenewBinding(input: RenewBindingInput): Promise<DeskPlan> {
+    const mints = renewalMints(input).map((mint) => address(mint))
     const wallet = address(input.wallet)
     const attestationAddress = address(input.attestation)
     const { account } = await readAccount(this.ctx, attestationAddress)
     if (!account) throw new PlanBlockedError({ code: 'AttestationMissingOrClosed', message: 'attestation not found' })
+    if (mints.length === 0) throw new PlanBlockedError({ code: 'MintMismatch', message: 'no mint to bind' })
     const attestation = decodeSasAttestation(account.data)
-    const snapshot = await inspectEligibility(this.ctx, mint, wallet)
+    const snapshots = await Promise.all(mints.map((mint) => inspectEligibility(this.ctx, mint, wallet)))
     return this.plan(
-      { kind: 'set-binding', mint, wallet, credential: attestation.credential, schema: attestation.schema, attestation: attestationAddress },
-      { source: snapshot, destination: snapshot },
-      [`bind ${attestationAddress} to ${wallet} in ${mint}`],
+      {
+        kind: 'set-binding',
+        mints,
+        wallet,
+        credential: attestation.credential,
+        schema: attestation.schema,
+        attestation: attestationAddress,
+      },
+      { source: snapshots[0]!, destination: snapshots[snapshots.length - 1]! },
+      mints.map((mint) => `bind ${attestationAddress} to ${wallet} in ${mint}`),
     )
   }
 
@@ -127,7 +138,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
       signature: input.signature,
       slot: confirmation.slot,
       logs: confirmation.logs,
-      error: confirmation.error,
+      error: withDiagnosticParams(confirmation.error, plan),
     }
     if (confirmation.status === 'unknown') return evidence
 
@@ -141,7 +152,7 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
       evidence.readback = readback
       evidence.balances = owners.map((owner, i) => ({ owner, before: input.balancesBefore?.[i], after: balances.balances[i] ?? 0n }))
     } else if (request.kind === 'set-binding') {
-      evidence.readback = [await inspectEligibility(this.ctx, request.mint, request.wallet)]
+      evidence.readback = await Promise.all(request.mints.map((mint) => inspectEligibility(this.ctx, mint, request.wallet)))
     } else {
       evidence.readback = [await inspectEligibility(this.ctx, request.mint, request.authority)]
     }
