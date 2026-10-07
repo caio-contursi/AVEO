@@ -862,4 +862,33 @@ summary {
   td {
     padding: 6px 8px;
   }
+
+  /* Matriz: carteira e os dois ativos lado a lado, sem rolar de lado. */
+  .matrix {
+    table-layout: fixed;
+  }
+
+  .matrix th:first-child,
+  .matrix td:first-child {
+    width: 24%;
+    overflow-wrap: anywhere;
+  }
+
+  .matrix td {
+    min-width: 0;
+  }
+
+  .matrix td,
+  .matrix th {
+    padding: 6px 4px;
+  }
+
+  .cell {
+    padding: 8px;
+  }
+
+  .cell-top {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 }
