@@ -64,20 +64,38 @@ export function WalletMenu() {
   const [open, setOpen] = useState(false)
   const [standard, setStandardSelection] = useState<{ wallet: UiWallet; account: UiWalletAccount } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
     const close = (event: MouseEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false)
     }
+    // Esc fecha o menu e devolve o foco ao botão, como num menu nativo.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      toggleRef.current?.focus()
+    }
     document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', escape)
+    }
   }, [open])
 
   return (
     <div className="wallet-menu" ref={ref}>
       {standard && <StandardSignerBridge wallet={standard.wallet} account={standard.account} chain={chain} />}
-      <button type="button" className={connected ? 'wallet-button connected' : 'wallet-button primary'} onClick={() => setOpen((v) => !v)}>
+      <button
+        ref={toggleRef}
+        type="button"
+        className={connected ? 'wallet-button connected' : 'wallet-button primary'}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
         {connected ? (
           <>
             <span className="dot" aria-hidden="true" />

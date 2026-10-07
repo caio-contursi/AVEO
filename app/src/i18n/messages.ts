@@ -18,6 +18,10 @@ const pt = {
   'state.retry': 'Tentar de novo',
   'state.empty': 'Nada por aqui ainda.',
 
+  'copy.label': 'Copiar {value}',
+  'copy.done': 'Copiado',
+  'copy.failed': 'Não deu para copiar: selecione o texto e copie à mão',
+
   'config.title': 'Configuração',
   'config.invalidEnv': 'Variáveis de ambiente inválidas',
   'config.notIntegrated': 'Backend MPL3643 não integrado',
@@ -117,6 +121,7 @@ const pt = {
   'assets.noProofs': 'Nenhuma prova encontrada para as carteiras do manifest.',
 
   'detail.title': '{wallet} em {asset}',
+  'detail.close': 'Fechar',
   'detail.read': 'Leitura no slot {slot} ({commitment}), relógio da rede {clock}. O diagnóstico explica; quem decide é o hook, na hora da transferência.',
   'detail.proof': 'Prova vinculada',
   'detail.noProof': 'Nenhuma prova lida',
@@ -132,6 +137,7 @@ const pt = {
   'span.min': '{n} min',
   'span.h': '{n} h',
   'span.d': '{n} dias',
+  'span.d.one': '{n} dia',
 
   'wallet.connect': 'Conectar carteira',
   'wallet.disconnect': 'Desconectar',
@@ -158,6 +164,7 @@ const pt = {
   'transfer.errorBalance': 'Quantidade maior que o saldo',
   'transfer.diagnosis': 'Diagnóstico das partes',
   'transfer.simulationOk': 'Simulação: o hook aceitaria',
+  'plan.simulationOk': 'Simulação: o programa aceitaria',
   'transfer.simulationFail': 'Simulação: seria recusada',
   'transfer.blocked': 'Não dá para montar a transação',
   'transfer.cu': '{units} unidades de computação',
@@ -264,6 +271,10 @@ const en: Record<MessageKey, string> = {
   'state.retry': 'Try again',
   'state.empty': 'Nothing here yet.',
 
+  'copy.label': 'Copy {value}',
+  'copy.done': 'Copied',
+  'copy.failed': 'Could not copy: select the text and copy it by hand',
+
   'config.title': 'Configuration',
   'config.invalidEnv': 'Invalid environment variables',
   'config.notIntegrated': 'MPL3643 backend not integrated',
@@ -363,6 +374,7 @@ const en: Record<MessageKey, string> = {
   'assets.noProofs': 'No proofs found for the manifest wallets.',
 
   'detail.title': '{wallet} in {asset}',
+  'detail.close': 'Close',
   'detail.read': 'Read at slot {slot} ({commitment}), network clock {clock}. The diagnosis explains; the hook decides at transfer time.',
   'detail.proof': 'Bound proof',
   'detail.noProof': 'No proof read',
@@ -378,6 +390,7 @@ const en: Record<MessageKey, string> = {
   'span.min': '{n} min',
   'span.h': '{n} h',
   'span.d': '{n} days',
+  'span.d.one': '{n} day',
 
   'wallet.connect': 'Connect wallet',
   'wallet.disconnect': 'Disconnect',
@@ -404,6 +417,7 @@ const en: Record<MessageKey, string> = {
   'transfer.errorBalance': 'Amount is above the balance',
   'transfer.diagnosis': 'Diagnosis of both parties',
   'transfer.simulationOk': 'Simulation: the hook would accept',
+  'plan.simulationOk': 'Simulation: the program would accept',
   'transfer.simulationFail': 'Simulation: would be rejected',
   'transfer.blocked': 'The transaction cannot be built',
   'transfer.cu': '{units} compute units',

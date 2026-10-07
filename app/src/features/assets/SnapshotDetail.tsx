@@ -27,7 +27,7 @@ function useBindableProof(snapshot: DeskSnapshot) {
   )
 }
 
-export function SnapshotDetail({ snapshot }: { snapshot: DeskSnapshot }) {
+export function SnapshotDetail({ snapshot, onClose }: { snapshot: DeskSnapshot; onClose?: () => void }) {
   const { t, locale } = useI18n()
   const { deployment } = useReadyDesk()
   const bindable = useBindableProof(snapshot)
@@ -38,6 +38,11 @@ export function SnapshotDetail({ snapshot }: { snapshot: DeskSnapshot }) {
       <header>
         <strong>{t('detail.title', { wallet: labelFor(deployment, snapshot.wallet), asset: labelFor(deployment, snapshot.mint) })}</strong>
         <VerdictBadge verdict={snapshot.verdict} />
+        {onClose && (
+          <button type="button" className="ghost detail-close" onClick={onClose}>
+            {t('detail.close')}
+          </button>
+        )}
       </header>
       <p className="small muted">
         {t('detail.read', {

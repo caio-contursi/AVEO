@@ -331,6 +331,12 @@ code,
   color: var(--muted);
 }
 
+/* Vinculada mas recusada pela política: um aviso, não um fato riscado. */
+.chip.rejected {
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+
 .addr {
   background: var(--surface-2);
   border-radius: 6px;
@@ -356,6 +362,27 @@ code,
   padding: 0 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.copy.copied {
+  color: var(--ok);
+}
+
+.copy.failed {
+  color: var(--bad);
+}
+
+/* Texto só para leitores de tela (avisos que não precisam aparecer). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .reasons {
@@ -691,6 +718,10 @@ dl.kv dd {
   flex-wrap: wrap;
 }
 
+.detail-close {
+  margin-left: auto;
+}
+
 /* Transferência e evidência */
 
 .simulation {
@@ -836,5 +867,85 @@ summary {
   th,
   td {
     padding: 6px 8px;
+  }
+
+  /* Matriz: carteira e os dois ativos lado a lado, sem rolar de lado. */
+  .matrix {
+    table-layout: fixed;
+  }
+
+  .matrix th:first-child,
+  .matrix td:first-child {
+    width: 24%;
+    overflow-wrap: anywhere;
+  }
+
+  .matrix td {
+    min-width: 0;
+  }
+
+  .matrix td,
+  .matrix th {
+    padding: 6px 4px;
+  }
+
+  .cell {
+    padding: 8px;
+  }
+
+  .cell-top {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Tabela em cartões: cada linha vira um bloco, com o nome do campo ao lado do valor. */
+  table.stack-sm thead {
+    display: none;
+  }
+
+  table.stack-sm,
+  table.stack-sm tbody,
+  table.stack-sm tr {
+    display: block;
+    width: 100%;
+  }
+
+  table.stack-sm tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.stack-sm td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: none;
+  }
+
+  table.stack-sm td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+  }
+}
+
+/* Telefone: as quatro abas cabem na barra, sem esconder "Rede" no fim de uma rolagem. */
+@media (max-width: 520px) {
+  .tabs {
+    overflow-x: visible;
+    gap: 2px;
+  }
+
+  .tabs a {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    font-size: 13px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
   }
 }

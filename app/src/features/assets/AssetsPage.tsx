@@ -50,7 +50,12 @@ function Matrix() {
                   const primary = snapshot?.reasons.find((r) => !r.hint)
                   return (
                     <td key={a.mint}>
-                      <button type="button" className={`cell ${isSelected ? 'selected' : ''}`} onClick={() => setSelected({ mint: a.mint, wallet: w.address })}>
+                      <button
+                        type="button"
+                        className={`cell ${isSelected ? 'selected' : ''}`}
+                        aria-pressed={isSelected}
+                        onClick={() => setSelected(isSelected ? null : { mint: a.mint, wallet: w.address })}
+                      >
                         <span className="cell-top">
                           {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.error ? <VerdictBadge verdict="unknown" /> : <span className="muted small">…</span>}
                           <span className="muted small">
@@ -73,7 +78,7 @@ function Matrix() {
           </tbody>
         </table>
       </div>
-      {selectedSnapshot && <SnapshotDetail snapshot={selectedSnapshot} />}
+      {selectedSnapshot && <SnapshotDetail snapshot={selectedSnapshot} onClose={() => setSelected(null)} />}
     </>
   )
 }
