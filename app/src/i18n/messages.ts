@@ -136,6 +136,7 @@ const pt = {
   'span.min': '{n} min',
   'span.h': '{n} h',
   'span.d': '{n} dias',
+  'span.d.one': '{n} dia',
 
   'wallet.connect': 'Conectar carteira',
   'wallet.disconnect': 'Desconectar',
@@ -386,6 +387,7 @@ const en: Record<MessageKey, string> = {
   'span.min': '{n} min',
   'span.h': '{n} h',
   'span.d': '{n} days',
+  'span.d.one': '{n} day',
 
   'wallet.connect': 'Connect wallet',
   'wallet.disconnect': 'Disconnect',

@@ -4,7 +4,8 @@ export function formatSpan(t: I18nValue['t'], seconds: number): string {
   const abs = Math.abs(seconds)
   if (abs < 3600) return t('span.min', { n: Math.max(1, Math.round(abs / 60)) })
   if (abs < 86_400) return t('span.h', { n: Math.round(abs / 3600) })
-  return t('span.d', { n: Math.round(abs / 86_400) })
+  const days = Math.round(abs / 86_400)
+  return t(days === 1 ? 'span.d.one' : 'span.d', { n: days })
 }
 
 /** Validade relativa ao relógio da rede (Clock sysvar), que é o que o hook usa. */
