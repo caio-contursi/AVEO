@@ -1,5 +1,7 @@
 // Textos da interface em português e inglês. O dicionário em inglês precisa ter as mesmas chaves (checado pelo TypeScript).
 const pt = {
+  'incidents.verifyFailed': 'Não foi possível concluir a verificação. As evidências foram mantidas; consulte novamente, sem reenviar a transação.',
+  'incidents.pendingRenewal': 'Há uma renovação enviada aguardando verificação ou com resultado desconhecido. Consulte a assinatura original em Recibos e verifique a elegibilidade; não prepare nem envie outra renovação para este incidente.',
   'operations.prepareFailed': 'Não foi possível preparar e simular esta ação. Nenhuma transação foi enviada; confira os dados e tente preparar novamente.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Quem pode mover o quê, com qual prova, e como fechar o incidente.',
@@ -298,6 +300,8 @@ const pt = {
 export type MessageKey = keyof typeof pt
 
 const en: Record<MessageKey, string> = {
+  'incidents.verifyFailed': 'Verification could not be completed. Evidence was retained; query again without resubmitting the transaction.',
+  'incidents.pendingRenewal': 'A submitted renewal is awaiting verification or has an unknown result. Query the original signature in Receipts and verify eligibility; do not prepare or submit another renewal for this incident.',
   'operations.prepareFailed': 'Could not prepare and simulate this action. No transaction was sent; check the inputs and prepare again.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Who can move what, under which proof, and how to close the incident.',

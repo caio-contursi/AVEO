@@ -1,9 +1,10 @@
 import type { IncidentState } from '@aveo/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Address as SolanaAddress } from '@solana/kit'
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { DeskPlan } from '../../api/backend'
 import { checkPayload } from '../../api/eligibility'
+import type { DeskSnapshot } from '../../api/diagnostics'
 import type { ProofRow } from '../../api/inventory'
 import { useReadyDesk } from '../../app/desk'
 import { Address } from '../../components/Address'
@@ -20,9 +21,13 @@ import { runPlan } from '../operations/useExecutePlan'
 import { getSubmissionJournal } from '../operations/submission-journal'
 import { applySends, applyVerification, markPrepared, type DeskIncident, type SendOutcome } from './model'
 import { useIncidentStore } from './store'
+import { usePlanPreparation } from '../operations/usePlanPreparation'
+import { canPrepareRenewal, groupRenewalCandidates, hasPendingRenewal, sameRenewalIntent } from './renewal'
 
 const STATES: IncidentState[] = ['open', 'action-prepared', 'awaiting-confirmation', 'resolved']
 const STATE_TONE = { open: 'bad', 'action-prepared': 'warn', 'awaiting-confirmation': 'accent', resolved: 'ok' } as const
+type RenewalReview = { key: string; title: string; plan: DeskPlan }
+const NO_PLANS: RenewalReview[] = []
 
 /** Prova nova da mesma carteira, aceita pela política do ativo e válida no relógio da rede. */
 function useCandidates(incident: DeskIncident) {
@@ -44,7 +49,11 @@ function useCandidates(incident: DeskIncident) {
     }
     return { mint, proof }
   })
-  return { loading, candidates, clockUnix: clock.data?.unix }
+  const policies = incident.affectedMints.map((mint) => {
+    const policy = assets.data?.assets.find((asset) => asset.asset.mint === mint)?.policy
+    return [mint, policy?.policyVersion?.toString(), policy?.active]
+  })
+  return { loading, candidates, policies, clockUnix: clock.data?.unix }
 }
 
 export function IncidentCard({ incident }: { incident: DeskIncident }) {
@@ -53,13 +62,13 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const { connected } = useWallet()
   const queryClient = useQueryClient()
   const { patch } = useIncidentStore()
-  const { loading, candidates, clockUnix } = useCandidates(incident)
-  const [plans, setPlans] = useState<{ key: string; title: string; plan: DeskPlan }[]>([])
-  const [busy, setBusy] = useState<'prepare' | 'sign' | 'verify'>()
+  const { loading, candidates, policies, clockUnix } = useCandidates(incident)
+  const [actionBusy, setActionBusy] = useState<'sign' | 'verify'>()
   const [actionError, setActionError] = useState<unknown>()
   const [journalError, setJournalError] = useState(false)
   const mounted = useRef(false)
-  useEffect(() => {
+  const actionLock = useRef(false)
+  useLayoutEffect(() => {
     mounted.current = true
     return () => { mounted.current = false }
   }, [])
@@ -70,79 +79,130 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const rebindable = candidates.filter(
     (c): c is { mint: string; proof: ProofRow } => c.proof !== undefined && !c.proof.boundTo.includes(c.mint as SolanaAddress),
   )
+  const pendingRenewal = hasPendingRenewal(incident)
+  const preparation = usePlanPreparation<RenewalReview[]>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment, connected?.address,
+    incident.id, incident.key, incident.type, incident.wallet, incident.proof, incident.affectedMints,
+    incident.observed, incident.state === 'resolved',
+    actionBusy === 'sign' && !resolved ? true : canPrepareRenewal(incident), loading,
+    policies,
+    rebindable.map(({ mint, proof }) => [mint, proof.address]),
+  ])
+  const verification = usePlanPreparation<DeskSnapshot[]>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment,
+    incident.id, incident.wallet, incident.proof, incident.affectedMints, incident.state,
+    incident.evidence.map((item) => [item.signature, item.status, item.slot]),
+  ])
+  const plans = preparation.plan ?? NO_PLANS
+  const busy = actionBusy ?? (preparation.planning ? 'prepare' : undefined)
   const signable = plans.filter((p) => p.plan.simulation.ok)
   const isSigner = connected?.address === incident.wallet
   const stateIndex = STATES.indexOf(incident.state)
   const now = () => new Date().toISOString()
 
   const prepare = async () => {
-    setBusy('prepare')
+    if (actionLock.current || loading || !canPrepareRenewal(incident) || rebindable.length === 0) return
     setActionError(undefined)
-    try {
-      const groups = new Map<string, { proof: ProofRow; mints: string[] }>()
-      for (const item of rebindable) {
-        const existing = groups.get(item.proof.address)
-        if (existing) existing.mints.push(item.mint)
-        else groups.set(item.proof.address, { proof: item.proof, mints: [item.mint] })
-      }
-      const built = await Promise.all(
-        [...groups.values()].map(async ({ proof, mints }) => ({
-          key: proof.address,
+    const built = await preparation.prepare(async () => {
+      const groups = groupRenewalCandidates(rebindable)
+      return Promise.all(
+        groups.map(async ({ key, attestation, mints }) => ({
+          key,
           title: mints.map((mint) => labelFor(deployment, mint)).join(' + '),
           plan: await backend.planRenewBinding({
             cluster: ctx.cluster,
             mint: mints[0]!,
             mints,
             wallet: incident.wallet,
-            attestation: proof.address,
+            attestation,
           }),
         })),
       )
-      setPlans(built)
-      const assetCount = [...groups.values()].reduce((count, group) => count + group.mints.length, 0)
-      patch(incident.id, (i) => markPrepared(i, assetCount, now()))
-    } catch (error) {
-      setActionError(error)
-    } finally {
-      setBusy(undefined)
+    })
+    if (!built || !preparation.isCurrent(built)) return
+    const assetCount = new Set(rebindable.map((item) => item.mint)).size
+    let accepted = false
+    try {
+      patch(incident.id, (current) => {
+        if (!sameRenewalIntent(current, incident) || !preparation.isCurrent(built)) return current
+        accepted = true
+        return markPrepared(current, assetCount, now())
+      })
+    } catch {
+      preparation.clear()
+      if (mounted.current) setActionError(new Error(t('operations.prepareFailed')))
+      return
     }
+    if (!accepted && preparation.isCurrent(built)) preparation.clear()
   }
 
-  // Uma transação por prova: Alfa e Beta com a mesma atestação assinam juntos.
+  // One transaction per proof; context changes stop groups not yet submitted.
   const sign = async () => {
-    if (!connected || !isSigner) return
-    setBusy('sign')
+    if (actionLock.current || !connected || !isSigner || !canPrepareRenewal(incident) ||
+      signable.length === 0 || !preparation.isCurrent(plans)) return
+    actionLock.current = true
+    setActionBusy('sign')
     const outcomes: SendOutcome[] = []
-    for (const { plan } of signable) {
-      const result = await runPlan(ctx, backend, connected.signer, plan, {
-        onSent: (signature) => {
-          // Keep grouped renewal signatures recoverable, even after leaving this card.
-          void getSubmissionJournal().capture(ctx, signature).then(() => {
-            if (mounted.current) setJournalError(getSubmissionJournal().error !== undefined)
-          }).catch(() => {
-            if (mounted.current) setJournalError(true)
-          })
-        },
-      })
-      outcomes.push('error' in result ? { error: result.error } : { evidence: result.evidence })
+    try {
+      for (const { plan } of signable) {
+        if (!preparation.isCurrent(plans)) break
+        const result = await runPlan(ctx, backend, connected.signer, plan, {
+          onSent: (signature) => {
+            try {
+              patch(incident.id, (current) => applySends(current, [{ evidence: { status: 'unknown', signature, logs: [] } }], now()))
+            } catch {
+              if (mounted.current) setJournalError(true)
+            }
+            // Keep grouped renewal signatures recoverable, even after leaving this card.
+            try {
+              const journal = getSubmissionJournal()
+              void journal.capture(ctx, signature).then(() => {
+                if (mounted.current) setJournalError(journal.error !== undefined)
+              }).catch(() => {
+                if (mounted.current) setJournalError(true)
+              })
+            } catch {
+              if (mounted.current) setJournalError(true)
+            }
+          },
+        })
+        outcomes.push('error' in result ? { error: result.error } : { evidence: result.evidence })
+        if (!('error' in result) && result.evidence.status === 'unknown') break
+      }
+    } catch {
+      if (mounted.current) setActionError(new Error(t('incidents.verifyFailed')))
+    } finally {
+      // Submission evidence belongs to the captured store even after leaving this screen.
+      try {
+        if (outcomes.length > 0) patch(incident.id, (current) => applySends(current, outcomes, now()))
+      } catch {
+        if (mounted.current) setActionError(new Error(t('incidents.verifyFailed')))
+      }
+      preparation.clear()
+      actionLock.current = false
+      if (mounted.current) setActionBusy(undefined)
     }
-    patch(incident.id, (i) => applySends(i, outcomes, now()))
-    setPlans([])
-    setBusy(undefined)
-    await queryClient.invalidateQueries()
+    try { await queryClient.invalidateQueries() } catch {
+      if (mounted.current) setActionError(new Error(t('incidents.verifyFailed')))
+    }
   }
 
   const verify = async () => {
-    setBusy('verify')
+    if (actionLock.current || !mounted.current) return
+    actionLock.current = true
+    preparation.clear()
+    setActionBusy('verify')
     setActionError(undefined)
     try {
-      const snapshots = await Promise.all(incident.affectedMints.map((mint) => backend.inspect({ cluster: ctx.cluster, mint, wallet: incident.wallet })))
+      const snapshots = await verification.prepare(() => Promise.all(incident.affectedMints.map((mint) => backend.inspect({ cluster: ctx.cluster, mint, wallet: incident.wallet }))))
+      if (!snapshots || !verification.isCurrent(snapshots)) return
       patch(incident.id, (i) => applyVerification(i, snapshots, now()))
       await queryClient.invalidateQueries()
-    } catch (error) {
-      setActionError(error)
+    } catch {
+      if (mounted.current) setActionError(new Error(t('incidents.verifyFailed')))
     } finally {
-      setBusy(undefined)
+      actionLock.current = false
+      if (mounted.current) setActionBusy(undefined)
     }
   }
 
@@ -238,7 +298,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
           )}
 
           <div className="actions">
-            {incident.type !== 'READ_UNVERIFIABLE' && rebindable.length > 0 && (
+            {canPrepareRenewal(incident) && rebindable.length > 0 && !loading && (
               <button type="button" disabled={busy !== undefined} onClick={() => void prepare()}>
                 {busy === 'prepare' && <Spinner />} {t('incidents.prepare')}
               </button>
@@ -247,6 +307,9 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
               {busy === 'verify' && <Spinner />} {t('incidents.verify')}
             </button>
           </div>
+          {pendingRenewal && <p className="small warn-text" role="alert">{t('incidents.pendingRenewal')}</p>}
+          {preparation.error && <p className="small warn-text" role="alert">{t('operations.prepareFailed')}</p>}
+          {verification.error && <p className="small warn-text" role="alert">{t('incidents.verifyFailed')}</p>}
           {actionError !== undefined && <ErrorState error={actionError} />}
         </>
       )}
