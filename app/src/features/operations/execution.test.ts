@@ -39,6 +39,42 @@ beforeEach(() => {
 })
 
 describe('runPlan and retained recheck', () => {
+  it('records the returned signature once before verification', async () => {
+    const record = vi.fn(() => expect(backend.verifyOutcome).not.toHaveBeenCalled())
+    const execution = new PlanExecution(vi.fn(), record)
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue(unknown) }
+    await execution.execute(ctx, backend, signer, plan)
+    expect(record).toHaveBeenCalledExactlyOnceWith(ctx, signature)
+    await execution.recheck(ctx)
+    expect(record).toHaveBeenCalledTimes(1)
+    expect(signAndSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('records a late signature in its original context even after navigation', async () => {
+    const record = vi.fn(), publish = vi.fn()
+    const execution = new PlanExecution(publish, record)
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue(unknown) }
+    const sending = deferred<Signature>()
+    vi.mocked(signAndSend).mockReturnValueOnce(sending.promise)
+    const result = execution.execute(ctx, backend, signer, plan)
+    execution.deactivate()
+    const count = publish.mock.calls.length
+    sending.resolve(signature)
+    expect(await result).toBeUndefined()
+    expect(record).toHaveBeenCalledExactlyOnceWith(ctx, signature)
+    expect(publish).toHaveBeenCalledTimes(count)
+    expect(signAndSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('still verifies an already submitted transaction when receipt recording throws', async () => {
+    const record = vi.fn(() => { throw new Error('Storage unavailable') })
+    const execution = new PlanExecution(vi.fn(), record)
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue(unknown) }
+    expect(await execution.execute(ctx, backend, signer, plan)).toEqual(unknown)
+    expect(execution.state.phase).toBe('done')
+    expect(backend.verifyOutcome).toHaveBeenCalledTimes(1)
+    expect(signAndSend).toHaveBeenCalledTimes(1)
+  })
   it.each(['confirmed', 'failed'] as const)('moves unknown to %s without signing again, retaining the original inputs', async (status) => {
     const { execution, backend } = setup()
     const balancesBefore = [10n, 20n]

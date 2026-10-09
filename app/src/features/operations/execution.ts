@@ -88,7 +88,10 @@ export class PlanExecution {
   private submittedKey?: string
   private active = true
 
-  constructor(private readonly publish: (state: ExecutionState) => void) {}
+  constructor(
+    private readonly publish: (state: ExecutionState) => void,
+    private readonly recordSubmission?: (ctx: ApiContext, signature: string) => void,
+  ) {}
 
   private update(state: ExecutionState) {
     this.state = state
@@ -138,6 +141,8 @@ export class PlanExecution {
         balancesBefore,
         onSent: (signature) => {
           this.submission = { ctx, backend, plan, signature, balancesBefore }
+          // Recording must not turn an already sent transaction into a send error.
+          try { this.recordSubmission?.(ctx, signature) } catch { /* Verification still proceeds. */ }
           if (generation === this.generation) this.update({ phase: 'verifying', signature })
         },
       })
