@@ -1,8 +1,9 @@
 import { useWalletAccountTransactionSendingSigner } from '@solana/react'
 import { address } from '@solana/kit'
 import { useConnect, useDisconnect, useWallets, type UiWallet, type UiWalletAccount } from '@wallet-standard/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Address } from '../components/Address'
+import { shortAddress } from '../components/format'
 import { useI18n } from '../i18n/context'
 import { useWallet } from './context'
 
@@ -65,6 +66,7 @@ export function WalletMenu() {
   const [standard, setStandardSelection] = useState<{ wallet: UiWallet; account: UiWalletAccount } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const panelId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -92,21 +94,22 @@ export function WalletMenu() {
         ref={toggleRef}
         type="button"
         className={connected ? 'wallet-button connected' : 'wallet-button primary'}
-        aria-haspopup="menu"
+        aria-controls={panelId}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         {connected ? (
           <>
             <span className="dot" aria-hidden="true" />
-            {connected.label} · <Address value={connected.address} short plain />
+            {connected.label} · <span title={connected.address}>{shortAddress(connected.address)}</span>
           </>
         ) : (
           t('wallet.connect')
         )}
       </button>
       {open && (
-        <div className="menu" role="menu">
+        <div className="menu" id={panelId} role="group" aria-label={t('wallet.connect')}>
+          {connected && <p className="menu-note"><Address value={connected.address} short /></p>}
           {connected ? (
             standard ? (
               <DisconnectStandard
@@ -159,7 +162,7 @@ export function WalletMenu() {
                     setOpen(false)
                   }}
                 >
-                  {w.label} <Address value={w.address} short plain />
+                  {w.label} <span title={w.address}>{shortAddress(w.address)}</span>
                 </button>
               ))}
               <p className="menu-note">{t('wallet.devNote')}</p>
