@@ -1,7 +1,10 @@
 import { createElement, type ReactNode, type FormEvent } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { address } from '@solana/kit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeskPlan } from '../../api/backend'
+import type { DeskSnapshot } from '../../api/diagnostics'
+import type { ExecutionState } from '../operations/execution'
 import { messages, type Language } from '../../i18n/messages'
 import { TransferPage } from './TransferPage'
 
@@ -12,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   sign: undefined as (() => void) | undefined,
   submit: undefined as ((event: FormEvent) => void) | undefined,
   language: 'en' as Language,
+  execution: { phase: 'idle' } as ExecutionState,
+  contextMatches: true,
+  connected: { address: 'source' } as { address: string } | undefined,
 }))
 const deployment = {
   generatedAt: '2026-10-09T12:00:00.000Z',
@@ -20,16 +26,22 @@ const deployment = {
 }
 const ctx = { cluster: 'localnet', rpcUrl: 'http://127.0.0.1:8899', programId: 'program', commitment: 'confirmed', deployment }
 
-vi.mock('../../app/desk', () => ({ useReadyDesk: () => ({ ctx, deployment, backend: { planTransfer: mocks.planTransfer } }) }))
-vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: { address: 'source' } }) }))
+vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: mocks.connected }) }))
+vi.mock('../../app/desk', () => ({
+  useReadyDesk: () => ({ ctx, deployment, backend: { planTransfer: mocks.planTransfer } }),
+  useDesk: () => ({ explorerUrl: () => null }),
+}))
 vi.mock('../../i18n/context', () => ({ useI18n: () => ({
   locale: 'en-US', t: (key: keyof typeof messages.en) => messages[mocks.language][key],
+  has: (key: string): key is keyof typeof messages.en => key in messages.en,
 }) }))
 vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ data: { holdings: [
   { mint: 'mint', wallet: 'source', amount: 100n }, { mint: 'mint', wallet: 'destination', amount: 50n },
 ] } }) }))
 vi.mock('../operations/useExecutePlan', () => ({ useExecutePlan: () => ({
-  state: { phase: 'idle' }, reset: mocks.reset, execute: mocks.execute,
+  state: mocks.execution, contextMatches: mocks.contextMatches,
+  displayMetadata: mocks.execution.evidence ? { deployment, decimals: 0 } : undefined,
+  reset: mocks.reset, execute: mocks.execute, recheck: vi.fn(),
 }) }))
 vi.mock('../operations/usePlanPreparation', () => ({ usePlanPreparation: (scope: unknown[]) => {
   mocks.scope = scope
@@ -55,6 +67,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.preparation = { plan: undefined, planning: false, error: undefined }
   mocks.language = 'en'
+  mocks.execution = { phase: 'idle' }
+  mocks.contextMatches = true
+  mocks.connected = { address: 'source' }
   mocks.sign = undefined
   mocks.submit = undefined
   mocks.reset.mockReturnValue(true)
@@ -64,6 +79,19 @@ beforeEach(() => {
 })
 
 function render() { return renderToStaticMarkup(createElement(TransferPage)) }
+
+function preparedPlan(ok = true): DeskPlan {
+  const snapshot: DeskSnapshot = {
+    backend: 'aveo-sas-hook', mint: 'mint', wallet: 'source', verdict: 'eligible', reasons: [], sourceAccounts: {}, actions: [],
+    read: { cluster: 'localnet', rpcUrl: ctx.rpcUrl, slot: 1, commitment: 'confirmed', observedAt: deployment.generatedAt },
+  }
+  const publicAddress = address('11111111111111111111111111111111')
+  return {
+    backend: 'aveo-sas-hook', transaction: '', requiredSigners: ['source'], summary: [],
+    request: { kind: 'transfer', mint: publicAddress, sourceOwner: publicAddress, destinationOwner: publicAddress, amount: 1n, decimals: 0 },
+    simulation: { ok, logs: [] }, diagnostics: { source: snapshot, destination: { ...snapshot, wallet: 'destination' } },
+  }
+}
 
 describe('transfer preparation integration', () => {
   it('scopes preparation to network, deployment, form and connected wallet without preparing on render', () => {
@@ -114,8 +142,7 @@ describe('transfer preparation integration', () => {
   })
 
   it.each([true, false])('requires the plan to remain current before signing (current: %s)', (current) => {
-    const snapshot = { wallet: 'source', verdict: 'eligible', reasons: [] }
-    const plan = { diagnostics: { source: snapshot, destination: { ...snapshot, wallet: 'destination' } } } as unknown as DeskPlan
+    const plan = preparedPlan()
     mocks.preparation.plan = plan
     mocks.isCurrent.mockReturnValue(current)
     render()
@@ -124,5 +151,77 @@ describe('transfer preparation integration', () => {
     expect(mocks.isCurrent).toHaveBeenCalledWith(plan)
     if (current) expect(mocks.execute).toHaveBeenCalledWith(plan, { balancesBefore: [100n, 50n] })
     else expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { phase: 'signing' }, { phase: 'verifying', signature: 'original' },
+    { phase: 'idle', sendBlocked: true },
+    { phase: 'done', signature: 'original', evidence: { status: 'unknown', signature: 'original', logs: [] } },
+  ] satisfies ExecutionState[])('disables every intent control while execution is locked (%j)', (state) => {
+    mocks.execution = state
+    const html = render()
+    expect(html.match(/<select disabled=""/g)).toHaveLength(3)
+    expect(html).toMatch(/<input disabled=""/)
+    expect(html).toMatch(/<button type="submit" class="primary" disabled=""/)
+  })
+
+  it('keeps read-only preparation available without a wallet', async () => {
+    mocks.connected = undefined
+    expect(render()).not.toMatch(/<button type="submit" class="primary" disabled/)
+    mocks.submit!({ preventDefault: () => {} } as FormEvent)
+    await vi.waitFor(() => expect(mocks.planTransfer).toHaveBeenCalledOnce())
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('blocks signing and expands diagnosis for a blocked plan even when simulation.ok is %s', (ok) => {
+    mocks.preparation.plan = { ...preparedPlan(ok), blocked: { code: 'SimulationFailed', message: 'blocked' } }
+    const html = render()
+    expect(html).toContain(messages.en['ux.nextBlocked'])
+    expect(html).toContain('<details open="">')
+    mocks.sign!()
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('blocks signing for a failed simulation and leaves successful diagnosis optional', () => {
+    mocks.preparation.plan = preparedPlan(false)
+    expect(render()).toContain('<details open="">')
+    mocks.sign!()
+    expect(mocks.execute).not.toHaveBeenCalled()
+    mocks.preparation.plan = preparedPlan()
+    expect(render()).toContain('<details>')
+  })
+
+  it.each(['failed', 'unknown'] as const)('expands diagnosis for %s evidence', (status) => {
+    mocks.preparation.plan = preparedPlan()
+    mocks.execution = { phase: 'done', signature: 'original', evidence: { status, signature: 'original', logs: [] } }
+    expect(render()).toContain('<details open="">')
+  })
+
+  it('keeps execution errors visible even after the prepared plan is cleared', () => {
+    mocks.execution = { phase: 'error', error: { code: 'SimulationFailed', message: 'Wallet rejected' } }
+    const html = render()
+    expect(html).toContain('Wallet rejected')
+    expect(html).toContain(messages.en['ux.nextError'])
+  })
+
+  it('does not show an all-good claim for unknown parties with no diagnostic reasons', () => {
+    const plan = preparedPlan()
+    mocks.preparation.plan = { ...plan, diagnostics: {
+      source: { ...plan.diagnostics.source, verdict: 'unknown' },
+      destination: { ...plan.diagnostics.destination, verdict: 'unknown' },
+    } }
+    expect(render()).not.toContain(messages.en['detail.allGood'])
+  })
+
+  it('identifies retained evidence and its original deployment without combining it with a new plan', () => {
+    mocks.execution = { phase: 'done', signature: 'original', evidence: { status: 'confirmed', signature: 'original', logs: [] } }
+    mocks.contextMatches = false
+    const html = render()
+    expect(html).toContain(messages.en['ux.retainedEvidence'])
+    expect(html).toContain(deployment.generatedAt)
+    expect(html).toContain('original')
+    expect(html).not.toContain('data-status="complete"')
+    mocks.preparation.plan = preparedPlan()
+    expect(render()).not.toContain('data-status="complete"')
   })
 })
