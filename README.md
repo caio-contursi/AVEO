@@ -113,6 +113,17 @@ signatures and hook errors are recorded in the ledger. It prints `PASS`, `FAIL`,
 `NOT_RUN`, and public transaction evidence; any failed expectation returns a
 nonzero exit status. Failed transactions still consume synthetic SOL fees.
 
+The false-KYC core of T04 uses a real verifier-A SAS attestation with KYC false,
+accreditation true, the correct subject/domain and a live validator-Clock expiry.
+Both active policies must require KYC. X signs bindings to this shared proof in
+Alfa and Beta; coherent observations must identify KYC as the sole blocking fact.
+Four submitted ledger transfers (inbound/outbound on each asset) must fail with
+`RequiredFactMissing` and unchanged token balances. A `finally` block restores
+the original eligible bindings before closing the temporary proof. The public
+report retains only typed synthetic fact flags, addresses, slots and signatures.
+These three stages do not complete T04's missing-binding/proof cases: T04 stays
+`NOT_RUN`, even when the false-KYC stages pass. This does not claim real KYC checks.
+
 T15 persists the actual grouped incident produced by closing X's shared proof.
 It writes an isolated SQLite database in one Node process, then reloads it in a
 different process and reapplies the same recorded observations. Incident
@@ -281,6 +292,14 @@ read-only recovery workflows again passed seven stages; readiness passed six
 stages before and after acceptance. No dependencies or on-chain interfaces were
 changed, and the Rust build was not repeated. Clipboard lifecycle tests use
 controlled callbacks/static rendering, not interactive browser verification.
+The ninth round passed 718 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint, frontend build and runner self-tests. Real local
+acceptance passed all 42 stages, adding the false-KYC core and explicit restoration
+without approving the complete T04 matrix case. Both read-only recovery workflows
+again passed seven stages; readiness passed six stages before and after acceptance.
+Visible-history capacity tests cover count/byte boundaries, full versus invalid
+snapshots and session-only warnings. No dependencies, Rust code or on-chain
+interfaces changed; the Rust build and interactive browser tests were not run.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -395,14 +414,26 @@ are never deleted automatically. Failed removal keeps the receipt available;
 successful removal can free capacity. Session-only receipts can be explicitly
 removed from session memory. There is no automatic archive or bulk deletion.
 
+The visible-history capacity indicator measures validated receipt count and UTF-8
+bytes of the sanitized compact JSON array, including session-only receipts. It
+warns at 90 receipts or 90 percent of 128,000 bytes; a measured full snapshot keeps
+its counters and shows a separate full warning. Invalid/oversized snapshots or
+invalid storage suppress the counters rather than suggesting available capacity.
+This is not the browser's storage quota, a persistence guarantee, an all-tab view,
+or the size of the pretty export envelope. A grouped export can exceed its own
+byte bound even when the compact journal fits; individual receipt export remains
+an independent option. Export does not free space and nothing is auto-evicted.
+
 ### Proposed backlog issues
 
 - Extract the network adapter and incident model into shared packages so the
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Show a concise receipt capacity indicator so operators can export public history
-  before reaching the bound, without automatic retention or eviction.
+- Centralize the journal, public-export and capacity limits so future changes
+  cannot drift between storage, backup and operator warnings.
+- Reuse coherent-observation checks across CLI acceptance helpers so subject,
+  context, fact and slot validation cannot silently diverge between scenarios.
 - Exercise interrupted SQLite writes and process crashes so recovery can
   distinguish corrupt local history from an intentionally empty store.
 - Add interactive browser coverage for denied clipboard permission, manual-copy
