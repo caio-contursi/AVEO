@@ -20,7 +20,8 @@
     "solana:stop": "node dev/solana/docker.mjs stop",
     "fixtures": "tsx scripts/fixtures.ts",
     "scenario": "tsx scripts/scenario.ts",
-    "scan:once": "tsx scripts/scan-once.ts"
+    "scan:once": "tsx scripts/scan-once.ts",
+    "demo:check": "tsx scripts/demo-check.ts"
   },
   "dependencies": {
     "@aveo/backend-aveo": "workspace:*",

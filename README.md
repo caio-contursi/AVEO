@@ -87,6 +87,59 @@ pnpm scan:once          # incidentes em app/.dev/incidents.sqlite
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
 
+## Automated local acceptance
+
+Use Node 22 or later. With the local validator running, generate the synthetic
+fixtures and run the acceptance checks without opening the Desk:
+
+```bash
+pnpm fixtures
+pnpm demo:check
+```
+
+`demo:check` checks shared proof reuse, successful transfers, the Alfa/Beta policy
+differences, issuer and binding authorization, authorized SAS close, rejected
+inbound/outbound transfers with unchanged token balances, grouped incidents, and
+wallet-signed renewal across both assets in one transaction. Expected failures
+are submitted with preflight disabled only in this local runner, so their
+signatures and hook errors are recorded in the ledger. It prints `PASS`, `FAIL`,
+`NOT_RUN`, and public transaction evidence; any failed expectation returns a
+nonzero exit status. Failed transactions still consume synthetic SOL fees.
+
+The runner changes synthetic localnet state: it closes X's proofs and creates a
+replacement. Regenerate fixtures to restore the original demonstration scenario.
+It requires loopback RPC/WebSocket endpoints and a localnet manifest, and does
+not deploy programs or authorize use with real assets. A loopback URL alone does
+not verify which network a proxy forwards to; use the project's local validator.
+
+```bash
+pnpm demo:check --self-test  # checks runner assertions without a validator
+pnpm typecheck
+pnpm test
+pnpm --filter @aveo/app lint
+pnpm --filter @aveo/app build
+cargo test -p aveo-hook --locked
+```
+
+The Rust tests exercise validation functions with account fixtures. The acceptance
+runner exercises the deployed local programs. Neither alone proves every scenario
+in the T01–T17 matrix or an official MPL-3643 integration.
+
+Local verification on 2026-10-09 used Node 22, Agave 2.3.0 and platform-tools
+v1.53: 23 Rust tests, 98 frontend tests and 4 backend tests passed, as did the
+13-stage acceptance runner, TypeScript checks, ESLint and the SBF/frontend builds.
+The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
+also reports its existing experimental SQLite warning during backend tests.
+These results establish local behavior, not a devnet deployment or the full
+T01–T17 security matrix.
+
+### Proposed backlog issues
+
+- Extract the network adapter and incident model into shared packages so the
+  Desk and CLI use the same application layer without importing frontend files.
+- Share binary account fixtures between Rust and TypeScript tests to detect
+  parser and diagnosis differences before they reach a demonstration or pilot.
+
 ## Estrutura
 
 ```

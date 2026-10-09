@@ -232,7 +232,7 @@ async function main() {
       ])
       return 'ok'
     } catch (error) {
-      return describeFailure(error, AVEO_HOOK_PROGRAM_ID)
+      throw new Error(`Fixture binding failed: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
     }
   }
   for (const asset of assets) {
@@ -274,7 +274,7 @@ async function main() {
       await send(treasury, await buildInstructions(ctx, request, treasury), 1_000_000)
       log(`Transferência ${t.amount} ${t.asset.symbol}`, `tesouraria → ${t.to.address}: ok (hook aprovou)`)
     } catch (error) {
-      log(`Transferência ${t.amount} ${t.asset.symbol}`, `FALHOU: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
+      throw new Error(`Fixture transfer failed: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
     }
   }
 

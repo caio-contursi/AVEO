@@ -12,6 +12,7 @@
     "fixtures": "pnpm --filter @aveo/app fixtures",
     "scenario": "pnpm --filter @aveo/app scenario",
     "scan:once": "pnpm --filter @aveo/app scan:once",
+    "demo:check": "pnpm --filter @aveo/app demo:check",
     "dev": "pnpm --filter @aveo/app dev"
   },
   "pnpm": {
