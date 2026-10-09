@@ -1,6 +1,6 @@
-// Read-only local acceptance: healthy RPC reads are real; failures are injected at the SDK boundary.
+// Read-only local acceptance with SDK injection or an ephemeral loopback HTTP fault server.
 import { DeskError } from '@aveo/contracts'
-import { isSignature, type Address } from '@solana/kit'
+import { createSolanaRpc, isSignature, type Address } from '@solana/kit'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +15,8 @@ import { parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applySends, applyVerification } from '../src/features/incidents/model'
 import { recheckSubmission } from '../src/features/operations/execution'
 import { AcceptanceReportBuilder } from './acceptance-report'
+import { createHttpFaultProxy } from './http-fault-proxy'
+import { FAULT_READ_METHODS } from './fault-read-methods'
 
 class FaultExpectation extends Error {}
 function expect(condition: unknown, message: string): asserts condition {
@@ -30,9 +32,10 @@ export function requireLocalFaultEndpoint(endpoint: string): void {
 
 export type RpcFault = 'none' | 'unavailable' | 'stale-slot' | 'account-timeout' | 'confirmation-timeout'
 
-/** Fault injection never forwards sendTransaction, even if a tested path mistakenly asks to send. */
+/** Fault injection never forwards methods outside the shared read/simulation allowlist. */
 export function faultContext(base: ApiContext, mode: RpcFault) {
   const counters = { reads: 0, sends: 0, aborted: 0 }
+  const allowed: ReadonlySet<string> = new Set(FAULT_READ_METHODS)
   const suspend = (options?: { abortSignal?: AbortSignal }): Promise<never> => new Promise((_resolve, reject) => {
     const abort = () => { counters.aborted++; reject(new Error('Injected request cancellation')) }
     if (options?.abortSignal?.aborted) abort()
@@ -40,7 +43,7 @@ export function faultContext(base: ApiContext, mode: RpcFault) {
   })
   const rpc = new Proxy(base.rpc, {
     get(target, key) {
-      if (key === 'sendTransaction') return () => { counters.sends++; throw new Error('Fault acceptance is read-only') }
+      if (typeof key === 'string' && !allowed.has(key)) return () => { counters.sends++; throw new Error('Fault acceptance is read-only') }
       if (key === 'getSignatureStatuses' && mode === 'confirmation-timeout') {
         return () => ({ send: (options?: { abortSignal?: AbortSignal }) => { counters.reads++; return suspend(options) } })
       }
@@ -68,9 +71,10 @@ const stages = [
   'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves',
 ] as const
 
-async function main(): Promise<void> {
+export async function runFaultAcceptance(transport: 'sdk-injected' | 'http-loopback' = 'sdk-injected'): Promise<void> {
   const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  const reportFile = path.join(appRoot, '.dev', 'fault-report.json')
+  const reportFile = path.join(appRoot, '.dev', transport === 'http-loopback' ? 'http-fault-report.json' : 'fault-report.json')
+  let http: Awaited<ReturnType<typeof createHttpFaultProxy>> | undefined
   const report = new AcceptanceReportBuilder(new Date().toISOString())
   let current = 0
   let exitCode = 0
@@ -98,25 +102,30 @@ async function main(): Promise<void> {
     const alfa = deployment.assets.find((asset) => asset.id === 'alfa')
     expect(x && treasury && alfa && deployment.assets.length === 2, 'Fault checks require X, treasury and two fixture assets')
     const base = createApiContext({ cluster: 'localnet', rpcUrl: endpoint, commitment: 'confirmed', programId: deployment.programs.aveoHook, deployment })
-    const healthy = faultContext(base, 'none')
+    if (transport === 'http-loopback') http = await createHttpFaultProxy(endpoint)
+    const createFault = (mode: RpcFault) => http
+      ? { ctx: { ...base, rpc: createSolanaRpc(http.endpoint) }, counters: http.select(mode) }
+      : faultContext(base, mode)
+    const healthy = createFault('none')
     const inspectX = (ctx: ApiContext) => Promise.all(deployment.assets.map((asset) => inspectEligibility(ctx, asset.mint, x.address)))
     const baseline = await inspectX(healthy.ctx)
     expect(baseline.every((snapshot) => snapshot.verdict === 'eligible' && snapshot.read.slot > 0), 'Both X bindings must be eligible on the real local validator')
     const baselineSlot = Math.max(...baseline.map((snapshot) => snapshot.read.slot))
     let store = applyScan(EMPTY_STORE, baseline, baselineSlot, new Date().toISOString())
-    evidence({ wallet: x.address, signature, slots: baseline.map((snapshot) => snapshot.read.slot) })
+    evidence({ wallet: x.address, signature, slots: baseline.map((snapshot) => snapshot.read.slot), faultTransport: transport })
     pass()
 
-    const timeout = faultContext(base, 'account-timeout')
+    const timeout = createFault('account-timeout')
     let timedOut = false
     try { await readAccounts(timeout.ctx, [await findPolicyPda(base.programId, alfa.mint)], undefined, 75) } catch (error) {
       timedOut = error instanceof DeskError && error.code === 'ReadUnverifiable'
     }
+    await http?.settleCancellation('account-timeout')
     expect(timedOut && timeout.counters.aborted === 1 && timeout.counters.sends === 0, 'Timed-out account reads must abort and fail closed without sending')
     evidence({ status: 'unknown', abortedRequests: timeout.counters.aborted, sendCalls: timeout.counters.sends })
     pass()
 
-    const unavailable = faultContext(base, 'unavailable')
+    const unavailable = createFault('unavailable')
     const unknown = await inspectX(unavailable.ctx)
     expect(unknown.every((snapshot) => snapshot.verdict === 'unknown' && snapshot.actions.length === 0), 'Unavailable reads must not report eligibility or revocation')
     store = applyScan(store, unknown, baselineSlot, new Date().toISOString())
@@ -125,7 +134,7 @@ async function main(): Promise<void> {
     evidence({ incidentType: incident.type, wallet: x.address, affectedMints: incident.affectedMints, verdicts: unknown.map((snapshot) => snapshot.verdict), sendCalls: unavailable.counters.sends })
     pass()
 
-    const stale = faultContext(base, 'stale-slot')
+    const stale = createFault('stale-slot')
     const inconsistent = await inspectX(stale.ctx)
     expect(inconsistent.every((snapshot) => snapshot.verdict === 'unknown'), 'A final account read older than discovery must be unknown')
     let pending = applyVerification(incident, inconsistent, new Date().toISOString())
@@ -133,8 +142,9 @@ async function main(): Promise<void> {
     evidence({ wallet: x.address, verdicts: inconsistent.map((snapshot) => snapshot.verdict), rpcReadCalls: stale.counters.reads, sendCalls: stale.counters.sends })
     pass()
 
-    const confirmationTimeout = faultContext(base, 'confirmation-timeout')
+    const confirmationTimeout = createFault('confirmation-timeout')
     const result = await confirmSignature(confirmationTimeout.ctx, signature as Parameters<typeof confirmSignature>[1], 75)
+    await http?.settleCancellation('confirmation-timeout')
     expect(result.status === 'unknown' && result.error?.code === 'ConfirmationUnknown' && confirmationTimeout.counters.aborted === 1, 'Hidden confirmation must remain unknown and abort at the deadline')
     pending = applySends(pending, [{ evidence: { ...result, signature } }], new Date().toISOString())
     pending = applyVerification(pending, inconsistent, new Date().toISOString())
@@ -142,23 +152,26 @@ async function main(): Promise<void> {
     evidence({ signature, status: result.status, abortedRequests: confirmationTimeout.counters.aborted, sendCalls: confirmationTimeout.counters.sends })
     pass()
 
-    const backend = new AveoSasHookBackend(healthy.ctx)
+    const recovery = createFault('none')
+    const backend = new AveoSasHookBackend(recovery.ctx)
     const plan = await backend.planTransfer({ cluster: 'localnet', mint: alfa.mint, sourceOwner: treasury.address, destinationOwner: x.address, amount: 1n })
-    const recovered = await recheckSubmission({ ctx: healthy.ctx, backend, plan, signature })
-    expect(recovered.status === 'confirmed' && recovered.signature === signature && recovered.readback?.length === 2 && healthy.counters.sends === 0, 'Recovery must verify the original signature without submitting a transaction')
-    evidence({ signature, status: recovered.status, slot: recovered.slot, sendCalls: healthy.counters.sends })
+    const recovered = await recheckSubmission({ ctx: recovery.ctx, backend, plan, signature })
+    expect(recovered.status === 'confirmed' && recovered.signature === signature && recovered.readback?.length === 2 && recovery.counters.sends === 0, 'Recovery must verify the original signature without submitting a transaction')
+    evidence({ signature, status: recovered.status, slot: recovered.slot, sendCalls: recovery.counters.sends })
     pass()
 
-    const fresh = await inspectX(healthy.ctx)
+    const fresh = await inspectX(recovery.ctx)
     pending = applyVerification(pending, fresh, new Date().toISOString())
     expect(pending.state === 'resolved' && pending.resolvedSlot !== undefined, 'Only a complete fresh eligible readback may resolve the read-unverifiable incident')
-    expect([healthy, timeout, unavailable, stale, confirmationTimeout].every((fault) => fault.counters.sends === 0), 'Fault checks must never request a send')
+    expect([healthy, timeout, unavailable, stale, confirmationTimeout, recovery].every((fault) => fault.counters.sends === 0), 'Fault checks must never request a send')
     evidence({ wallet: x.address, slot: pending.resolvedSlot, verdicts: fresh.map((snapshot) => snapshot.verdict), sendCalls: 0 })
     pass()
   } catch (error) {
     exitCode = 1
     line(`FAIL ${stages[current]}: ${error instanceof FaultExpectation ? error.message : 'Check local validator and acceptance prerequisites'}`)
     for (const stage of stages.slice(current + 1)) line(`NOT_RUN ${stage}`)
+  } finally {
+    await http?.close()
   }
   const result = report.finish(exitCode, new Date().toISOString())
   mkdirSync(path.dirname(reportFile), { recursive: true })
@@ -168,5 +181,5 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(() => { console.error('FAIL fault-check: could not finish the local report'); process.exitCode = 1 })
+  runFaultAcceptance().catch(() => { console.error('FAIL fault-check: could not finish the local report'); process.exitCode = 1 })
 }

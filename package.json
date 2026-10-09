@@ -15,6 +15,7 @@
     "demo:check": "pnpm --filter @aveo/app demo:check",
     "demo:report": "pnpm --filter @aveo/app demo:report",
     "demo:faults": "pnpm --filter @aveo/app demo:faults",
+    "demo:http-faults": "pnpm --filter @aveo/app demo:http-faults",
     "dev": "pnpm --filter @aveo/app dev"
   },
   "pnpm": {

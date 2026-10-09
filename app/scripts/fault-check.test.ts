@@ -46,6 +46,19 @@ describe('read-only fault acceptance guard', () => {
     expect(real.send).not.toHaveBeenCalled()
     expect(fault.counters).toEqual({ reads: 1, sends: 0, aborted: 0 })
   })
+  it.each(['none', 'unavailable', 'stale-slot', 'account-timeout', 'confirmation-timeout'] as const)('blocks airdrops and unknown methods in SDK mode %s', (mode) => {
+    const real = base()
+    const requestAirdrop = vi.fn()
+    const customMethod = vi.fn()
+    const ctx = { ...real.ctx, rpc: { ...real.ctx.rpc, requestAirdrop, customMethod } } as unknown as ApiContext
+    const fault = faultContext(ctx, mode)
+    const rpc = fault.ctx.rpc as unknown as Record<string, () => unknown>
+    expect(() => rpc.requestAirdrop!()).toThrow('read-only')
+    expect(() => rpc.customMethod!()).toThrow('read-only')
+    expect(requestAirdrop).not.toHaveBeenCalled()
+    expect(customMethod).not.toHaveBeenCalled()
+    expect(fault.counters).toEqual({ reads: 0, sends: 2, aborted: 0 })
+  })
   it('leaves discovery healthy but rejects an injected final slot below its floor', async () => {
     const real = base()
     const fault = faultContext(real.ctx, 'stale-slot')
