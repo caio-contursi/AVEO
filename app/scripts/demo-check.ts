@@ -2,6 +2,8 @@
 // pnpm --filter @aveo/app exec tsx scripts/demo-check.ts [--self-test]
 // Evidence contains public addresses, signatures, slots, codes, token balances and delegated allowances only.
 import assert from 'node:assert/strict'
+import { AUTHORIZATION_STAGES, runAuthorizationChecks } from './authorization-checks'
+import { BOUNDARY_STAGES, runBoundaryChecks } from './boundary-checks'
 import { existsSync } from 'node:fs'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
 import { findAssociatedTokenPda, getApproveCheckedInstruction, getRevokeInstruction, getTokenDecoder, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute, type Token } from '@solana-program/token-2022'
@@ -187,7 +189,8 @@ async function selfTest(): Promise<void> {
 
 const stages = [
   'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
-  'external-with-extra-accounts', 'external-without-extra-accounts', 'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
+  'external-with-extra-accounts', 'external-without-extra-accounts', ...AUTHORIZATION_STAGES, ...BOUNDARY_STAGES,
+  'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
   'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
   'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping',
   'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
@@ -365,6 +368,13 @@ async function main(): Promise<void> {
     pass()
     await externalTransfer(false)
     pass()
+
+    const completeStage = (stage: string) => {
+      expect(stages[current] === stage, 'Security acceptance stage order mismatch')
+      pass()
+    }
+    await runAuthorizationChecks({ ctx, treasury: treasurySigner, x: xSigner, asset: assets[0]!, reject, emit: evidence, completeStage })
+    await runBoundaryChecks({ ctx, treasurySigner, xSigner, walletX: x.address, asset: assets[0]!, loopbackAuthorized: true, evidence, passStage: completeStage })
 
     // T12: the delegate authorizes spending; X remains the compliance subject.
     const delegateSigner = (await newDevWallet('delegate', 'Synthetic delegate', 'investor')).signer
