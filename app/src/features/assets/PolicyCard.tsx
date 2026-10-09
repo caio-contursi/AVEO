@@ -12,6 +12,7 @@ import { EvidenceView } from '../operations/EvidenceView'
 import { labelFor } from '../operations/labels'
 import { PlanReview } from '../operations/PlanReview'
 import { useExecutePlan } from '../operations/useExecutePlan'
+import { usePlanPreparation } from '../operations/usePlanPreparation'
 
 const policyFormSchema = z.object({
   credentials: z.array(z.string()).min(1).max(2),
@@ -22,10 +23,11 @@ const policyFormSchema = z.object({
 
 type PolicyForm = z.infer<typeof policyFormSchema>
 
-/** Edição da política pelo emissor (update_policy). Só aparece para o issuer_authority conectado. */
+/** Issuer policy editing (update_policy), available to the connected issuer authority. */
 function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => void }) {
   const { t } = useI18n()
-  const { backend, deployment } = useReadyDesk()
+  const { backend, ctx, deployment } = useReadyDesk()
+  const { connected } = useWallet()
   const policy = state.policy!
   const [form, setForm] = useState<PolicyForm>({
     credentials: policy.pairs.map((p) => p.credential),
@@ -34,40 +36,45 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
     active: policy.active,
   })
   const [error, setError] = useState<string>()
-  const [plan, setPlan] = useState<DeskPlan>()
-  const [planning, setPlanning] = useState(false)
+  const preparation = usePlanPreparation<DeskPlan>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment,
+    state.asset.mint, policy.policyVersion.toString(), form, connected?.address,
+  ])
+  const { plan, planning } = preparation
   const execution = useExecutePlan()
 
+  const updateForm = (update: (current: PolicyForm) => PolicyForm) => {
+    if (!execution.reset()) return
+    preparation.clear()
+    setForm(update)
+  }
+
   const toggle = (credential: string) =>
-    setForm((f) => ({
+    updateForm((f) => ({
       ...f,
       credentials: f.credentials.includes(credential) ? f.credentials.filter((c) => c !== credential) : [...f.credentials, credential],
     }))
 
   const simulate = async () => {
+    if (!execution.reset()) return
     const parsed = policyFormSchema.safeParse(form)
     if (!parsed.success) {
       setError(t('policy.errorPairs'))
       return
     }
     setError(undefined)
-    if (!execution.reset()) return
-    setPlanning(true)
-    try {
+    await preparation.prepare(() => {
       const pairs = parsed.data.credentials.map((credential) => {
         const verifier = deployment.verifiers.find((v) => v.credential === credential)!
         return { credential: verifier.credential, schema: verifier.schema }
       })
-      setPlan(
-        await backend.planUpdatePolicy({
-          mint: state.asset.mint,
-          authority: policy.issuerAuthority,
-          args: { proofDomain: policy.proofDomain, pairs, requireKyc: parsed.data.requireKyc, requireAccredited: parsed.data.requireAccredited, active: parsed.data.active },
-        }),
-      )
-    } finally {
-      setPlanning(false)
-    }
+      const input = {
+        mint: state.asset.mint,
+        authority: policy.issuerAuthority,
+        args: { proofDomain: new Uint8Array(policy.proofDomain), pairs, requireKyc: parsed.data.requireKyc, requireAccredited: parsed.data.requireAccredited, active: parsed.data.active },
+      }
+      return backend.planUpdatePolicy(input)
+    })
   }
 
   return (
@@ -86,15 +93,15 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
       </Field>
       <div className="checks" style={{ marginTop: 8 }}>
         <label>
-          <input type="checkbox" checked={form.requireKyc} onChange={(e) => setForm((f) => ({ ...f, requireKyc: e.target.checked }))} />
+          <input type="checkbox" checked={form.requireKyc} onChange={(e) => { const checked = e.target.checked; updateForm((f) => ({ ...f, requireKyc: checked })) }} />
           {t('policy.requireKyc')}
         </label>
         <label>
-          <input type="checkbox" checked={form.requireAccredited} onChange={(e) => setForm((f) => ({ ...f, requireAccredited: e.target.checked }))} />
+          <input type="checkbox" checked={form.requireAccredited} onChange={(e) => { const checked = e.target.checked; updateForm((f) => ({ ...f, requireAccredited: checked })) }} />
           {t('policy.requireAccredited')}
         </label>
         <label>
-          <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />
+          <input type="checkbox" checked={form.active} onChange={(e) => { const checked = e.target.checked; updateForm((f) => ({ ...f, active: checked })) }} />
           {t('policy.active')}
         </label>
       </div>
@@ -106,13 +113,14 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
           {t('policy.cancel')}
         </button>
       </div>
+      {preparation.error && <p className="warn-text" role="alert">{t('operations.prepareFailed')}</p>}
       {plan && (
         <PlanReview
           plan={plan}
           signerLabel={labelFor(deployment, policy.issuerAuthority)}
           signLabel={t('policy.sign')}
           execution={execution.state}
-          onSign={() => void execution.execute(plan)}
+          onSign={() => { if (preparation.isCurrent(plan)) void execution.execute(plan) }}
         />
       )}
       {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} persistenceWarning={execution.journalError} />}

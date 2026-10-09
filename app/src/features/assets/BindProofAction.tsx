@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { DeskPlan } from '../../api/backend'
 import type { DeskSnapshot } from '../../api/diagnostics'
 import type { ProofRow } from '../../api/inventory'
@@ -10,6 +9,7 @@ import { EvidenceView } from '../operations/EvidenceView'
 import { labelFor } from '../operations/labels'
 import { PlanReview } from '../operations/PlanReview'
 import { useExecutePlan } from '../operations/useExecutePlan'
+import { usePlanPreparation } from '../operations/usePlanPreparation'
 
 /**
  * Vincula uma prova válida e aceita pela política (set_binding). A própria carteira assina:
@@ -19,20 +19,18 @@ export function BindProofAction({ snapshot, proof }: { snapshot: DeskSnapshot; p
   const { t } = useI18n()
   const { backend, ctx, deployment } = useReadyDesk()
   const { connected } = useWallet()
-  const [plan, setPlan] = useState<DeskPlan>()
-  const [planning, setPlanning] = useState(false)
+  const preparation = usePlanPreparation<DeskPlan>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment,
+    snapshot.mint, snapshot.wallet, proof.address, snapshot.read.slot, connected?.address,
+  ])
+  const { plan, planning, error } = preparation
   const execution = useExecutePlan()
   const walletLabel = labelFor(deployment, snapshot.wallet)
   const assetLabel = labelFor(deployment, snapshot.mint)
 
   const prepare = async () => {
     if (!execution.reset()) return
-    setPlanning(true)
-    try {
-      setPlan(await backend.planRenewBinding({ cluster: ctx.cluster, mint: snapshot.mint, wallet: snapshot.wallet, attestation: proof.address }))
-    } finally {
-      setPlanning(false)
-    }
+    await preparation.prepare(() => backend.planRenewBinding({ cluster: ctx.cluster, mint: snapshot.mint, wallet: snapshot.wallet, attestation: proof.address }))
   }
 
   return (
@@ -43,13 +41,16 @@ export function BindProofAction({ snapshot, proof }: { snapshot: DeskSnapshot; p
         </button>
         {connected?.address !== snapshot.wallet && <span className="small muted">{t('detail.bindNeedsWallet', { wallet: walletLabel })}</span>}
       </div>
+      {error && <p className="small warn-text" role="alert">{t('operations.prepareFailed')}</p>}
       {plan && (
         <PlanReview
           plan={plan}
           signerLabel={walletLabel}
           signLabel={t('incidents.sign', { wallet: walletLabel })}
           execution={execution.state}
-          onSign={() => void execution.execute(plan)}
+          onSign={() => {
+            if (preparation.isCurrent(plan)) void execution.execute(plan)
+          }}
         />
       )}
       {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} persistenceWarning={execution.journalError} />}

@@ -1,5 +1,6 @@
 // Textos da interface em português e inglês. O dicionário em inglês precisa ter as mesmas chaves (checado pelo TypeScript).
 const pt = {
+  'operations.prepareFailed': 'Não foi possível preparar e simular esta ação. Nenhuma transação foi enviada; confira os dados e tente preparar novamente.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Quem pode mover o quê, com qual prova, e como fechar o incidente.',
   'app.syntheticBanner': 'Provas sintéticas; demo devnet; sem KYC real',
@@ -297,6 +298,7 @@ const pt = {
 export type MessageKey = keyof typeof pt
 
 const en: Record<MessageKey, string> = {
+  'operations.prepareFailed': 'Could not prepare and simulate this action. No transaction was sent; check the inputs and prepare again.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Who can move what, under which proof, and how to close the incident.',
   'app.syntheticBanner': 'Synthetic proofs; devnet demo; no real KYC',

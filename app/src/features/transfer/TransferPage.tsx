@@ -13,6 +13,7 @@ import { EvidenceView } from '../operations/EvidenceView'
 import { labelFor } from '../operations/labels'
 import { PlanReview } from '../operations/PlanReview'
 import { useExecutePlan } from '../operations/useExecutePlan'
+import { usePlanPreparation } from '../operations/usePlanPreparation'
 
 interface FormState {
   asset: string
@@ -52,9 +53,10 @@ export function TransferPage() {
     amount: '1',
   })
   const [errors, setErrors] = useState<FormErrors>({})
-  const [plan, setPlan] = useState<DeskPlan>()
-  const [planning, setPlanning] = useState(false)
-  const [planError, setPlanError] = useState<unknown>()
+  const preparation = usePlanPreparation<DeskPlan>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment, form, connected?.address,
+  ])
+  const { plan, planning } = preparation
 
   // Suggest a connected manifest wallet only before an operation starts.
   useEffect(() => {
@@ -69,8 +71,8 @@ export function TransferPage() {
 
   const update = (patch: Partial<FormState>) => {
     if (!execution.reset()) return
+    preparation.clear()
     setForm((f) => ({ ...f, ...patch }))
-    setPlan(undefined)
   }
 
   const validate = (): bigint | undefined => {
@@ -99,19 +101,12 @@ export function TransferPage() {
     const amount = validate()
     if (amount === undefined) return
     if (!execution.reset()) return
-    setPlanning(true)
-    setPlanError(undefined)
-    try {
-      setPlan(await backend.planTransfer({ cluster: ctx.cluster, mint: asset.mint, sourceOwner: form.from, destinationOwner: form.to, amount }))
-    } catch (error) {
-      setPlanError(error)
-    } finally {
-      setPlanning(false)
-    }
+    const request = { cluster: ctx.cluster, mint: asset.mint, sourceOwner: form.from, destinationOwner: form.to, amount }
+    await preparation.prepare(() => backend.planTransfer(request))
   }
 
   const sign = () => {
-    if (!plan) return
+    if (!plan || !preparation.isCurrent(plan)) return
     const before = [balanceOf(form.from), balanceOf(form.to)]
     void execution.execute(plan, { balancesBefore: before.every((b) => b !== undefined) ? (before as bigint[]) : undefined })
   }
@@ -163,7 +158,7 @@ export function TransferPage() {
           </div>
           <p className="small muted">{t('transfer.note')}</p>
         </form>
-        {planError !== undefined && <ReasonList reasons={[{ code: 'ReadUnverifiable', message: planError instanceof Error ? planError.message : String(planError) }]} showDetail />}
+        {preparation.error && <p className="warn-text" role="alert">{t('operations.prepareFailed')}</p>}
       </Card>
 
       {plan && (
