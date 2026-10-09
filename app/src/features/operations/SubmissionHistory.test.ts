@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiContext } from '../../api/context'
 import { I18nContext } from '../../i18n/context'
 import { messages, type Language } from '../../i18n/messages'
-import { confirmReceipt, SubmissionHistory, SubmissionReceiptView } from './SubmissionHistory'
+import { confirmReceipt, createReceiptRemoval, SubmissionHistory, SubmissionReceiptView } from './SubmissionHistory'
 import { SubmissionJournal, type SubmissionReceipt } from './submission-journal'
 
 const mocks = vi.hoisted(() => ({
@@ -119,6 +119,10 @@ describe('public receipt history markup', () => {
     expect(html).toContain(messages[language]['receipts.exportReceipt'])
     expect(html).toContain('aria-live="polite"')
     expect(html).not.toContain('<textarea')
+    expect(html).toContain(messages[language]['receipts.removeLocal'])
+    expect(html).not.toContain(messages[language]['receipts.removeWarning'])
+    expect(html).not.toContain(messages[language]['receipts.confirmRemove'])
+    expect(html).not.toContain(messages[language]['receipts.cancelRemove'])
     expect(html).not.toContain('aveo-public-submission-receipt')
     expect(html).toContain(messages[language]['evidence.unknown'])
     expect(html).not.toContain('private')
@@ -181,5 +185,159 @@ describe('public receipt history markup', () => {
     expect(html).toContain(messages.en['receipts.exportReceipt'])
     expect(mocks.confirmSignature).not.toHaveBeenCalled()
     expect(mocks.explorerUrl).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'pt'] as const)('disables removal without an optional callback and keeps copying available (%s)', async (language) => {
+    const html = render(createElement(SubmissionReceiptView, {
+      receipt: await receipt(), busy: false, disabled: false, onRecheck: () => {},
+    }), language)
+    expect(html).toContain(`<button type="button" disabled="">${messages[language]['receipts.removeLocal']}</button>`)
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.copyReceipt']}</button>`)
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.exportReceipt']}</button>`)
+    expect(html).not.toContain(messages[language]['receipts.removeWarning'])
+  })
+
+  it.each([undefined, { matches: false }] as const)('allows explicit removal for unknown or mismatched metadata: %j', async (result) => {
+    const onRemove = vi.fn(async () => {})
+    const html = render(createElement(SubmissionReceiptView, {
+      receipt: await receipt(), result, busy: false, disabled: true, onRecheck: () => {}, onRemove,
+    }))
+    expect(html).toContain(`<button type="button">${messages.en['receipts.removeLocal']}</button>`)
+    expect(html).toContain(messages.en['evidence.unknown'])
+    expect(html).not.toContain(messages.en['evidence.confirmed'])
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it.each([{ busy: true }, { busy: false, matching: true }])('disables removal while its receipt is being checked: %j', async (props) => {
+    const html = render(createElement(SubmissionReceiptView, {
+      receipt: await receipt(), ...props, disabled: false, onRecheck: () => {}, onRemove: async () => {},
+    }))
+    expect(html).toContain(`<button type="button" disabled="">${messages.en['receipts.removeLocal']}</button>`)
+    expect(html).toContain(`<button type="button">${messages.en['receipts.copyReceipt']}</button>`)
+  })
+})
+
+describe('explicit local receipt removal', () => {
+  it('requires the warning step, supports cancel, and never reads the network', async () => {
+    const entry = await receipt(), onRemove = vi.fn(async () => {}), changed = vi.fn()
+    const removal = createReceiptRemoval(changed)
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).not.toHaveBeenCalled()
+    removal.request()
+    expect(changed).toHaveBeenLastCalledWith('confirming')
+    expect(onRemove).not.toHaveBeenCalled()
+    removal.cancel()
+    expect(changed).toHaveBeenLastCalledWith('idle')
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).not.toHaveBeenCalled()
+    removal.request()
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(entry)
+    expect(changed).toHaveBeenLastCalledWith('removed')
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+    expect(mocks.explorerUrl).not.toHaveBeenCalled()
+  })
+
+  it('guards double submission synchronously and cannot cancel a pending removal', async () => {
+    const entry = await receipt(), changed = vi.fn()
+    let resolve!: () => void
+    const onRemove = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    const removal = createReceiptRemoval(changed)
+    removal.request()
+    const pending = removal.confirm(entry, onRemove, () => true)
+    expect(changed).toHaveBeenLastCalledWith('removing')
+    removal.cancel()
+    removal.request()
+    await removal.confirm(entry, onRemove, () => true)
+    expect(changed).toHaveBeenCalledTimes(2)
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(entry)
+    resolve()
+    await pending
+    expect(changed).toHaveBeenLastCalledWith('removed')
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).toHaveBeenCalledTimes(1)
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it('blocks a check in progress, missing callbacks, and inactive contexts', async () => {
+    const entry = await receipt(), onRemove = vi.fn(async () => {}), changed = vi.fn()
+    const removal = createReceiptRemoval(changed)
+    removal.request(true)
+    expect(changed).not.toHaveBeenCalled()
+    removal.request()
+    await removal.confirm(entry, undefined, () => true)
+    await removal.confirm(entry, onRemove, () => false)
+    await removal.confirm(entry, onRemove, () => true, true)
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledExactlyOnceWith('confirming')
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(entry)
+  })
+
+  it('keeps the receipt on failure and emits only a static error state before explicit retry', async () => {
+    const entry = await receipt(), changed = vi.fn()
+    const onRemove = vi.fn(async (): Promise<void> => { throw new Error('private storage path and RPC key') })
+    const removal = createReceiptRemoval(changed)
+    removal.request()
+    await removal.confirm(entry, onRemove, () => true)
+    expect(changed).toHaveBeenLastCalledWith('removeFailed')
+    expect(JSON.stringify(changed.mock.calls)).not.toContain('private')
+    expect(mocks.journal!.getSnapshot()).toEqual([entry])
+    expect(onRemove).toHaveBeenCalledTimes(1)
+    onRemove.mockResolvedValueOnce(undefined)
+    await removal.confirm(entry, onRemove, () => true)
+    expect(onRemove).toHaveBeenCalledTimes(2)
+    expect(changed).toHaveBeenLastCalledWith('removed')
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it.each(['success', 'failure'] as const)('discards late %s after unmount or a new context generation', async (answer) => {
+    const entry = await receipt(), changed = vi.fn()
+    let generation = 1
+    let resolve!: () => void, reject!: (error: Error) => void
+    const removal = createReceiptRemoval(changed)
+    removal.request()
+    const pending = removal.confirm(entry, () => new Promise<void>((done, fail) => { resolve = done; reject = fail }), () => generation === 1)
+    generation = 2
+    if (answer === 'success') resolve()
+    else reject(new Error('private details'))
+    await pending
+    expect(changed.mock.calls).toEqual([['confirming'], ['removing']])
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it('retains real journal metadata when the removal storage write fails', async () => {
+    let stored: string | null = null
+    let fail = false
+    const journal = new SubmissionJournal({
+      getItem: () => stored,
+      setItem: (_key, value) => { if (fail) throw new Error('private storage details'); stored = value },
+    })
+    await journal.capture(ctx, signature)
+    const entry = journal.getSnapshot()[0]!, original = stored, changed = vi.fn()
+    const removal = createReceiptRemoval(changed)
+    fail = true
+    removal.request()
+    await removal.confirm(entry, (receipt) => journal.remove(receipt.signature), () => true)
+    expect(changed).toHaveBeenLastCalledWith('removeFailed')
+    expect(journal.getSnapshot()).toEqual([entry])
+    expect(stored).toBe(original)
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it('keeps independent receipts independent when one removal is pending', async () => {
+    const entry = await receipt(), firstChanged = vi.fn(), secondChanged = vi.fn()
+    const first = createReceiptRemoval(firstChanged), second = createReceiptRemoval(secondChanged)
+    let resolve!: () => void
+    first.request()
+    const pending = first.confirm(entry, () => new Promise<void>((done) => { resolve = done }), () => true)
+    second.request()
+    second.cancel()
+    expect(secondChanged.mock.calls).toEqual([['confirming'], ['idle']])
+    expect(firstChanged).toHaveBeenLastCalledWith('removing')
+    resolve()
+    await pending
+    expect(secondChanged).toHaveBeenLastCalledWith('idle')
   })
 })
