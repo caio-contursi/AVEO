@@ -10,10 +10,11 @@ import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } 
 import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, inspectPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
 import { receiptCapacity } from './receipt-capacity'
 import { MAX_RECEIPTS, MAX_RECEIPT_BYTES } from './receipt-limits'
+import { downloadPublicReceiptHistory, type ReceiptHistoryDownloadResult } from './receipt-download'
 
 const receiptLimitParams = { maxCount: MAX_RECEIPTS, maxBytes: MAX_RECEIPT_BYTES }
 
-type HistoryExportState = { status: ReceiptCopyResult['status'] | 'manualExport' | 'copying'; text?: string }
+type HistoryExportState = { status: ReceiptCopyResult['status'] | ReceiptHistoryDownloadResult['status'] | 'manualExport' | 'copying'; text?: string }
 
 export function SubmissionHistoryCapacity({ receipts, error }: {
   receipts: unknown; error?: SubmissionJournal['error']
@@ -62,6 +63,18 @@ export function createHistoryExport(onChange: (state: HistoryExportState) => voi
       const text = exportPublicReceiptHistory(receipts)
       onChange(text === undefined ? { status: 'invalidExport' } : { status: 'manualExport', text })
     },
+    download(receipts: readonly SubmissionReceipt[], isCurrent: () => boolean) {
+      const active = () => {
+        try { return isCurrent() } catch { return false }
+      }
+      if (receipts.length === 0 || !active()) return
+      // Download supersedes clipboard feedback, not an already-started clipboard write.
+      invalidate()
+      const started = generation
+      const current = () => generation === started && active()
+      const result = downloadPublicReceiptHistory(receipts, current)
+      if (result && current()) onChange(result)
+    },
   }
 }
 
@@ -84,6 +97,7 @@ export function SubmissionHistoryExport({ receipts, getSnapshot }: {
   const exportable = receipts.length > 0 && preview.status === 'ready'
   return <div className="box">
     <p className="small muted">{t('receipts.historyExportNote')}</p>
+    <p className="small muted">{t('receipts.downloadNote')}</p>
     <div role="status" aria-live="polite" aria-atomic="true">
       <p className="small muted">{t('receipts.historyPreviewNote')}</p>
       {preview.status === 'invalid'
@@ -96,7 +110,9 @@ export function SubmissionHistoryExport({ receipts, getSnapshot }: {
     <button type="button" disabled={!exportable || state?.status === 'copying'}
       onClick={() => { void exporter.copy(receipts, isCurrent) }}>{t('receipts.copyHistory')}</button>{' '}
     <button type="button" disabled={!exportable}
-      onClick={() => { exporter.manual(receipts, isCurrent) }}>{t('receipts.exportHistory')}</button>
+      onClick={() => { exporter.manual(receipts, isCurrent) }}>{t('receipts.exportHistory')}</button>{' '}
+    <button type="button" disabled={!exportable}
+      onClick={() => { exporter.download(receipts, isCurrent) }}>{t('receipts.downloadHistory')}</button>
     <p className="small" role="status" aria-live="polite" aria-atomic="true">
       {state && t(state.status === 'copying' ? 'receipts.historyCopying'
         : state.status === 'copied' ? 'receipts.historyCopied'

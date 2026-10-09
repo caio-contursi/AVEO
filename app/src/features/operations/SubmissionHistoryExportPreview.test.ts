@@ -52,10 +52,10 @@ function previewRegion(html: string) {
 }
 
 function expectActions(html: string, language: Language, disabled: boolean) {
-  for (const key of ['receipts.copyHistory', 'receipts.exportHistory'] as const) {
+  for (const key of ['receipts.copyHistory', 'receipts.exportHistory', 'receipts.downloadHistory'] as const) {
     expect(html).toContain(`<button type="button"${disabled ? ' disabled=""' : ''}>${escaped(messages[language][key])}</button>`)
   }
-  expect(html.match(/<button\b/g)).toHaveLength(2)
+  expect(html.match(/<button\b/g)).toHaveLength(3)
   expect(html).not.toContain('<textarea')
   expect(html).not.toMatch(/\{(?:bytes|maxBytes)\}/)
 }
@@ -68,7 +68,7 @@ function receiptAtBytes(bytes: number): SubmissionReceipt {
 }
 
 describe.each(['en', 'pt'] as const)('public history export preview static markup (%s)', (language) => {
-  it('measures the formatted public envelope and enables both actions for a nonempty ready snapshot', () => {
+  it('measures the formatted public envelope and enables all three actions for a nonempty ready snapshot', () => {
     const entries = Object.freeze([receipt])
     const bytes = formattedBytes(entries)
     expect(inspectPublicReceiptHistory(entries)).toEqual({ status: 'ready', bytes, maxBytes: MAX_RECEIPT_BYTES })
@@ -92,7 +92,7 @@ describe.each(['en', 'pt'] as const)('public history export preview static marku
     expect(previewRegion(render([], language))).toContain(escaped(note))
   })
 
-  it('shows the empty public envelope size while disabling both actions', () => {
+  it('shows the empty public envelope size while disabling all three actions', () => {
     const bytes = formattedBytes([])
     expect(bytes).toBeGreaterThan(2)
     expect(inspectPublicReceiptHistory([])).toEqual({ status: 'ready', bytes, maxBytes: MAX_RECEIPT_BYTES })
@@ -121,7 +121,7 @@ describe.each(['en', 'pt'] as const)('public history export preview static marku
     expectActions(html, language, false)
   })
 
-  it('keeps both actions enabled at the exact formatted export byte limit', () => {
+  it('keeps all three actions enabled at the exact formatted export byte limit', () => {
     const entries = [receiptAtBytes(MAX_RECEIPT_BYTES)]
     expect(formattedBytes(entries)).toBe(MAX_RECEIPT_BYTES)
     expect(inspectPublicReceiptHistory(entries)).toEqual({ status: 'ready', bytes: MAX_RECEIPT_BYTES, maxBytes: MAX_RECEIPT_BYTES })
@@ -151,7 +151,7 @@ describe.each(['en', 'pt'] as const)('public history export preview static marku
     expectActions(html, language, true)
   })
 
-  it('hides counters and disables both actions for malformed, duplicate and excessive snapshots', () => {
+  it('hides counters and disables all three actions for malformed, duplicate and excessive snapshots', () => {
     const invalidSnapshots: unknown[][] = [
       [receipt, null],
       [receipt, { ...receipt, signature: 'PRIVATE_RPC_SECRET' }],
