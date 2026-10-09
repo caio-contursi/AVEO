@@ -97,6 +97,7 @@ pnpm fixtures
 pnpm demo:check
 pnpm demo:report  # reruns the checks and writes a public JSON receipt
 pnpm demo:faults  # read-only faults/recovery, after a passing current demo:report
+pnpm demo:http-faults  # the same workflow through an ephemeral loopback HTTP server
 ```
 
 `demo:check` checks shared proof reuse, successful transfers, the Alfa/Beta policy
@@ -126,6 +127,26 @@ transfer fails with `AttestationExpired`; neither balances nor allowance change.
 X revokes the temporary approval in a `finally` cleanup and the runner verifies
 that no delegate or allowance remains. The delegate never receives issuer powers.
 
+T13 invokes SPL Transfer Hook Execute directly with the complete official
+account list. It must fail in the real ledger with `NotTransferContext`, because
+Token-2022 has not marked the accounts as transferring; all protected accounts
+remain unchanged. Separate policy and binding tests sign a valid, distinct fee
+payer but deliberately omit the required authority signature. Only the canonical
+validator signature-verification error is accepted. These packets are rejected
+before execution: they have no ledger confirmation, and their evidence slots
+describe unchanged account reads, not transaction confirmations.
+
+T16 uses raw Token-2022 instructions for zero, exact available balance, one above
+the available balance and maximum u64 (an unsigned 64-bit token amount). The two
+oversized transfers must fail in the ledger with the specific Token-2022
+`InsufficientFunds` error and unchanged balances. It also transfers between two
+distinct token accounts owned by the treasury, validating conservation and the
+actual owner. The exact-balance transfer is returned by X; a `finally` cleanup
+returns auxiliary tokens, closes the temporary account and checks original token
+balances. If a submitted signature remains unknown, cleanup must not replay a
+transfer: the run fails explicitly rather than risking a duplicate operation.
+This sizing uses the existing TransferHook-only fixture mint, not arbitrary mints.
+
 `demo:report` writes `app/.dev/acceptance-report.json`, an ignored runtime artifact
 with timestamps, ordered stage results, public signatures, slots and balances.
 Only explicitly allowed evidence fields are saved, never raw process logs,
@@ -150,6 +171,22 @@ This is controlled SDK fault injection, not an HTTP outage, browser interaction
 test or independent network attestation. The two receipts are not merged: T14
 remains `NOT_RUN` in `acceptance-report.json`, and unrelated matrix cases remain
 `NOT_RUN` in `fault-report.json`. No single receipt claims the complete matrix.
+
+`demo:http-faults` repeats that same seven-stage workflow with an actual HTTP
+transport, not a mocked SDK method. An ephemeral server listens only on
+`127.0.0.1`, forwards explicit read/simulation methods to the local validator,
+returns controlled HTTP 503 responses, holds requests until the client cancels
+their connections, and rewrites only an observation slot for the stale-read case.
+It blocks transaction submission, airdrops, unknown methods and batches, refuses
+credential-bearing or non-loopback upstreams and never follows HTTP redirects.
+Healthy upstream JSON is preserved verbatim to avoid rounding large integer
+values. The server closes its connections on success or failure.
+
+The ignored `app/.dev/http-fault-report.json` identifies `http-loopback` transport;
+the SDK receipt identifies `sdk-injected`. Each independently covers T14's core
+workflow with zero sends. These are controlled local transport failures, not
+public-RPC load testing, browser-wallet testing or evidence of devnet readiness.
+The three independent reports are not merged into a full security-matrix claim.
 
 The runner changes synthetic localnet state: it closes X's proofs and creates a
 replacement. Regenerate fixtures to restore the original demonstration scenario.
@@ -188,6 +225,12 @@ The real local acceptance run passed all 27 stages, including T12 owner-based
 delegate checks and approval cleanup. The separate seven-stage SDK fault and
 read-only recovery run passed, including T14's core workflow with zero sends.
 This round did not change or rebuild the Rust program or add dependencies.
+The sixth round passed 420 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint, frontend build and runner self-tests. Its expanded real local acceptance run
+passed all 36 stages, adding T13 authority and direct-hook checks and T16 boundary
+and same-owner checks. Both the SDK and actual loopback HTTP recovery workflows
+passed seven stages independently, with zero sends. No Rust program or dependency
+was changed in this round; the earlier Rust build was not repeated.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -199,8 +242,8 @@ requests, log requests and polling. Requests are aborted at the deadline, and
 timeouts return `unknown`, never success or an automatic transaction resend.
 If logs are unavailable for a confirmed failure, the result remains a failure
 without inventing a specific hook error. These RPC failure modes are covered by
-unit tests and the controlled SDK acceptance workflow described above, not
-claimed as browser or HTTP-level end-to-end T14 coverage.
+unit tests and the controlled SDK and loopback HTTP acceptance workflows described
+above, not claimed as browser end-to-end or public-network T14 coverage.
 
 Account reads have a 10-second deadline, cancel their pending request and reject
 invalid or stale slots and incomplete account lists. Eligibility inspection uses
@@ -269,8 +312,10 @@ browser tests are not implemented; Node-process recovery is not a browser test.
   and simultaneous browser windows cannot obscure pending-operation history.
 - Add interactive browser coverage for denied clipboard permission, manual-copy
   focus and network changes while confirmation is pending, without new runtime dependencies.
-- Exercise the same fault/recovery workflow through a controlled HTTP transport
-  outage to complement SDK injection without involving a public RPC or real funds.
+- Add an explicit post-suite fixture-health check across both assets to make
+  repeated demonstrations and synthetic recovery prerequisites easy to verify.
+- Document the security matrix's error vocabulary next to the deployed program
+  names so judging evidence cannot confuse transfer-context and signature failures.
 
 ## Estrutura
 
