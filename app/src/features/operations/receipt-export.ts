@@ -14,17 +14,37 @@ const publicReceiptSchema = z.object({
   rpcFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 })
 
-/** Export one bounded snapshot, never a partial collection of valid-looking records. */
-export function exportPublicReceiptHistory(receipts: unknown): string | undefined {
+/** One canonical serialization for both sizing and export; never a partial snapshot. */
+function preparePublicReceiptHistory(receipts: unknown): { text: string; bytes: number } | undefined {
   try {
     if (!Array.isArray(receipts) || receipts.length > MAX_RECEIPTS) return undefined
     const parsed = z.array(publicReceiptSchema).max(MAX_RECEIPTS).safeParse(receipts)
     if (!parsed.success || new Set(parsed.data.map((receipt) => receipt.signature)).size !== parsed.data.length) return undefined
     const text = JSON.stringify({ version: 1, kind: 'aveo-public-submission-history', receipts: parsed.data }, null, 2)
-    return receiptUtf8Bytes(text) <= MAX_RECEIPT_BYTES ? text : undefined
+    return { text, bytes: receiptUtf8Bytes(text) }
   } catch {
     return undefined
   }
+}
+
+export type ReceiptHistoryExportPreview =
+  | { status: 'invalid'; maxBytes: number }
+  | { status: 'ready' | 'tooLarge'; bytes: number; maxBytes: number }
+
+/** Exact sanitized public-envelope bytes, not journal storage or browser quota. */
+export function inspectPublicReceiptHistory(receipts: unknown): ReceiptHistoryExportPreview {
+  const prepared = preparePublicReceiptHistory(receipts)
+  if (!prepared) return { status: 'invalid', maxBytes: MAX_RECEIPT_BYTES }
+  return {
+    status: prepared.bytes <= MAX_RECEIPT_BYTES ? 'ready' : 'tooLarge',
+    bytes: prepared.bytes, maxBytes: MAX_RECEIPT_BYTES,
+  }
+}
+
+/** Export one bounded snapshot, never a partial collection of valid-looking records. */
+export function exportPublicReceiptHistory(receipts: unknown): string | undefined {
+  const prepared = preparePublicReceiptHistory(receipts)
+  return prepared && prepared.bytes <= MAX_RECEIPT_BYTES ? prepared.text : undefined
 }
 
 /** Strip unknown fields and reject malformed known fields without exposing input or errors. */
