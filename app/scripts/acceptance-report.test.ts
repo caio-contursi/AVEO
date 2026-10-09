@@ -13,6 +13,27 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 }
 
 describe('public acceptance receipt', () => {
+  it('retains only typed synthetic KYC facts without claiming complete T04 coverage', () => {
+    const stages = ['false-kyc-proof-bound', 'false-kyc-transfers-rejected', 'false-kyc-original-bindings-restored']
+    const report = builder(stages)
+    const facts = { requiredFact: 'kyc', kycPass: false, accreditedPass: true, hookCode: 'RequiredFactMissing' }
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ ...facts, identity: 'private', providerResponse: 'secret' })}`)
+    for (const stage of stages) report.acceptLine(`PASS ${stage}`)
+    const result = report.finish(0, NOW)
+    expect(result.status).toBe('PASS')
+    expect(result.stages[0]!.evidence).toEqual([facts])
+    expect(result.matrix.find((item) => item.id === 'T04')?.status).toBe('NOT_RUN')
+    expect(JSON.stringify(result)).not.toMatch(/private|secret/)
+  })
+
+  it.each([{ requiredFact: 'unknown' }, { kycPass: 'false' }, { accreditedPass: 1 }])(
+    'rejects malformed synthetic fact evidence: %j', (facts) => {
+      const report = builder(['one'])
+      report.acceptLine(`EVIDENCE ${JSON.stringify(facts)}`)
+      report.acceptLine('PASS one')
+      expect(report.finish(0, NOW).status).toBe('FAIL')
+    },
+  )
   it.each([
     ['T15', ['persistence-initial-save', 'persistence-process-restart', 'persistence-repeated-scan']],
     ['T12', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],

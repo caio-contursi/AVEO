@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
 import { findAssociatedTokenPda, getApproveCheckedInstruction, getRevokeInstruction, getTokenDecoder, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute, type Token } from '@solana-program/token-2022'
 import {
+  address,
   appendTransactionMessageInstructions,
   createTransactionMessage,
   getBase64EncodedWireTransaction,
@@ -39,6 +40,7 @@ import { buildInstructions, confirmSignature, simulate, tokenBalances } from '..
 import { hexToBytes, parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applyVerification } from '../src/features/incidents/model'
 import { checkIncidentPersistence, PERSISTENCE_STAGES } from './persistence-check'
+import { FALSE_KYC_STAGES, requireFalseKycSnapshots } from './kyc-checks'
 import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send } from './lib'
 
 class ExpectationFailed extends Error {}
@@ -192,7 +194,7 @@ const stages = [
   'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
   'external-with-extra-accounts', 'external-without-extra-accounts', ...AUTHORIZATION_STAGES, ...BOUNDARY_STAGES,
   'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
-  'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
+  'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected', ...FALSE_KYC_STAGES,
   'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping', ...PERSISTENCE_STAGES,
   'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
   'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
@@ -475,6 +477,80 @@ async function main(): Promise<void> {
         credential: proofOfX.credential, schema: proofOfX.schema, attestation: proofOfX.attestation,
       })
       await rejectAccountMutation(ySigner, [wrongSubjectBinding], 'SubjectMismatch', await findBindingPda(ctx.programId, assets[0]!.mint, y.address))
+      pass()
+
+      // T04 core only: a live, correctly signed SAS proof whose sole failing fact is KYC.
+      const kycVerifier = deployment.verifiers.find((verifier) => verifier.id === 'A')
+      expect(kycVerifier && initial.every((snapshot) => snapshot.proof?.credential === kycVerifier.credential
+        && snapshot.proof.schema === kycVerifier.schema), 'Original X proof must belong to verifier A')
+      const kycAuthority = signer('verifier-a', kycVerifier.authority)
+      const kycPolicies = await readAccounts(ctx, await Promise.all(assets.map((asset) => findPolicyPda(ctx.programId, asset.mint))))
+      expect(kycPolicies.accounts.every((account) => {
+        if (account?.owner !== ctx.programId) return false
+        const policy = decodeIssuerPolicy(account.data)
+        return policy.active && policy.requireKyc
+      }),
+      'Both active policies must require KYC for the negative test')
+      const kycNonce = (await newDevWallet('nonce', 'nonce', 'investor')).signer.address
+      const [falseKycProof] = await deriveAttestationPda({ credential: kycVerifier.credential, schema: kycVerifier.schema, nonce: kycNonce })
+      const clockRead = await readAccounts(ctx, [SYSVAR_CLOCK_ID])
+      expect(clockRead.accounts[0], 'Validator Clock is required for false KYC proof')
+      const kycClock = Number(getSysvarClockDecoder().decode(clockRead.accounts[0].data).unixTimestamp)
+      expect(Number.isSafeInteger(kycClock) && kycClock >= 0, 'False KYC expiry needs a valid validator Clock')
+      const kycBefore = await Promise.all(assets.map((asset) => tokenBalances(ctx, asset.mint, [treasury.address, x.address])))
+      const setKycBindings = async (attestation: Address) => checkedSend(xSigner, await Promise.all(assets.map((asset) =>
+        getSetBindingInstruction({ programId: ctx.programId, subject: xSigner, mint: asset.mint,
+          credential: kycVerifier.credential, schema: kycVerifier.schema, attestation }))))
+      let restoredKycSlot: number | undefined
+      try {
+        await checkedSend(kycAuthority, [getCreateAttestationInstruction({
+          payer: kycAuthority as never, authority: kycAuthority as never, credential: kycVerifier.credential,
+          schema: kycVerifier.schema, attestation: falseKycProof, nonce: kycNonce,
+          data: encodeEligibilityPayload({ subjectWallet: x.address, proofDomain: hexToBytes(deployment.proofDomain),
+            kycPass: false, accreditedPass: true }), expiry: kycClock + 86_400,
+        }) as unknown as Instruction])
+        const boundSignature = await setKycBindings(falseKycProof)
+        const bound = await confirmSignature(ctx, boundSignature)
+        expect(bound.status === 'confirmed' && bound.slot !== undefined, 'False KYC bindings must confirm')
+        const blocked = await inspectX()
+        requireFalseKycSnapshots({ ctx, snapshots: blocked, owner: x.address, proof: falseKycProof, assets, floor: bound.slot })
+        expect(blocked.every((snapshot) => snapshot.proof?.credential === kycVerifier.credential
+          && snapshot.proof.schema === kycVerifier.schema), 'False KYC proof must use the accepted verifier')
+        evidence({ wallet: x.address, proof: falseKycProof, mints: assets.map((asset) => asset.mint),
+          slots: blocked.map((snapshot) => snapshot.read.slot), verdicts: blocked.map((snapshot) => snapshot.verdict),
+          hookCode: 'RequiredFactMissing', requiredFact: 'kyc', kycPass: false, accreditedPass: true })
+        pass()
+        for (const asset of assets) {
+          await transfer(asset, x.address, false, 'RequiredFactMissing')
+          await transfer(asset, treasury.address, false, 'RequiredFactMissing', xSigner)
+        }
+        pass()
+      } finally {
+        // Restore the original bindings before closing the temporary SAS proof.
+        const signature = await setKycBindings(address(sharedProof))
+        const restored = await confirmSignature(ctx, signature)
+        expect(restored.status === 'confirmed' && restored.slot !== undefined, 'Original KYC bindings must confirm after the test')
+        restoredKycSlot = restored.slot
+        for (const snapshot of await inspectX()) {
+          expectVerdict(snapshot)
+          expect(snapshot.sourceAccounts.attestation === sharedProof && snapshot.read.slot >= restored.slot,
+            'Original KYC proof must be eligible again at a fresh slot')
+        }
+        const temporary = await readAccounts(ctx, [falseKycProof], restored.slot)
+        if (temporary.accounts[0]) {
+          expect(temporary.accounts[0].owner === SAS_PROGRAM_ID, 'Temporary KYC proof must be SAS-owned')
+          await checkedSend(kycAuthority, [getCloseAttestationInstruction({ payer: kycAuthority as never,
+            authority: kycAuthority as never, credential: kycVerifier.credential, attestation: falseKycProof }) as unknown as Instruction])
+        }
+        expect((await readAccounts(ctx, [falseKycProof], restored.slot)).accounts[0] === null,
+          'Temporary false KYC proof must be closed')
+      }
+      for (const [index, asset] of assets.entries()) {
+        const after = await tokenBalances(ctx, asset.mint, [treasury.address, x.address])
+        expectBalances(kycBefore[index]!.balances, after.balances, false)
+        evidence({ asset: asset.id, before: kycBefore[index]!.balances, after: after.balances, slot: after.slot })
+      }
+      evidence({ wallet: x.address, proof: sharedProof, closedProof: falseKycProof, slot: restoredKycSlot })
       pass()
 
       const proofs = await findProofsForWallet(ctx, x.address)
