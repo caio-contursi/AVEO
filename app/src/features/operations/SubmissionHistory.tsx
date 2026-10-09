@@ -9,6 +9,9 @@ import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
 import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
 import { receiptCapacity } from './receipt-capacity'
+import { MAX_RECEIPTS, MAX_RECEIPT_BYTES } from './receipt-limits'
+
+const receiptLimitParams = { maxCount: MAX_RECEIPTS, maxBytes: MAX_RECEIPT_BYTES }
 
 type HistoryExportState = { status: ReceiptCopyResult['status'] | 'manualExport' | 'copying'; text?: string }
 
@@ -18,11 +21,11 @@ export function SubmissionHistoryCapacity({ receipts, error }: {
   const { t } = useI18n()
   const capacity = error === 'invalid-records' ? undefined : receiptCapacity(receipts)
   return <div className="box" role="status" aria-live="polite" aria-atomic="true">
-    <p className="small muted">{t('receipts.capacityNote')}</p>
+    <p className="small muted">{t('receipts.capacityNote', receiptLimitParams)}</p>
     {!capacity
       ? <p className="warn-text">{t('receipts.capacityUnavailable')}</p>
       : <>
-        <p className="small">{t('receipts.capacityCounter', { count: capacity.count, bytes: capacity.bytes })}</p>
+        <p className="small">{t('receipts.capacityCounter', { ...receiptLimitParams, count: capacity.count, bytes: capacity.bytes })}</p>
         {capacity.full ? <p className="warn-text">{t('receipts.capacityFull')}</p>
           : capacity.nearFull && <p className="warn-text">{t('receipts.capacityNearFull')}</p>}
       </>}
@@ -306,11 +309,11 @@ function ScopedHistory({ ctx }: { ctx: ApiContext | null }) {
 
   return (
     <Card title={t('receipts.title')}>
-      <p className="small muted">{t('receipts.note')}</p>
+      <p className="small muted">{t('receipts.note', receiptLimitParams)}</p>
       <p className="small muted">{t('receipts.scopeNote')}</p>
       <SubmissionHistoryCapacity receipts={receipts} error={journal.error} />
       <SubmissionHistoryExport receipts={receipts} getSnapshot={journal.getSnapshot} />
-      {journal.error && <p className="warn-text" role="alert">{t(`receipts.${journal.error}`)}</p>}
+      {journal.error && <p className="warn-text" role="alert">{t(`receipts.${journal.error}`, receiptLimitParams)}</p>}
       <p className="small" role="status" aria-live="polite" aria-atomic="true">{removed && t('receipts.removed')}</p>
       {receipts.length === 0 && <EmptyState>{t('receipts.empty')}</EmptyState>}
       {receipts.map((receipt) => <SubmissionReceiptView key={receipt.signature} receipt={receipt}

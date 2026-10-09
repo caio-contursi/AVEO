@@ -42,6 +42,10 @@ async function receipt(): Promise<SubmissionReceipt> {
   return journal.getSnapshot()[0]!
 }
 
+function boundedMessage(language: Language, key: keyof typeof messages.en) {
+  return messages[language][key].replace('{maxCount}', '100').replace('{maxBytes}', '128000')
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.ctx = ctx
@@ -52,11 +56,21 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('read-only visible snapshot capacity markup', () => {
+  it.each(['en', 'pt'] as const)('interpolates both limits in a full-journal warning (%s)', (language) => {
+    mocks.journal!.error = 'storage-full'
+    const html = render(createElement(SubmissionHistory), language)
+    expect(html).toContain(boundedMessage(language, 'receipts.storage-full'))
+    expect(html).not.toMatch(/\{(?:maxCount|maxBytes)\}/)
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
   it.each(['en', 'pt'] as const)('renders empty SSR counters and translated snapshot limitations (%s)', (language) => {
     mocks.ctx = null
     const html = render(createElement(SubmissionHistory), language)
-    expect(html).toContain(messages[language]['receipts.capacityNote'])
-    expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '0').replace('{bytes}', '2'))
+    expect(html).toContain(boundedMessage(language, 'receipts.capacityNote'))
+    expect(html).toContain(boundedMessage(language, 'receipts.capacityCounter').replace('{count}', '0').replace('{bytes}', '2'))
+    expect(html).toContain(boundedMessage(language, 'receipts.note'))
+    expect(html).not.toMatch(/\{(?:maxCount|maxBytes)\}/)
     expect(html).not.toContain(messages[language]['receipts.capacityNearFull'])
     expect(html).not.toContain(messages[language]['receipts.capacityUnavailable'])
     expect(mocks.confirmSignature).not.toHaveBeenCalled()
@@ -72,7 +86,7 @@ describe('read-only visible snapshot capacity markup', () => {
     const entries = journal.getSnapshot()
     const bytes = new TextEncoder().encode(JSON.stringify(entries)).length
     const html = render(createElement(SubmissionHistory), language)
-    expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '1').replace('{bytes}', String(bytes)))
+    expect(html).toContain(boundedMessage(language, 'receipts.capacityCounter').replace('{count}', '1').replace('{bytes}', String(bytes)))
     expect(html).toContain(messages[language]['receipts.capacityVolatile'])
     expect(html).toContain(messages[language]['receipts.storage-unavailable'])
     expect(journal.getSnapshot()).toBe(entries)
@@ -133,7 +147,7 @@ describe('read-only visible snapshot capacity markup', () => {
         expect(html).toContain('1 / 100')
         expect(html).toContain('128000 / 128000')
       } else {
-        expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '1').replace('{bytes}', String(bytes)))
+        expect(html).toContain(boundedMessage(language, 'receipts.capacityCounter').replace('{count}', '1').replace('{bytes}', String(bytes)))
         expect(html.includes(messages[language]['receipts.capacityNearFull'])).toBe(bytes >= 115200)
       }
       expect(html).not.toContain('<button')
@@ -329,7 +343,7 @@ describe('public receipt history markup', () => {
   it.each(['en', 'pt'] as const)('explains untrusted local history and network limits (%s)', async (language) => {
     await receipt()
     const html = render(createElement(SubmissionHistory), language)
-    expect(html).toContain(messages[language]['receipts.note'])
+    expect(html).toContain(boundedMessage(language, 'receipts.note'))
     expect(html).toContain(messages[language]['receipts.scopeNote'])
     expect(html).toContain(messages[language]['receipts.exportNote'])
     expect(html).toContain(messages[language]['receipts.copyReceipt'])
@@ -351,7 +365,7 @@ describe('public receipt history markup', () => {
     mocks.journal!.error = error
     const html = render(createElement(SubmissionHistory))
     expect(html).toContain('role="alert"')
-    expect(html).toContain(messages.en[`receipts.${error}`])
+    expect(html).toContain(boundedMessage('en', `receipts.${error}`))
   })
 
   it('shows the empty state without requiring a backend', () => {
