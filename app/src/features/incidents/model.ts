@@ -189,7 +189,25 @@ export function applySends(incident: DeskIncident, outcomes: SendOutcome[], now:
 export function applyVerification(incident: DeskIncident, snapshots: DeskSnapshot[], now: string): DeskIncident {
   if (incident.state === 'resolved') return incident
   const slot = Math.max(0, ...snapshots.map((s) => s.read.slot))
-  if (snapshots.length === 0 || snapshots.some((s) => s.verdict === 'unknown')) {
+  const first = snapshots[0]
+  const minimumSlot = Math.max(incident.detectedSlot, ...incident.evidence.map((evidence) => evidence.slot ?? 0))
+  // A partial, stale or unrelated readback cannot close the affected assets.
+  const completeReadback =
+    first !== undefined &&
+    incident.affectedMints.length > 0 &&
+    snapshots.length === incident.affectedMints.length &&
+    new Set(snapshots.map((snapshot) => snapshot.mint)).size === incident.affectedMints.length &&
+    snapshots.every(
+      (snapshot) =>
+        snapshot.wallet === incident.wallet &&
+        incident.affectedMints.includes(snapshot.mint) &&
+        snapshot.backend === first.backend &&
+        snapshot.read.cluster === first.read.cluster &&
+        snapshot.read.rpcUrl === first.read.rpcUrl &&
+        snapshot.read.commitment === first.read.commitment &&
+        snapshot.read.slot >= minimumSlot,
+    )
+  if (!completeReadback || snapshots.some((s) => s.verdict === 'unknown')) {
     return { ...incident, events: [...incident.events, { at: now, kind: 'unknown' }] }
   }
   if (snapshots.every((s) => s.verdict === 'eligible')) {

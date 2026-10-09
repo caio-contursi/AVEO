@@ -108,6 +108,49 @@ describe('ciclo do incidente', () => {
     expect(checked.events.at(-1)?.kind).toBe('unknown')
   })
 
+  it('keeps an incident open when the readback omits an affected asset', () => {
+    const checked = applyVerification(opened, [snap(ALFA, X, 'eligible', undefined, 'proof-new', 140)], NOW)
+    expect(checked.state).toBe('open')
+    expect(checked.events.at(-1)?.kind).toBe('unknown')
+    expect(checked.evidence).toEqual(opened.evidence)
+  })
+
+  it('rejects duplicate assets and readbacks for another wallet', () => {
+    const readbacks = [
+      [snap(ALFA, X, 'eligible'), snap(ALFA, X, 'eligible')],
+      [snap(ALFA, X, 'eligible'), snap(BETA, 'wallet-y', 'eligible')],
+      [snap(ALFA, X, 'eligible'), snap('other-mint', X, 'eligible')],
+    ]
+    for (const snapshots of readbacks) {
+      const checked = applyVerification(opened, snapshots, NOW)
+      expect(checked.state).toBe('open')
+      expect(checked.events.at(-1)?.kind).toBe('unknown')
+    }
+  })
+
+  it('rejects reads older than detection or a confirmed correction', () => {
+    const stale = applyVerification(opened, [snap(ALFA, X, 'eligible', undefined, PROOF, 99), snap(BETA, X, 'eligible')], NOW)
+    expect(stale.state).toBe('open')
+    const sent = applySends(opened, [{ evidence: { status: 'confirmed', signature: 'sig', slot: 150, logs: [] } }], NOW)
+    const checked = applyVerification(sent, [snap(ALFA, X, 'eligible', undefined, 'proof-new', 149), snap(BETA, X, 'eligible', undefined, 'proof-new', 151)], NOW)
+    expect(checked.state).toBe('awaiting-confirmation')
+    expect(checked.events.at(-1)?.kind).toBe('unknown')
+  })
+
+  it('rejects a readback assembled from different networks or RPCs', () => {
+    const alfa = snap(ALFA, X, 'eligible')
+    const beta = snap(BETA, X, 'eligible')
+    for (const read of [
+      { ...beta.read, cluster: 'devnet' as const },
+      { ...beta.read, rpcUrl: 'http://127.0.0.1:9999' },
+      { ...beta.read, commitment: 'processed' as const },
+    ]) {
+      const checked = applyVerification(opened, [alfa, { ...beta, read }], NOW)
+      expect(checked.state).toBe('open')
+      expect(checked.events.at(-1)?.kind).toBe('unknown')
+    }
+  })
+
   it('incidente resolvido não volta a abrir: o mesmo problema depois é um incidente novo', () => {
     const resolved = applyVerification(opened, [snap(ALFA, X, 'eligible', undefined, PROOF), snap(BETA, X, 'eligible', undefined, PROOF)], NOW)
     const data = applyScan({ ...EMPTY_STORE, incidents: [resolved] }, [snap(ALFA, X, 'ineligible', 'AttestationExpired', PROOF, 200)], 200, NOW)
