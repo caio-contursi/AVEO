@@ -1,5 +1,5 @@
 import type { Signature } from '@solana/kit'
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ApiContext } from '../../api/context'
 import { confirmSignature, type Confirmation } from '../../api/transactions'
 import { useDesk } from '../../app/desk'
@@ -7,6 +7,7 @@ import { Address } from '../../components/Address'
 import { Badge, Card, EmptyState, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
+import { copyPublicReceipt, exportPublicReceipt, type ReceiptCopyResult } from './receipt-export'
 
 type ReceiptResult = { matches: boolean; confirmation?: Confirmation }
 
@@ -34,6 +35,37 @@ export function SubmissionReceiptView({ receipt, result, busy, disabled, onReche
 }) {
   const { t } = useI18n()
   const desk = useDesk()
+  const [exportStatus, setExportStatus] = useState<ReceiptCopyResult['status'] | 'manualExport' | 'copying'>()
+  const [exportText, setExportText] = useState<string>()
+  const active = useRef(false)
+  const copying = useRef(false)
+  useEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
+
+  async function copyReceipt() {
+    if (copying.current || !active.current) return
+    copying.current = true
+    setExportStatus('copying')
+    setExportText(undefined)
+    try {
+      const result = await copyPublicReceipt(receipt, () => active.current)
+      if (result && active.current) {
+        setExportStatus(result.status)
+        if (result.status === 'copyFailed') setExportText(result.text)
+      }
+    } finally {
+      copying.current = false
+    }
+  }
+
+  function showExport() {
+    const text = exportPublicReceipt(receipt)
+    setExportText(text)
+    setExportStatus(text === undefined ? 'invalidExport' : 'manualExport')
+  }
+
   const explorer = result?.matches === true ? desk.explorerUrl(receipt.signature) : null
   const status = result?.matches === true ? result.confirmation?.status ?? 'unknown' : 'unknown'
   return (
@@ -55,6 +87,16 @@ export function SubmissionReceiptView({ receipt, result, busy, disabled, onReche
       <button type="button" disabled={disabled || result?.matches !== true} onClick={onRecheck}>
         {busy && <Spinner />} {t(busy ? 'evidence.rechecking' : 'evidence.recheck')}
       </button>
+      <p className="small muted">{t('receipts.exportNote')}</p>
+      <button type="button" disabled={exportStatus === 'copying'} onClick={() => { void copyReceipt() }}>
+        {t('receipts.copyReceipt')}
+      </button>{' '}
+      <button type="button" disabled={exportStatus === 'copying'} onClick={showExport}>{t('receipts.exportReceipt')}</button>
+      <p className="small" role="status" aria-live="polite" aria-atomic="true">
+        {exportStatus && t(`receipts.${exportStatus}`)}
+      </p>
+      {exportText !== undefined && <textarea aria-label={t('receipts.manualText')} readOnly rows={16}
+        value={exportText} onFocus={(event) => { event.currentTarget.select() }} />}
     </div>
   )
 }

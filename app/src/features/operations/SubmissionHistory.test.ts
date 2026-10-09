@@ -114,6 +114,12 @@ describe('public receipt history markup', () => {
     const html = render(createElement(SubmissionHistory), language)
     expect(html).toContain(messages[language]['receipts.note'])
     expect(html).toContain(messages[language]['receipts.scopeNote'])
+    expect(html).toContain(messages[language]['receipts.exportNote'])
+    expect(html).toContain(messages[language]['receipts.copyReceipt'])
+    expect(html).toContain(messages[language]['receipts.exportReceipt'])
+    expect(html).toContain('aria-live="polite"')
+    expect(html).not.toContain('<textarea')
+    expect(html).not.toContain('aveo-public-submission-receipt')
     expect(html).toContain(messages[language]['evidence.unknown'])
     expect(html).not.toContain('private')
     expect(mocks.confirmSignature).not.toHaveBeenCalled()
@@ -152,5 +158,28 @@ describe('public receipt history markup', () => {
     expect(html).toContain(`https://current-network/tx/${signature}`)
     expect(html).toContain(messages.en['evidence.rechecking'])
     expect(html).toMatch(/<button type="button" disabled="">/)
+  })
+
+  it.each(['en', 'pt'] as const)('keeps export enabled on mismatch while verification is disabled (%s)', async (language) => {
+    const html = render(createElement(SubmissionReceiptView, {
+      receipt: await receipt(), result: { matches: false }, busy: true, disabled: true, onRecheck: () => {},
+    }), language)
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.copyReceipt']}</button>`)
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.exportReceipt']}</button>`)
+    expect(html).not.toContain('<textarea')
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+    expect(mocks.explorerUrl).not.toHaveBeenCalled()
+  })
+
+  it('renders export actions with no current network or backend', async () => {
+    const entry = await receipt()
+    mocks.ctx = null
+    const html = render(createElement(SubmissionReceiptView, {
+      receipt: entry, busy: false, disabled: true, onRecheck: () => {},
+    }))
+    expect(html).toContain(messages.en['receipts.copyReceipt'])
+    expect(html).toContain(messages.en['receipts.exportReceipt'])
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+    expect(mocks.explorerUrl).not.toHaveBeenCalled()
   })
 })
