@@ -82,6 +82,40 @@ describe('ciclo do incidente', () => {
   const opened = applyScan(EMPTY_STORE, [snap(ALFA, X, 'ineligible', 'AttestationExpired', PROOF), snap(BETA, X, 'ineligible', 'AttestationExpired', PROOF)], 100, NOW)
     .incidents[0]!
 
+  it.each(['confirmed', 'failed', 'unknown'] as const)('reconciles provisional signature evidence with a later %s outcome', (status) => {
+    const pending = applySends(opened, [{ evidence: { status: 'unknown', signature: 'original', logs: [] } }], NOW)
+    const retained = { status: 'confirmed' as const, signature: 'other', slot: 110, logs: [] }
+    const result = applySends({ ...pending, evidence: [...pending.evidence, retained] }, [{ evidence: {
+      status, signature: 'original', slot: status === 'unknown' ? undefined : 120, logs: ['verified'],
+    } }], NOW)
+    expect(result.evidence.filter((item) => item.signature === 'original')).toHaveLength(1)
+    expect(result.evidence.find((item) => item.signature === 'original')).toMatchObject({ status, logs: ['verified'] })
+    expect(result.evidence).toContain(retained)
+    expect(result.events.filter((event) => event.kind === 'signed' && event.params?.signature === 'original')).toHaveLength(1)
+    expect(result.events.filter((event) => event.kind === 'unknown')).toHaveLength(1)
+    expect(result.state).toBe(status === 'failed' ? 'open' : 'awaiting-confirmation')
+    expect(pending.evidence[0]?.status).toBe('unknown')
+  })
+
+  it.each(['confirmed', 'failed', 'unknown'] as const)('retains a resolved incident when a late %s send completes', (status) => {
+    const resolved = applyVerification(opened, [snap(ALFA, X, 'eligible', undefined, 'new-proof', 130), snap(BETA, X, 'eligible', undefined, 'new-proof', 130)], NOW)
+    const result = applySends(resolved, [{ evidence: { status, signature: 'late', logs: [] } }], NOW)
+    expect(result.state).toBe('resolved')
+    expect(result.resolvedSlot).toBe(130)
+    expect(result.observed).toBe(false)
+    expect(result.evidence[0]).toBe(resolved.evidence[0])
+    expect(result.evidence.at(-1)?.signature).toBe('late')
+  })
+
+  it('retains resolution and evidence when a late wallet rejection completes', () => {
+    const resolved = applyVerification(opened, [snap(ALFA, X, 'eligible', undefined, 'new-proof', 130), snap(BETA, X, 'eligible', undefined, 'new-proof', 130)], NOW)
+    const result = applySends(resolved, [{ error: { code: 'SimulationFailed', message: 'Rejected' } }], NOW)
+    expect(result.state).toBe('resolved')
+    expect(result.resolvedSlot).toBe(130)
+    expect(result.evidence).toEqual(resolved.evidence)
+    expect(result.events.at(-1)?.kind).toBe('sendFailed')
+  })
+
   it('envio recusado mantém o incidente aberto', () => {
     const prepared = markPrepared(opened, 2, NOW)
     expect(prepared.state).toBe('action-prepared')

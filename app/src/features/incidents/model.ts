@@ -170,15 +170,19 @@ export function applySends(incident: DeskIncident, outcomes: SendOutcome[], now:
       events.push({ at: now, kind: 'sendFailed', params: { code: outcome.evidence.error?.code ?? 'SimulationFailed' } })
       continue
     }
-    events.push({ at: now, kind: 'signed', params: { signature } })
-    if (outcome.evidence.status === 'unknown') events.push({ at: now, kind: 'unknown' })
+    const previous = incident.evidence.find((item) => signature !== '' && item.signature === signature)
+    if (!previous) events.push({ at: now, kind: 'signed', params: { signature } })
+    if (outcome.evidence.status === 'unknown' && previous?.status !== 'unknown') events.push({ at: now, kind: 'unknown' })
     sent = true
   }
   return {
     ...incident,
-    state: sent ? 'awaiting-confirmation' : 'open',
+    state: incident.state === 'resolved' ? 'resolved' : sent ? 'awaiting-confirmation' : 'open',
     events: [...incident.events, ...events],
-    evidence: [...incident.evidence, ...evidence],
+    // Replace provisional same-signature evidence with its later verification.
+    // Unrelated submissions and readbacks remain available.
+    evidence: [...incident.evidence.filter((previous) =>
+      !previous.signature || !evidence.some((next) => next.signature === previous.signature)), ...evidence],
   }
 }
 
