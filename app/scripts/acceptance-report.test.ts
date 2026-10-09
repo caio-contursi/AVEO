@@ -13,6 +13,27 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 }
 
 describe('public acceptance receipt', () => {
+  it.each([
+    ['T12', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],
+    ['T14', ['fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident', 'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open', 'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves']],
+  ])('requires every stage before passing %s', (id, stages) => {
+    const report = builder(stages)
+    for (const stage of stages.slice(0, -1)) report.acceptLine(`PASS ${stage}`)
+    expect(report.finish(0, NOW).matrix.find((entry) => entry.id === id)?.status).toBe('NOT_RUN')
+    report.acceptLine(`PASS ${stages.at(-1)}`)
+    expect(report.finish(0, NOW).matrix.find((entry) => entry.id === id)?.status).toBe('PASS')
+    const failed = builder(stages)
+    failed.acceptLine(`FAIL ${stages[0]}`)
+    for (const stage of stages.slice(1)) failed.acceptLine(`NOT_RUN ${stage}`)
+    expect(failed.finish(1, NOW).matrix.find((entry) => entry.id === id)?.status).toBe('FAIL')
+  })
+  it('retains validated public allowance and fault counters, not transport details', () => {
+    const report = builder(['one'])
+    const publicFields = { delegatedAllowanceBefore: '10', delegatedAllowanceAfter: '9', rpcReadCalls: 4, sendCalls: 0, abortedRequests: 1 }
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ ...publicFields, rpcUrl: 'secret', request: 'secret' })}`)
+    report.acceptLine('PASS one')
+    expect(report.finish(0, NOW).stages[0]?.evidence).toEqual([publicFields])
+  })
   it('requires successful, missing-extra and expired-proof external checks before passing T11', () => {
     const stages = ['external-with-extra-accounts', 'external-without-extra-accounts', 'external-expired-proof-rejected']
     const report = builder(stages)
@@ -61,6 +82,11 @@ describe('public acceptance receipt', () => {
     { before: ['secret', '1'] },
     { hookCode: 'fake-success' },
     { secretKey: [1, 2, 3] },
+    { delegatedAllowanceBefore: '-1' },
+    { delegatedAllowanceAfter: 9 },
+    { rpcReadCalls: 1.5 },
+    { sendCalls: -1 },
+    { abortedRequests: Number.MAX_SAFE_INTEGER + 1 },
   ])('fails closed on malformed evidence without storing it (%j)', (evidence) => {
     const report = builder(['one'])
     report.acceptLine(`EVIDENCE ${JSON.stringify(evidence)}`)

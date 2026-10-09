@@ -1,16 +1,17 @@
 // Localnet acceptance runner. Requires fixtures; repeat runs renew X's proof in place.
 // pnpm --filter @aveo/app exec tsx scripts/demo-check.ts [--self-test]
-// Evidence contains public addresses, signatures, slots, codes and token balances only.
+// Evidence contains public addresses, signatures, slots, codes, token balances and delegated allowances only.
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
-import { findAssociatedTokenPda, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute } from '@solana-program/token-2022'
+import { findAssociatedTokenPda, getApproveCheckedInstruction, getRevokeInstruction, getTokenDecoder, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute, type Token } from '@solana-program/token-2022'
 import {
   appendTransactionMessageInstructions,
   createTransactionMessage,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
   getSignatureFromTransaction,
+  lamports,
   pipe,
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -61,6 +62,19 @@ function expectBalances(before: bigint[], after: bigint[], accepted: boolean): v
   expect(before.length === 2 && after.length === 2, 'Expected both token balances')
   expect(after[0] === before[0]! - (accepted ? 1n : 0n), 'Source balance mismatch')
   expect(after[1] === before[1]! + (accepted ? 1n : 0n), 'Destination balance mismatch')
+}
+
+function expectDelegation(token: Pick<Token, 'delegate' | 'delegatedAmount'>, delegate: Address | null, allowance: bigint): void {
+  expect(delegate === null
+    ? token.delegate.__option === 'None'
+    : token.delegate.__option === 'Some' && token.delegate.value === delegate, 'Token account delegate mismatch')
+  expect(token.delegatedAmount === allowance, 'Delegated allowance mismatch')
+}
+
+function expectDelegatedTransfer(before: bigint[], after: bigint[], allowanceBefore: bigint, allowanceAfter: bigint, accepted: boolean): void {
+  expect(before[0]! > 0n && allowanceBefore > 0n, 'Delegate requires source tokens and a positive allowance')
+  expectBalances(before, after, accepted)
+  expect(allowanceAfter === allowanceBefore - (accepted ? 1n : 0n), 'Delegated transfer allowance delta mismatch')
 }
 
 function expectHookRejection(logs: readonly string[], expectedCode: ReasonCode): void {
@@ -118,6 +132,20 @@ async function selfTest(): Promise<void> {
   assert.throws(() => expectBalances([5n, 2n], [5n, 2n], true), ExpectationFailed)
   assert.throws(() => expectBalances([5n, 2n], [4n, 3n], false), ExpectationFailed)
   assert.throws(() => expectBalances([], [], false), ExpectationFailed)
+  const delegated = { delegate: { __option: 'Some' as const, value: AVEO_HOOK_PROGRAM_ID }, delegatedAmount: 10n }
+  expectDelegation(delegated, AVEO_HOOK_PROGRAM_ID, 10n)
+  expectDelegation({ delegate: { __option: 'None' }, delegatedAmount: 0n }, null, 0n)
+  assert.throws(() => expectDelegation(delegated, SAS_PROGRAM_ID, 10n), ExpectationFailed)
+  assert.throws(() => expectDelegation(delegated, null, 0n), ExpectationFailed)
+  assert.throws(() => expectDelegation(delegated, AVEO_HOOK_PROGRAM_ID, 9n), ExpectationFailed)
+  assert.throws(() => expectDelegation({ delegate: { __option: 'None' }, delegatedAmount: 0n }, AVEO_HOOK_PROGRAM_ID, 0n), ExpectationFailed)
+  assert.throws(() => expectDelegation({ delegate: { __option: 'None' }, delegatedAmount: 1n }, null, 0n), ExpectationFailed)
+  expectDelegatedTransfer([5n, 2n], [4n, 3n], 10n, 9n, true)
+  expectDelegatedTransfer([5n, 2n], [5n, 2n], 9n, 9n, false)
+  assert.throws(() => expectDelegatedTransfer([5n, 2n], [4n, 3n], 10n, 10n, true), ExpectationFailed)
+  assert.throws(() => expectDelegatedTransfer([5n, 2n], [5n, 2n], 9n, 8n, false), ExpectationFailed)
+  assert.throws(() => expectDelegatedTransfer([0n, 2n], [0n, 2n], 9n, 9n, false), ExpectationFailed)
+  assert.throws(() => expectDelegatedTransfer([5n, 2n], [5n, 2n], 0n, 0n, false), ExpectationFailed)
   const closedLogs = [`Program ${AVEO_HOOK_PROGRAM_ID} failed: custom program error: 0x1777`]
   expectHookRejection(closedLogs, 'AttestationMissingOrClosed')
   assert.throws(() => expectHookRejection(closedLogs, 'AttestationExpired'), ExpectationFailed)
@@ -154,19 +182,20 @@ async function selfTest(): Promise<void> {
   assert.equal(await waitForExpiry(async () => 102, 101, async () => {}, 1), 102)
   await assert.rejects(waitForExpiry(async () => 99, 101, async () => {}, 3), ExpectationFailed)
   await assert.rejects(waitForExpiry(async () => Number.NaN, 101, async () => {}, 1), ExpectationFailed)
-  console.log('PASS self-test: loopback guards, exact balance deltas, hook rejection matching, missing-extra ledger errors, unchanged accounts and bounded Clock polling')
+  console.log('PASS self-test: loopback guards, exact balance and allowance deltas, delegate identity and revocation, hook rejection matching, missing-extra ledger errors, unchanged accounts and bounded Clock polling')
 }
 
 const stages = [
   'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
-  'external-with-extra-accounts', 'external-without-extra-accounts', 'policy-differences-Y-B-Z',
+  'external-with-extra-accounts', 'external-without-extra-accounts', 'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
   'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
   'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping',
   'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
   'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
   'issuer-inactivates-alfa-only', 'issuer-restores-active-alfa-policy',
   'short-lived-X-proof-bound', 'validator-clock-reaches-expiry',
-  'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'valid-X-proof-bindings-restored',
+  'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'delegate-expired-owner-rejected', 'valid-X-proof-bindings-restored',
+  'delegate-approval-revoked',
 ] as const
 
 async function main(): Promise<void> {
@@ -242,6 +271,7 @@ async function main(): Promise<void> {
       expect(confirmation.status === 'failed' && confirmation.slot !== undefined, 'Expected a failed transaction recorded in the local ledger')
       expectHookRejection(confirmation.logs, expectedCode)
       evidence({ signature, slot: confirmation.slot, status: confirmation.status, hookCode: expectedCode })
+      return confirmation
     }
     const rejectAccountMutation = async (payer: KeyPairSigner, instructions: Instruction[], expectedCode: ReasonCode, target: Address) => {
       const before = await readAccounts(ctx, [target])
@@ -336,243 +366,317 @@ async function main(): Promise<void> {
     await externalTransfer(false)
     pass()
 
-    for (const id of ['Y', 'Z']) {
-      const owner = wallet(id).address
-      const snapshots = await Promise.all(assets.map((asset) => inspectEligibility(ctx, asset.mint, owner)))
-      const code = id === 'Y' ? 'ProviderPairNotAllowed' : 'RequiredFactMissing'
-      expectVerdict(snapshots[0]!)
-      expectVerdict(snapshots[1]!, code)
-      const verifier = deployment.verifiers.find((item) => item.id === (id === 'Y' ? 'B' : 'A'))
-      expect(verifier && snapshots.every((snapshot) => snapshot.sourceAccounts.credential === verifier.credential), 'Policy example must use the intended verifier')
-      expect(snapshots[1]!.proof?.accreditedPass === false, 'Policy example must lack accreditation')
-      await transfer(assets[0]!, owner, true)
-      await transfer(assets[1]!, owner, false, code)
+    // T12: the delegate authorizes spending; X remains the compliance subject.
+    const delegateSigner = (await newDevWallet('delegate', 'Synthetic delegate', 'investor')).signer
+    expect(delegateSigner.address !== x.address && delegateSigner.address !== treasury.address, 'Delegate must be distinct from both token owners')
+    const delegateBindings = await Promise.all(assets.map((asset) => findBindingPda(ctx.programId, asset.mint, delegateSigner.address)))
+    const unbound = await readAccounts(ctx, delegateBindings)
+    expect(unbound.accounts.every((account) => account === null), 'Fresh delegate must have no Aveo binding')
+    expect((await findProofsForWallet(ctx, delegateSigner.address)).length === 0, 'Fresh delegate must have no SAS proof')
+    const fundingSignature = await ctx.rpc.requestAirdrop(delegateSigner.address, lamports(100_000_000n), { commitment: 'confirmed' }).send()
+    const funding = await confirmSignature(ctx, fundingSignature)
+    expect(funding.status === 'confirmed' && funding.slot !== undefined, 'Delegate loopback airdrop must confirm')
+    evidence({ signer: delegateSigner.address, signature: fundingSignature, slot: funding.slot })
+    const delegatedAsset = assets[0]!
+    const [[delegatedSource], [delegatedDestination]] = await Promise.all([x.address, treasury.address].map((owner) => findAssociatedTokenPda({ owner, mint: delegatedAsset.mint, tokenProgram: TOKEN_2022_PROGRAM_ID })))
+    const readDelegatedAccounts = async (minContextSlot?: number) => {
+      const readback = await readAccounts(ctx, [delegatedSource, delegatedDestination], minContextSlot)
+      const tokens = readback.accounts.map((account, i) => {
+        expect(account && account.owner === TOKEN_2022_PROGRAM_ID && !account.executable, 'Delegated transfer requires Token-2022 accounts')
+        const token = getTokenDecoder().decode(account.data)
+        expect(token.mint === delegatedAsset.mint && token.owner === [x.address, treasury.address][i], 'Delegated token account must have the actual mint and owner')
+        return token
+      })
+      return { slot: readback.slot, source: tokens[0]!, balances: tokens.map((token) => token.amount) }
     }
-    pass()
-
-    const policyAddress = await findPolicyPda(ctx.programId, assets[0]!.mint)
-    const { accounts: policyAccounts } = await readAccounts(ctx, [policyAddress])
-    expect(policyAccounts[0], 'Policy account is required for issuer authorization test')
-    const policy = decodeIssuerPolicy(policyAccounts[0].data)
-    expect(policy.issuerAuthority !== xSigner.address, 'X must not be the issuer')
-    const unauthorizedUpdate = await getUpdatePolicyInstruction({
-      programId: ctx.programId, authority: xSigner, mint: assets[0]!.mint,
-      args: { proofDomain: policy.proofDomain, pairs: policy.pairs, requireKyc: policy.requireKyc, requireAccredited: policy.requireAccredited, active: !policy.active },
-    })
-    await rejectAccountMutation(xSigner, [unauthorizedUpdate], 'UnauthorizedIssuer', policyAddress)
-    pass()
-
-    const y = wallet('Y')
-    const ySigner = signer('Y', y.address)
-    expect(y.address !== x.address, 'X and Y must be distinct subjects')
-    const proofOfX = initial[0]!.proof
-    expect(proofOfX, 'Live X proof is required for subject authorization test')
-    const wrongSubjectBinding = await getSetBindingInstruction({
-      programId: ctx.programId, subject: ySigner, mint: assets[0]!.mint,
-      credential: proofOfX.credential, schema: proofOfX.schema, attestation: proofOfX.attestation,
-    })
-    await rejectAccountMutation(ySigner, [wrongSubjectBinding], 'SubjectMismatch', await findBindingPda(ctx.programId, assets[0]!.mint, y.address))
-    pass()
-
-    const proofs = await findProofsForWallet(ctx, x.address)
-    expect(proofs.some((proof) => proof.address === sharedProof), 'Shared proof must be present before close')
-    for (const proof of proofs) {
-      const verifier = deployment.verifiers.find((item) => item.credential === proof.attestation.credential)
-      expect(verifier, 'Cannot close a proof from an unknown verifier')
-      const authority = signer(`verifier-${verifier.id.toLowerCase()}`, verifier.authority)
-      await checkedSend(authority, [getCloseAttestationInstruction({ payer: authority as never, authority: authority as never, credential: proof.attestation.credential, attestation: proof.address }) as unknown as Instruction])
-      evidence({ closedProof: proof.address })
+    const beforeApproval = await readDelegatedAccounts()
+    expectDelegation(beforeApproval.source, null, 0n)
+    const delegatedTransfer = async (accepted: boolean) => {
+      const ownerSnapshot = await inspectEligibility(ctx, delegatedAsset.mint, x.address)
+      expectVerdict(ownerSnapshot, accepted ? undefined : 'AttestationExpired')
+      const before = await readDelegatedAccounts(ownerSnapshot.read.slot)
+      expectDelegation(before.source, delegateSigner.address, before.source.delegatedAmount)
+      expect(before.source.amount > 0n && before.source.delegatedAmount > 0n, 'Delegated attempt must have spendable tokens and allowance')
+      const raw = getTransferCheckedInstruction({ source: delegatedSource, mint: delegatedAsset.mint, destination: delegatedDestination, authority: delegateSigner, amount: 1n, decimals: delegatedAsset.decimals })
+      expect(raw.accounts.length === 4, 'Raw delegated transfer must contain only the four Token-2022 accounts')
+      const extra = await resolveExtraAccountMetasForExecute({ rpc: ctx.rpc, transferHookProgramAddress: AVEO_HOOK_PROGRAM_ID, source: delegatedSource, mint: delegatedAsset.mint, destination: delegatedDestination, owner: before.source.owner, amount: 1n })
+      expect(extra.length > 0, 'Official client must resolve all delegated transfer hook accounts')
+      const instruction: Instruction = { ...raw, accounts: [...raw.accounts, ...extra] }
+      let transactionSlot: number
+      if (accepted) {
+        const signature = await checkedSend(delegateSigner, [instruction])
+        const confirmation = await confirmSignature(ctx, signature)
+        expect(confirmation.status === 'confirmed' && confirmation.slot !== undefined, 'Delegated transfer must confirm in the ledger')
+        transactionSlot = confirmation.slot
+      } else {
+        const confirmation = await reject(delegateSigner, [instruction], 'AttestationExpired')
+        expect(confirmation.slot !== undefined, 'Delegated hook rejection must have a ledger slot')
+        transactionSlot = confirmation.slot
+      }
+      const after = await readDelegatedAccounts(transactionSlot)
+      expectDelegatedTransfer(before.balances, after.balances, before.source.delegatedAmount, after.source.delegatedAmount, accepted)
+      expectDelegation(after.source, delegateSigner.address, before.source.delegatedAmount - (accepted ? 1n : 0n))
+      evidence({ asset: delegatedAsset.id, source: x.address, destination: treasury.address, signer: delegateSigner.address, proof: ownerSnapshot.sourceAccounts.attestation, accepted, hookCode: accepted ? undefined : 'AttestationExpired', before: before.balances, after: after.balances, delegatedAllowanceBefore: before.source.delegatedAmount, delegatedAllowanceAfter: after.source.delegatedAmount, slot: after.slot })
     }
-    expect((await findProofsForWallet(ctx, x.address)).length === 0, 'All X proofs must be closed')
-    const closed = await inspectX()
-    for (const snapshot of closed) expectVerdict(snapshot, 'AttestationMissingOrClosed')
-    pass()
+    try {
+      // Cover even an approval that reaches the ledger but fails confirmation/readback.
+      const approvalSignature = await checkedSend(xSigner, [getApproveCheckedInstruction({ source: delegatedSource, mint: delegatedAsset.mint, delegate: delegateSigner.address, owner: xSigner, amount: 10n, decimals: delegatedAsset.decimals })])
+      const approval = await confirmSignature(ctx, approvalSignature)
+      expect(approval.status === 'confirmed' && approval.slot !== undefined, 'Owner approval must confirm in the ledger')
+      const approved = await readDelegatedAccounts(approval.slot)
+      expectDelegation(approved.source, delegateSigner.address, 10n)
+      await delegatedTransfer(true)
+      pass()
 
-    for (const asset of assets) {
-      await transfer(asset, x.address, false, 'AttestationMissingOrClosed')
-      await transfer(asset, treasury.address, false, 'AttestationMissingOrClosed', xSigner)
-    }
-    pass()
+      for (const id of ['Y', 'Z']) {
+        const owner = wallet(id).address
+        const snapshots = await Promise.all(assets.map((asset) => inspectEligibility(ctx, asset.mint, owner)))
+        const code = id === 'Y' ? 'ProviderPairNotAllowed' : 'RequiredFactMissing'
+        expectVerdict(snapshots[0]!)
+        expectVerdict(snapshots[1]!, code)
+        const verifier = deployment.verifiers.find((item) => item.id === (id === 'Y' ? 'B' : 'A'))
+        expect(verifier && snapshots.every((snapshot) => snapshot.sourceAccounts.credential === verifier.credential), 'Policy example must use the intended verifier')
+        expect(snapshots[1]!.proof?.accreditedPass === false, 'Policy example must lack accreditation')
+        await transfer(assets[0]!, owner, true)
+        await transfer(assets[1]!, owner, false, code)
+      }
+      pass()
 
-    scan = applyScan(scan, closed, Math.max(...closed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
-    const grouped = scan.incidents.filter((incident) => incident.wallet === x.address && incident.type === 'PROOF_CLOSED')
-    expect(grouped.length === 1 && grouped[0]!.proof === sharedProof, 'Closed shared proof must create one incident')
-    expect(grouped[0]!.affectedMints.length === 2 && assets.every((asset) => grouped[0]!.affectedMints.includes(asset.mint)), 'Incident must group both assets')
-    const repeated = applyScan(scan, closed, Math.max(...closed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
-    expect(repeated.incidents.length === scan.incidents.length, 'Repeated scan must not duplicate incidents')
-    evidence({ incidentType: grouped[0]!.type, proof: sharedProof, affectedMints: grouped[0]!.affectedMints })
-    pass()
+      const policyAddress = await findPolicyPda(ctx.programId, assets[0]!.mint)
+      const { accounts: policyAccounts } = await readAccounts(ctx, [policyAddress])
+      expect(policyAccounts[0], 'Policy account is required for issuer authorization test')
+      const policy = decodeIssuerPolicy(policyAccounts[0].data)
+      expect(policy.issuerAuthority !== xSigner.address, 'X must not be the issuer')
+      const unauthorizedUpdate = await getUpdatePolicyInstruction({
+        programId: ctx.programId, authority: xSigner, mint: assets[0]!.mint,
+        args: { proofDomain: policy.proofDomain, pairs: policy.pairs, requireKyc: policy.requireKyc, requireAccredited: policy.requireAccredited, active: !policy.active },
+      })
+      await rejectAccountMutation(xSigner, [unauthorizedUpdate], 'UnauthorizedIssuer', policyAddress)
+      pass()
 
-    const verifierA = deployment.verifiers.find((verifier) => verifier.id === 'A')
-    expect(verifierA, 'Missing verifier A')
-    const authority = signer('verifier-a', verifierA.authority)
-    const nonce = (await newDevWallet('nonce', 'nonce', 'investor')).signer.address
-    const [renewal] = await deriveAttestationPda({ credential: verifierA.credential, schema: verifierA.schema, nonce })
-    const clock = closed[0]!.clockUnix
-    expect(clock !== undefined, 'Validator clock is required for renewal expiry')
-    await checkedSend(authority, [getCreateAttestationInstruction({
-      payer: authority as never, authority: authority as never, credential: verifierA.credential, schema: verifierA.schema,
-      attestation: renewal, nonce,
-      data: encodeEligibilityPayload({ subjectWallet: x.address, proofDomain: hexToBytes(deployment.proofDomain), kycPass: true, accreditedPass: true }),
-      expiry: clock + 86_400,
-    }) as unknown as Instruction])
-    expect((await findProofsForWallet(ctx, x.address)).some((proof) => proof.address === renewal), 'Renewal must be discoverable')
-    for (const snapshot of await inspectX()) expectVerdict(snapshot, 'AttestationMissingOrClosed')
-    evidence({ renewal, wallet: x.address })
-    pass()
+      const y = wallet('Y')
+      const ySigner = signer('Y', y.address)
+      expect(y.address !== x.address, 'X and Y must be distinct subjects')
+      const proofOfX = initial[0]!.proof
+      expect(proofOfX, 'Live X proof is required for subject authorization test')
+      const wrongSubjectBinding = await getSetBindingInstruction({
+        programId: ctx.programId, subject: ySigner, mint: assets[0]!.mint,
+        credential: proofOfX.credential, schema: proofOfX.schema, attestation: proofOfX.attestation,
+      })
+      await rejectAccountMutation(ySigner, [wrongSubjectBinding], 'SubjectMismatch', await findBindingPda(ctx.programId, assets[0]!.mint, y.address))
+      pass()
 
-    const plan = await backend.planRenewBinding({ cluster: 'localnet', mint: assets[0]!.mint, mints: assets.map((asset) => asset.mint), wallet: x.address, attestation: renewal })
-    expect(plan.simulation.ok && !plan.blocked, 'Batched rebind plan must simulate successfully')
-    expect(plan.requiredSigners.length === 1 && plan.requiredSigners[0] === x.address, 'X must be the single required signer')
-    expect(plan.request.kind === 'set-binding' && plan.request.mints.length === 2, 'Plan must contain both asset bindings')
-    const instructions = await buildInstructions(ctx, plan.request, xSigner)
-    expect(instructions.length === 2, 'One binding instruction is required per asset')
-    const signature = await checkedSend(xSigner, instructions)
-    pass()
+      const proofs = await findProofsForWallet(ctx, x.address)
+      expect(proofs.some((proof) => proof.address === sharedProof), 'Shared proof must be present before close')
+      for (const proof of proofs) {
+        const verifier = deployment.verifiers.find((item) => item.credential === proof.attestation.credential)
+        expect(verifier, 'Cannot close a proof from an unknown verifier')
+        const authority = signer(`verifier-${verifier.id.toLowerCase()}`, verifier.authority)
+        await checkedSend(authority, [getCloseAttestationInstruction({ payer: authority as never, authority: authority as never, credential: proof.attestation.credential, attestation: proof.address }) as unknown as Instruction])
+        evidence({ closedProof: proof.address })
+      }
+      expect((await findProofsForWallet(ctx, x.address)).length === 0, 'All X proofs must be closed')
+      const closed = await inspectX()
+      for (const snapshot of closed) expectVerdict(snapshot, 'AttestationMissingOrClosed')
+      pass()
 
-    const verified = await backend.verifyOutcome({ cluster: 'localnet', signature, plan })
-    expect(verified.status === 'confirmed' && verified.slot !== undefined, 'Backend must confirm batched rebind')
-    expect(verified.readback?.length === 2, 'Backend must read back both assets')
-    const fresh = await inspectX()
-    for (const snapshot of [...verified.readback!, ...fresh]) {
-      expectVerdict(snapshot)
-      expect(snapshot.sourceAccounts.attestation === renewal && snapshot.proof?.attestation === renewal, 'Fresh binding must reference renewal')
-      expect(snapshot.read.slot >= verified.slot, 'Readback must be at or after transaction confirmation')
-    }
-    expect(applyVerification(grouped[0]!, fresh, new Date().toISOString()).state === 'resolved', 'Fresh readback must resolve the grouped incident')
-    evidence({ signature, renewal, slots: fresh.map((snapshot) => snapshot.read.slot), verdicts: fresh.map((snapshot) => snapshot.verdict) })
-    pass()
+      for (const asset of assets) {
+        await transfer(asset, x.address, false, 'AttestationMissingOrClosed')
+        await transfer(asset, treasury.address, false, 'AttestationMissingOrClosed', xSigner)
+      }
+      pass()
 
-    for (const asset of assets) {
-      await transfer(asset, x.address, true)
-      await transfer(asset, treasury.address, true, undefined, xSigner)
-    }
-    pass()
+      scan = applyScan(scan, closed, Math.max(...closed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
+      const grouped = scan.incidents.filter((incident) => incident.wallet === x.address && incident.type === 'PROOF_CLOSED')
+      expect(grouped.length === 1 && grouped[0]!.proof === sharedProof, 'Closed shared proof must create one incident')
+      expect(grouped[0]!.affectedMints.length === 2 && assets.every((asset) => grouped[0]!.affectedMints.includes(asset.mint)), 'Incident must group both assets')
+      const repeated = applyScan(scan, closed, Math.max(...closed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
+      expect(repeated.incidents.length === scan.incidents.length, 'Repeated scan must not duplicate incidents')
+      evidence({ incidentType: grouped[0]!.type, proof: sharedProof, affectedMints: grouped[0]!.affectedMints })
+      pass()
 
-    // T08/T17 change Alfa only. Restore every original argument even when a check fails.
-    const issuerSigner = signer('issuer', deployment.issuer)
-    const alfa = assets[0]!
-    const beta = assets[1]!
-    const originalRead = await readAccounts(ctx, [policyAddress, await findPolicyPda(ctx.programId, beta.mint)])
-    expect(originalRead.accounts[0] && originalRead.accounts[1], 'Both policies must exist before issuer tests')
-    const originalPolicy = decodeIssuerPolicy(originalRead.accounts[0].data)
-    expect(originalPolicy.issuerAuthority === issuerSigner.address, 'Fixture issuer must own Alfa policy')
-    const originalArgs: PolicyArgs = {
-      proofDomain: originalPolicy.proofDomain, pairs: originalPolicy.pairs,
-      requireKyc: originalPolicy.requireKyc, requireAccredited: originalPolicy.requireAccredited, active: originalPolicy.active,
-    }
-    const betaBefore = originalRead.accounts[1]
-    const updateAlfa = async (args: PolicyArgs) => {
-      await checkedSend(issuerSigner, [await getUpdatePolicyInstruction({ programId: ctx.programId, authority: issuerSigner, mint: alfa.mint, args })])
-      const readback = await readAccounts(ctx, [policyAddress, betaBefore.address], originalRead.slot)
-      expect(readback.accounts[0], 'Updated Alfa policy must exist')
-      const updated = decodeIssuerPolicy(readback.accounts[0].data)
-      expect(bytesEqual(updated.proofDomain, args.proofDomain) && updated.requireKyc === args.requireKyc && updated.requireAccredited === args.requireAccredited && updated.active === args.active, 'Policy arguments must match issuer update')
-      expect(updated.pairs.length === args.pairs.length && updated.pairs.every((pair, i) => pair.credential === args.pairs[i]!.credential && pair.schema === args.pairs[i]!.schema), 'Policy pairs must match issuer update')
-      expect(updated.policyVersion > originalPolicy.policyVersion, 'Issuer update must advance policy version')
-      expectUnchangedAccount(betaBefore, readback.accounts[1] ?? null)
-      evidence({ asset: alfa.id, protectedAccount: policyAddress, policyVersion: updated.policyVersion, policyActive: updated.active, slot: readback.slot })
-    }
-    const restoredAlfa = async () => {
-      for (const snapshot of await inspectX()) expectVerdict(snapshot)
+      const verifierA = deployment.verifiers.find((verifier) => verifier.id === 'A')
+      expect(verifierA, 'Missing verifier A')
+      const authority = signer('verifier-a', verifierA.authority)
+      const nonce = (await newDevWallet('nonce', 'nonce', 'investor')).signer.address
+      const [renewal] = await deriveAttestationPda({ credential: verifierA.credential, schema: verifierA.schema, nonce })
+      const clock = closed[0]!.clockUnix
+      expect(clock !== undefined, 'Validator clock is required for renewal expiry')
+      await checkedSend(authority, [getCreateAttestationInstruction({
+        payer: authority as never, authority: authority as never, credential: verifierA.credential, schema: verifierA.schema,
+        attestation: renewal, nonce,
+        data: encodeEligibilityPayload({ subjectWallet: x.address, proofDomain: hexToBytes(deployment.proofDomain), kycPass: true, accreditedPass: true }),
+        expiry: clock + 86_400,
+      }) as unknown as Instruction])
+      expect((await findProofsForWallet(ctx, x.address)).some((proof) => proof.address === renewal), 'Renewal must be discoverable')
+      for (const snapshot of await inspectX()) expectVerdict(snapshot, 'AttestationMissingOrClosed')
+      evidence({ renewal, wallet: x.address })
+      pass()
+
+      const plan = await backend.planRenewBinding({ cluster: 'localnet', mint: assets[0]!.mint, mints: assets.map((asset) => asset.mint), wallet: x.address, attestation: renewal })
+      expect(plan.simulation.ok && !plan.blocked, 'Batched rebind plan must simulate successfully')
+      expect(plan.requiredSigners.length === 1 && plan.requiredSigners[0] === x.address, 'X must be the single required signer')
+      expect(plan.request.kind === 'set-binding' && plan.request.mints.length === 2, 'Plan must contain both asset bindings')
+      const instructions = await buildInstructions(ctx, plan.request, xSigner)
+      expect(instructions.length === 2, 'One binding instruction is required per asset')
+      const signature = await checkedSend(xSigner, instructions)
+      pass()
+
+      const verified = await backend.verifyOutcome({ cluster: 'localnet', signature, plan })
+      expect(verified.status === 'confirmed' && verified.slot !== undefined, 'Backend must confirm batched rebind')
+      expect(verified.readback?.length === 2, 'Backend must read back both assets')
+      const fresh = await inspectX()
+      for (const snapshot of [...verified.readback!, ...fresh]) {
+        expectVerdict(snapshot)
+        expect(snapshot.sourceAccounts.attestation === renewal && snapshot.proof?.attestation === renewal, 'Fresh binding must reference renewal')
+        expect(snapshot.read.slot >= verified.slot, 'Readback must be at or after transaction confirmation')
+      }
+      expect(applyVerification(grouped[0]!, fresh, new Date().toISOString()).state === 'resolved', 'Fresh readback must resolve the grouped incident')
+      evidence({ signature, renewal, slots: fresh.map((snapshot) => snapshot.read.slot), verdicts: fresh.map((snapshot) => snapshot.verdict) })
+      pass()
+
       for (const asset of assets) {
         await transfer(asset, x.address, true)
         await transfer(asset, treasury.address, true, undefined, xSigner)
       }
-    }
-    const withoutA = originalArgs.pairs.filter((pair) => pair.credential !== verifierA.credential)
-    expect(withoutA.length > 0 && withoutA.length < originalArgs.pairs.length, 'T08 requires A and another provider in Alfa')
-    try {
-      await updateAlfa({ ...originalArgs, pairs: withoutA })
-      const removed = await inspectX()
-      expectVerdict(removed[0]!, 'ProviderPairNotAllowed')
-      expectVerdict(removed[1]!)
-      const providerScan = applyScan(applyScan(EMPTY_STORE, fresh, verified.slot, new Date().toISOString()), removed, Math.max(...removed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
-      const incident = providerScan.incidents.filter((item) => item.wallet === x.address && item.type === 'PROVIDER_REMOVED')
-      expect(incident.length === 1 && incident[0]!.affectedMints.length === 1 && incident[0]!.affectedMints[0] === alfa.mint, 'T08 incident must affect Alfa only')
-      evidence({ incidentType: incident[0]!.type, wallet: x.address, proof: renewal, affectedMints: incident[0]!.affectedMints })
-      await transfer(alfa, x.address, false, 'ProviderPairNotAllowed')
-      await transfer(alfa, treasury.address, false, 'ProviderPairNotAllowed', xSigner)
-      await transfer(beta, x.address, true)
-      await transfer(beta, treasury.address, true, undefined, xSigner)
       pass()
-    } finally {
-      await updateAlfa(originalArgs)
-    }
-    await restoredAlfa()
-    pass()
 
-    try {
-      await updateAlfa({ ...originalArgs, active: false })
-      const inactive = await inspectX()
-      expectVerdict(inactive[0]!, 'PolicyMissingOrInactive')
-      expectVerdict(inactive[1]!)
-      await transfer(alfa, x.address, false, 'PolicyMissingOrInactive')
-      await transfer(alfa, treasury.address, false, 'PolicyMissingOrInactive', xSigner)
-      await transfer(beta, x.address, true)
-      await transfer(beta, treasury.address, true, undefined, xSigner)
-      pass()
-    } finally {
-      await updateAlfa(originalArgs)
-    }
-    await restoredAlfa()
-    pass()
-
-    const readClock = async () => {
-      const { value } = await ctx.rpc.getAccountInfo(SYSVAR_CLOCK_ID, { encoding: 'base64', commitment: 'confirmed' }).send({ abortSignal: AbortSignal.timeout(2_000) })
-      expect(value, 'Validator Clock account must exist')
-      return Number(getSysvarClockDecoder().decode(new Uint8Array(getBase64Encoder().encode(value.data[0]))).unixTimestamp)
-    }
-    const bindX = async (attestation: Address) => {
-      const bindingPlan = await backend.planRenewBinding({ cluster: 'localnet', mint: alfa.mint, mints: assets.map((asset) => asset.mint), wallet: x.address, attestation })
-      expect(bindingPlan.simulation.ok && !bindingPlan.blocked && bindingPlan.requiredSigners.length === 1 && bindingPlan.requiredSigners[0] === x.address, 'X batched binding must simulate and require only X')
-      const signature = await checkedSend(xSigner, await buildInstructions(ctx, bindingPlan.request, xSigner))
-      const outcome = await backend.verifyOutcome({ cluster: 'localnet', signature, plan: bindingPlan })
-      expect(outcome.status === 'confirmed' && outcome.slot !== undefined && outcome.readback?.length === 2, 'X batched binding must confirm with both readbacks')
-      for (const snapshot of outcome.readback) {
-        expectVerdict(snapshot)
-        expect(snapshot.sourceAccounts.attestation === attestation && snapshot.read.slot >= outcome.slot, 'Bindings must reference requested proof at a fresh slot')
+      // T08/T17 change Alfa only. Restore every original argument even when a check fails.
+      const issuerSigner = signer('issuer', deployment.issuer)
+      const alfa = assets[0]!
+      const beta = assets[1]!
+      const originalRead = await readAccounts(ctx, [policyAddress, await findPolicyPda(ctx.programId, beta.mint)])
+      expect(originalRead.accounts[0] && originalRead.accounts[1], 'Both policies must exist before issuer tests')
+      const originalPolicy = decodeIssuerPolicy(originalRead.accounts[0].data)
+      expect(originalPolicy.issuerAuthority === issuerSigner.address, 'Fixture issuer must own Alfa policy')
+      const originalArgs: PolicyArgs = {
+        proofDomain: originalPolicy.proofDomain, pairs: originalPolicy.pairs,
+        requireKyc: originalPolicy.requireKyc, requireAccredited: originalPolicy.requireAccredited, active: originalPolicy.active,
       }
-      evidence({ wallet: x.address, proof: attestation, signature, slot: outcome.slot, mints: assets.map((asset) => asset.mint) })
-    }
-    const shortNonce = (await newDevWallet('nonce', 'nonce', 'investor')).signer.address
-    const [shortProof] = await deriveAttestationPda({ credential: verifierA.credential, schema: verifierA.schema, nonce: shortNonce })
-    const expiry = (await readClock()) + 30
-    try {
-      await checkedSend(authority, [getCreateAttestationInstruction({
-        payer: authority as never, authority: authority as never, credential: verifierA.credential, schema: verifierA.schema,
-        attestation: shortProof, nonce: shortNonce,
-        data: encodeEligibilityPayload({ subjectWallet: x.address, proofDomain: hexToBytes(deployment.proofDomain), kycPass: true, accreditedPass: true }), expiry,
-      }) as unknown as Instruction])
-      await bindX(shortProof)
-      const liveClock = await readClock()
-      expect(liveClock < expiry, 'Short proof must still be live after both bindings confirm')
-      evidence({ wallet: x.address, proof: shortProof, expiry, clockUnix: liveClock })
+      const betaBefore = originalRead.accounts[1]
+      const updateAlfa = async (args: PolicyArgs) => {
+        await checkedSend(issuerSigner, [await getUpdatePolicyInstruction({ programId: ctx.programId, authority: issuerSigner, mint: alfa.mint, args })])
+        const readback = await readAccounts(ctx, [policyAddress, betaBefore.address], originalRead.slot)
+        expect(readback.accounts[0], 'Updated Alfa policy must exist')
+        const updated = decodeIssuerPolicy(readback.accounts[0].data)
+        expect(bytesEqual(updated.proofDomain, args.proofDomain) && updated.requireKyc === args.requireKyc && updated.requireAccredited === args.requireAccredited && updated.active === args.active, 'Policy arguments must match issuer update')
+        expect(updated.pairs.length === args.pairs.length && updated.pairs.every((pair, i) => pair.credential === args.pairs[i]!.credential && pair.schema === args.pairs[i]!.schema), 'Policy pairs must match issuer update')
+        expect(updated.policyVersion > originalPolicy.policyVersion, 'Issuer update must advance policy version')
+        expectUnchangedAccount(betaBefore, readback.accounts[1] ?? null)
+        evidence({ asset: alfa.id, protectedAccount: policyAddress, policyVersion: updated.policyVersion, policyActive: updated.active, slot: readback.slot })
+      }
+      const restoredAlfa = async () => {
+        for (const snapshot of await inspectX()) expectVerdict(snapshot)
+        for (const asset of assets) {
+          await transfer(asset, x.address, true)
+          await transfer(asset, treasury.address, true, undefined, xSigner)
+        }
+      }
+      const withoutA = originalArgs.pairs.filter((pair) => pair.credential !== verifierA.credential)
+      expect(withoutA.length > 0 && withoutA.length < originalArgs.pairs.length, 'T08 requires A and another provider in Alfa')
+      try {
+        await updateAlfa({ ...originalArgs, pairs: withoutA })
+        const removed = await inspectX()
+        expectVerdict(removed[0]!, 'ProviderPairNotAllowed')
+        expectVerdict(removed[1]!)
+        const providerScan = applyScan(applyScan(EMPTY_STORE, fresh, verified.slot, new Date().toISOString()), removed, Math.max(...removed.map((snapshot) => snapshot.read.slot)), new Date().toISOString())
+        const incident = providerScan.incidents.filter((item) => item.wallet === x.address && item.type === 'PROVIDER_REMOVED')
+        expect(incident.length === 1 && incident[0]!.affectedMints.length === 1 && incident[0]!.affectedMints[0] === alfa.mint, 'T08 incident must affect Alfa only')
+        evidence({ incidentType: incident[0]!.type, wallet: x.address, proof: renewal, affectedMints: incident[0]!.affectedMints })
+        await transfer(alfa, x.address, false, 'ProviderPairNotAllowed')
+        await transfer(alfa, treasury.address, false, 'ProviderPairNotAllowed', xSigner)
+        await transfer(beta, x.address, true)
+        await transfer(beta, treasury.address, true, undefined, xSigner)
+        pass()
+      } finally {
+        await updateAlfa(originalArgs)
+      }
+      await restoredAlfa()
       pass()
 
-      const expiredClock = await waitForExpiry(readClock, expiry, async () => { await new Promise((resolve) => setTimeout(resolve, 500)) })
-      evidence({ wallet: x.address, proof: shortProof, expiry, clockUnix: expiredClock })
+      try {
+        await updateAlfa({ ...originalArgs, active: false })
+        const inactive = await inspectX()
+        expectVerdict(inactive[0]!, 'PolicyMissingOrInactive')
+        expectVerdict(inactive[1]!)
+        await transfer(alfa, x.address, false, 'PolicyMissingOrInactive')
+        await transfer(alfa, treasury.address, false, 'PolicyMissingOrInactive', xSigner)
+        await transfer(beta, x.address, true)
+        await transfer(beta, treasury.address, true, undefined, xSigner)
+        pass()
+      } finally {
+        await updateAlfa(originalArgs)
+      }
+      await restoredAlfa()
       pass()
 
-      const expired = await inspectX()
-      for (const snapshot of expired) {
-        expectVerdict(snapshot, 'AttestationExpired')
-        expect(snapshot.clockUnix !== undefined && snapshot.clockUnix >= expiry && snapshot.sourceAccounts.attestation === shortProof, 'Expired snapshot must use validator Clock and short proof')
+      const readClock = async () => {
+        const { value } = await ctx.rpc.getAccountInfo(SYSVAR_CLOCK_ID, { encoding: 'base64', commitment: 'confirmed' }).send({ abortSignal: AbortSignal.timeout(2_000) })
+        expect(value, 'Validator Clock account must exist')
+        return Number(getSysvarClockDecoder().decode(new Uint8Array(getBase64Encoder().encode(value.data[0]))).unixTimestamp)
+      }
+      const bindX = async (attestation: Address) => {
+        const bindingPlan = await backend.planRenewBinding({ cluster: 'localnet', mint: alfa.mint, mints: assets.map((asset) => asset.mint), wallet: x.address, attestation })
+        expect(bindingPlan.simulation.ok && !bindingPlan.blocked && bindingPlan.requiredSigners.length === 1 && bindingPlan.requiredSigners[0] === x.address, 'X batched binding must simulate and require only X')
+        const signature = await checkedSend(xSigner, await buildInstructions(ctx, bindingPlan.request, xSigner))
+        const outcome = await backend.verifyOutcome({ cluster: 'localnet', signature, plan: bindingPlan })
+        expect(outcome.status === 'confirmed' && outcome.slot !== undefined && outcome.readback?.length === 2, 'X batched binding must confirm with both readbacks')
+        for (const snapshot of outcome.readback) {
+          expectVerdict(snapshot)
+          expect(snapshot.sourceAccounts.attestation === attestation && snapshot.read.slot >= outcome.slot, 'Bindings must reference requested proof at a fresh slot')
+        }
+        evidence({ wallet: x.address, proof: attestation, signature, slot: outcome.slot, mints: assets.map((asset) => asset.mint) })
+      }
+      const shortNonce = (await newDevWallet('nonce', 'nonce', 'investor')).signer.address
+      const [shortProof] = await deriveAttestationPda({ credential: verifierA.credential, schema: verifierA.schema, nonce: shortNonce })
+      const expiry = (await readClock()) + 30
+      try {
+        await checkedSend(authority, [getCreateAttestationInstruction({
+          payer: authority as never, authority: authority as never, credential: verifierA.credential, schema: verifierA.schema,
+          attestation: shortProof, nonce: shortNonce,
+          data: encodeEligibilityPayload({ subjectWallet: x.address, proofDomain: hexToBytes(deployment.proofDomain), kycPass: true, accreditedPass: true }), expiry,
+        }) as unknown as Instruction])
+        await bindX(shortProof)
+        const liveClock = await readClock()
+        expect(liveClock < expiry, 'Short proof must still be live after both bindings confirm')
+        evidence({ wallet: x.address, proof: shortProof, expiry, clockUnix: liveClock })
+        pass()
+
+        const expiredClock = await waitForExpiry(readClock, expiry, async () => { await new Promise((resolve) => setTimeout(resolve, 500)) })
+        evidence({ wallet: x.address, proof: shortProof, expiry, clockUnix: expiredClock })
+        pass()
+
+        const expired = await inspectX()
+        for (const snapshot of expired) {
+          expectVerdict(snapshot, 'AttestationExpired')
+          expect(snapshot.clockUnix !== undefined && snapshot.clockUnix >= expiry && snapshot.sourceAccounts.attestation === shortProof, 'Expired snapshot must use validator Clock and short proof')
+        }
+        for (const asset of assets) {
+          await transfer(asset, x.address, false, 'AttestationExpired')
+          await transfer(asset, treasury.address, false, 'AttestationExpired', xSigner)
+        }
+        pass()
+        await externalTransfer(true, 'AttestationExpired')
+        pass()
+        await delegatedTransfer(false)
+        pass()
+      } finally {
+        // A failed expiry test must not strand the demo with expired bindings.
+        await bindX(renewal)
       }
       for (const asset of assets) {
-        await transfer(asset, x.address, false, 'AttestationExpired')
-        await transfer(asset, treasury.address, false, 'AttestationExpired', xSigner)
+        await transfer(asset, x.address, true)
+        await transfer(asset, treasury.address, true, undefined, xSigner)
       }
       pass()
-      await externalTransfer(true, 'AttestationExpired')
-      pass()
     } finally {
-      // A failed expiry test must not strand the demo with expired bindings.
-      await bindX(renewal)
-    }
-    for (const asset of assets) {
-      await transfer(asset, x.address, true)
-      await transfer(asset, treasury.address, true, undefined, xSigner)
+      // Only X, the token account owner, can remove the temporary approval.
+      const signature = await checkedSend(xSigner, [getRevokeInstruction({ source: delegatedSource, owner: xSigner })])
+      const confirmation = await confirmSignature(ctx, signature)
+      expect(confirmation.status === 'confirmed' && confirmation.slot !== undefined, 'Owner revocation must confirm in the ledger')
+      const after = await readDelegatedAccounts(confirmation.slot)
+      expectDelegation(after.source, null, 0n)
+      evidence({ asset: delegatedAsset.id, source: x.address, signer: x.address, delegatedAllowanceAfter: after.source.delegatedAmount, slot: after.slot })
     }
     pass()
     console.log(`PASS demo-check (${stages.length}/${stages.length})`)
