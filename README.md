@@ -113,6 +113,21 @@ signatures and hook errors are recorded in the ledger. It prints `PASS`, `FAIL`,
 `NOT_RUN`, and public transaction evidence; any failed expectation returns a
 nonzero exit status. Failed transactions still consume synthetic SOL fees.
 
+T15 persists the actual grouped incident produced by closing X's shared proof.
+It writes an isolated SQLite database in one Node process, then reloads it in a
+different process and reapplies the same recorded observations. Incident
+identities, lifecycle state, grouped mints, watched proofs and event history must
+remain unchanged, without duplication or an invented resolution. Replaying these
+observations is not a fresh blockchain scan and never authorizes a transfer.
+The temporary database is separate from the operator's `scan:once` history and
+is removed after the check; only allowlisted public evidence enters the report.
+The round trip must be exact, including bigint values; an unsupported JSON shape
+such as an explicit `undefined` property fails rather than claiming persistence.
+Worker errors and deadlines cannot approve T15. Deadline/cleanup ordering is
+covered with controlled process events; successful restarts and a missing-database
+failure use actual Node processes and SQLite. This does not test an OS crash
+during a write or promise production high availability.
+
 The runner also exercises an external Token-2022 client without a Desk plan:
 with official extra-account resolution the valid transfer succeeds; without the
 extra accounts it fails in the ledger without changing balances; with complete
@@ -258,6 +273,14 @@ and after acceptance. Browser coordination is tested using injected locks/events
 not claimed as interactive multi-tab browser verification.
 No dependencies or Rust program were changed; the earlier Rust build was not
 repeated in this round.
+The eighth round passed 567 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint, frontend build and runner self-tests. It adds bounded
+visible-history export and actual-process incident persistence. Real local
+acceptance passed all 39 stages, including the three required T15 stages. Both
+read-only recovery workflows again passed seven stages; readiness passed six
+stages before and after acceptance. No dependencies or on-chain interfaces were
+changed, and the Rust build was not repeated. Clipboard lifecycle tests use
+controlled callbacks/static rendering, not interactive browser verification.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -322,6 +345,22 @@ If clipboard access is unavailable or denied, a read-only text area exposes the
 same validated JSON for manual copy. Exported metadata remains untrusted; there
 is no import, transaction reconstruction or authorization from this JSON.
 
+**Copy visible public history** and **Export visible history for manual copy** export one
+snapshot of the currently visible local receipts, including session-only entries.
+The versioned `aveo-public-submission-history` envelope preserves receipt order
+and independently strips unknown fields from every entry. Any invalid or duplicate
+receipt rejects the entire export, never silently skipping a record. The readable
+JSON is bounded to 100 receipts and 128,000 UTF-8 bytes, including its envelope.
+An empty history disables both actions in the UI.
+
+These actions require no wallet, matching network context or RPC response. Denied
+clipboard access exposes the same validated JSON for manual copy. Navigation,
+context changes or a changed visible snapshot discard late clipboard replies and
+clear old export feedback. A browser clipboard write already in progress cannot
+be undone; any copied JSON describes the snapshot requested, not subsequent
+changes. This is not an export of all devices/tabs, proof of confirmation, an
+import format or an automatic backup. Copy/export never removes a receipt.
+
 The journal is bounded to 100 receipts and 128 KB, and never silently evicts one.
 Storage failure produces a warning and falls back to session memory; new receipts may
 not survive reload. Full storage also warns rather than overwriting earlier
@@ -362,8 +401,10 @@ removed from session memory. There is no automatic archive or bulk deletion.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Offer a bounded public history export before manual retention decisions, so
-  operators can keep an independent record without storing plans or credentials.
+- Show a concise receipt capacity indicator so operators can export public history
+  before reaching the bound, without automatic retention or eviction.
+- Exercise interrupted SQLite writes and process crashes so recovery can
+  distinguish corrupt local history from an intentionally empty store.
 - Add interactive browser coverage for denied clipboard permission, manual-copy
   focus and network changes while confirmation is pending, without new runtime dependencies.
 - Add a real multi-tab browser test for simultaneous capture/removal, coalesced
