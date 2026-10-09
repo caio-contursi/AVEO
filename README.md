@@ -334,6 +334,14 @@ and static-render tests cover disconnected wallets and concurrent actions;
 these are not interactive browser or live devnet acceptance. No dependencies,
 Rust code, acceptance scripts or on-chain interfaces changed; local-validator
 acceptance and the Rust build were not repeated.
+The fourteenth round passed 1,072 app/script tests and 4 backend tests,
+production/test TypeScript checks, ESLint and the frontend build. It adds an
+exact public-history export-size preview with shared canonical serialization,
+translated byte-limit guidance and disabled actions for invalid/oversized
+snapshots. Its 89 new unit/static-render tests include exact byte boundaries,
+storage-valid but export-oversized history, privacy and both languages. These
+are not interactive browser tests or live devnet acceptance. No dependencies,
+Rust code or on-chain interfaces changed; validator acceptance was not rerun.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -559,6 +567,20 @@ or the size of the pretty export envelope. A grouped export can exceed its own
 byte bound even when the compact journal fits; individual receipt export remains
 an independent option. Export does not free space and nothing is auto-evicted.
 
+The history export panel also previews the exact UTF-8 size of its formatted
+public backup, independently of compact-storage capacity. Preview and export
+use the same canonical, allowlisted serialization in
+`app/src/features/operations/receipt-export.ts`. Valid snapshots up to and
+including 128,000 bytes are exportable; larger snapshots retain their measured
+size and show a separate warning. Invalid metadata, duplicate signatures or
+more than 100 records show no byte counter. Empty history still has a measurable
+envelope, but no export action. Copy/manual-history buttons are disabled when
+the snapshot is empty, invalid or too large; direct export callers still perform
+their own current validation. Nothing is split, truncated or discarded, and
+valid individual-receipt export remains available. Computing this preview does
+not access the clipboard, wallet, RPC or browser storage, and does not guarantee
+persistence or confirmation on chain.
+
 ### Proposed backlog issues
 
 - Inspect confirmed transaction instructions and binding accounts before
@@ -573,8 +595,10 @@ an independent option. Export does not free space and nothing is auto-evicted.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Add an explicit export-size preview so an operator can distinguish a valid
-  stored snapshot from one too large for the pretty public-export envelope.
+- Offer an explicit browser download of the same validated public JSON so denied
+  clipboard permissions do not require manual selection of a large backup.
+- Share the exact-byte fractional-timestamp fixture across receipt tests to keep
+  compact-storage and formatted-export boundary scenarios easy to maintain.
 - Group the cross-consumer receipt contract tests in a documented CI gate so
   changes to storage, backup and translated operator warnings stay consistent.
 - Reuse coherent-observation checks across CLI acceptance helpers so subject,
