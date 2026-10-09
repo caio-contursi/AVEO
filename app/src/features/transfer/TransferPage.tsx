@@ -72,7 +72,7 @@ export function TransferPage() {
   }, [connected, deployment.wallets, execution.state.phase, execution.state.sendBlocked])
 
   const asset = deployment.assets.find((a) => a.id === form.asset)!
-  const balanceOf = (wallet: string) => holdings.data?.holdings.find((h) => h.mint === asset.mint && h.wallet === wallet)?.amount
+  const balanceOf = (wallet: string) => holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings.find((h) => h.mint === asset.mint && h.wallet === wallet)?.amount
 
   const update = (patch: Partial<FormState>) => {
     if (!execution.reset()) return
@@ -122,65 +122,59 @@ export function TransferPage() {
   return (
     <div className="stack">
       <OperationFlow plan={plan} planning={planning} preparationError={preparation.error} execution={execution.state} contextMatches={execution.contextMatches} submissionPlan={submissionPlan.current} />
-      <Card title={t('transfer.title')} aside={<span className="muted small">{t('transfer.flow')}</span>}>
-        <form onSubmit={(e) => void submit(e)} noValidate>
-          <div className="form-row">
-            <Field label={t('transfer.asset')}>
-              <select disabled={formLocked} value={form.asset} onChange={(e) => update({ asset: e.target.value })}>
-                {deployment.assets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label} ({a.symbol})
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              label={t('transfer.from')}
-              error={errors.from}
-              hint={balanceOf(form.from) !== undefined ? t('transfer.balance', { amount: formatAmount(locale, balanceOf(form.from)!, asset.decimals) }) : undefined}
-            >
-              <select disabled={formLocked} value={form.from} onChange={(e) => update({ from: e.target.value })}>
-                {deployment.wallets.map((w) => (
-                  <option key={w.address} value={w.address}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t('transfer.to')} error={errors.to}>
-              <select disabled={formLocked} value={form.to} onChange={(e) => update({ to: e.target.value })}>
-                {deployment.wallets.map((w) => (
-                  <option key={w.address} value={w.address}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t('transfer.amount')} error={errors.amount}>
-              <input disabled={formLocked} type="text" inputMode="numeric" value={form.amount} onChange={(e) => update({ amount: e.target.value.trim() })} />
-            </Field>
-          </div>
-          <div className="actions">
-            <button type="submit" className="primary" disabled={formLocked}>
-              {planning && <Spinner />} {t('transfer.plan')}
-            </button>
-          </div>
-          <p className="small muted">{t('transfer.note')}</p>
-        </form>
-        {preparation.error && <p className="warn-text" role="alert">{t('operations.prepareFailed')}</p>}
-        {!plan && execution.state.error && <ReasonList reasons={[execution.state.error]} showDetail />}
-      </Card>
-
-      {plan && (
-        <>
-          <details open={blocked || execution.state.phase === 'error' || execution.state.evidence?.status === 'failed' || execution.state.evidence?.status === 'unknown'}>
-            <summary>{t('transfer.diagnosis')}</summary>
-            <div className="grid-2">
-              <PartyCard title={t('transfer.from')} snapshot={plan.diagnostics.source} />
-              <PartyCard title={t('transfer.to')} snapshot={plan.diagnostics.destination} />
+      <section className="stack" aria-label={t('transfer.title')}>
+        <Card title={t('transfer.title')} aside={<span className="muted small">{t('transfer.flow')}</span>}>
+          <form onSubmit={(e) => void submit(e)} noValidate>
+            <div className="form-row">
+              <Field label={t('transfer.asset')}>
+                <select disabled={formLocked} value={form.asset} onChange={(e) => update({ asset: e.target.value })}>
+                  {deployment.assets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label} ({a.symbol})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field
+                label={t('transfer.from')}
+                error={errors.from}
+                hint={balanceOf(form.from) !== undefined ? t('transfer.balance', { amount: formatAmount(locale, balanceOf(form.from)!, asset.decimals) }) : undefined}
+              >
+                <select disabled={formLocked} value={form.from} onChange={(e) => update({ from: e.target.value })}>
+                  {deployment.wallets.map((w) => (
+                    <option key={w.address} value={w.address}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('transfer.to')} error={errors.to}>
+                <select disabled={formLocked} value={form.to} onChange={(e) => update({ to: e.target.value })}>
+                  {deployment.wallets.map((w) => (
+                    <option key={w.address} value={w.address}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('transfer.amount')} error={errors.amount}>
+                <input disabled={formLocked} type="text" inputMode="numeric" value={form.amount} onChange={(e) => update({ amount: e.target.value.trim() })} />
+              </Field>
             </div>
-          </details>
-          <Card>
+            <div className="actions">
+              <button type="submit" className="primary" disabled={formLocked}>
+                {planning && <Spinner />} {t('transfer.plan')}
+              </button>
+            </div>
+            <p className="small muted">{t('transfer.note')}</p>
+          </form>
+          {preparation.error && <p className="warn-text" role="alert">{t('operations.prepareFailed')}</p>}
+          {!plan && execution.state.error && <ReasonList reasons={[execution.state.error]} showDetail />}
+        </Card>
+
+        {plan && (
+          <section aria-label={t('ux.stepReview')}>
+            <h3>{t('ux.stepReview')}</h3>
             <PlanReview
               plan={plan}
               signerLabel={labelFor(deployment, form.from)}
@@ -188,8 +182,18 @@ export function TransferPage() {
               execution={execution.state}
               onSign={sign}
             />
-          </Card>
-        </>
+          </section>
+        )}
+      </section>
+
+      {plan && (
+        <details open={blocked || execution.state.phase === 'error' || execution.state.evidence?.status === 'failed' || execution.state.evidence?.status === 'unknown'}>
+          <summary>{t('transfer.diagnosis')}</summary>
+          <div className="grid-2">
+            <PartyCard title={t('transfer.from')} snapshot={plan.diagnostics.source} />
+            <PartyCard title={t('transfer.to')} snapshot={plan.diagnostics.destination} />
+          </div>
+        </details>
       )}
 
       {execution.state.evidence && (

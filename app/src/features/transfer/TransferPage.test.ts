@@ -11,12 +11,14 @@ import { TransferPage } from './TransferPage'
 const mocks = vi.hoisted(() => ({
   planTransfer: vi.fn(), prepare: vi.fn(), clear: vi.fn(), isCurrent: vi.fn(),
   execute: vi.fn(), reset: vi.fn(), scope: [] as unknown[],
+  recheck: vi.fn(), onRecheck: undefined as (() => void) | undefined,
   preparation: { plan: undefined as DeskPlan | undefined, planning: false, error: undefined as 'preparation-failed' | undefined },
   sign: undefined as (() => void) | undefined,
   submit: undefined as ((event: FormEvent) => void) | undefined,
   language: 'en' as Language,
   execution: { phase: 'idle' } as ExecutionState,
   contextMatches: true,
+  holdingsFailed: false, holdingsFetching: false,
   connected: { address: 'source' } as { address: string } | undefined,
 }))
 const deployment = {
@@ -35,33 +37,48 @@ vi.mock('../../i18n/context', () => ({ useI18n: () => ({
   locale: 'en-US', t: (key: keyof typeof messages.en) => messages[mocks.language][key],
   has: (key: string): key is keyof typeof messages.en => key in messages.en,
 }) }))
-vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ data: { holdings: [
+vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('Offline') : undefined,
+  isFetching: mocks.holdingsFetching, data: { holdings: [
   { mint: 'mint', wallet: 'source', amount: 100n }, { mint: 'mint', wallet: 'destination', amount: 50n },
 ] } }) }))
 vi.mock('../operations/useExecutePlan', () => ({ useExecutePlan: () => ({
   state: mocks.execution, contextMatches: mocks.contextMatches,
   displayMetadata: mocks.execution.evidence ? { deployment, decimals: 0 } : undefined,
-  reset: mocks.reset, execute: mocks.execute, recheck: vi.fn(),
+  reset: mocks.reset, execute: mocks.execute, recheck: mocks.recheck,
 }) }))
 vi.mock('../operations/usePlanPreparation', () => ({ usePlanPreparation: (scope: unknown[]) => {
   mocks.scope = scope
   return { ...mocks.preparation, prepare: mocks.prepare, clear: mocks.clear, isCurrent: mocks.isCurrent }
 } }))
-vi.mock('../operations/PlanReview', () => ({ PlanReview: ({ onSign }: { onSign: () => void }) => {
-  mocks.sign = onSign
-  return createElement('div', null, 'review')
-} }))
-vi.mock('../../components/ui', async (original) => ({
-  ...await original<typeof import('../../components/ui')>(),
-  Card: ({ children }: { children: ReactNode }) => {
-    for (const child of Array.isArray(children) ? children : [children]) {
-      if (child && typeof child === 'object' && 'type' in child && child.type === 'form') {
-        mocks.submit = (child as { props: { onSubmit: (event: FormEvent) => void } }).props.onSubmit
+vi.mock('../operations/PlanReview', async (original) => {
+  const { PlanReview } = await original<typeof import('../operations/PlanReview')>()
+  return { PlanReview: (props: Parameters<typeof PlanReview>[0]) => {
+    mocks.sign = props.onSign
+    return createElement(PlanReview, props)
+  } }
+})
+vi.mock('../operations/EvidenceView', async (original) => {
+  const { EvidenceView } = await original<typeof import('../operations/EvidenceView')>()
+  return { EvidenceView: (props: Parameters<typeof EvidenceView>[0]) => {
+    mocks.onRecheck = props.onRecheck
+    return createElement(EvidenceView, props)
+  } }
+})
+vi.mock('../../components/ui', async (original) => {
+  const ui = await original<typeof import('../../components/ui')>()
+  return {
+    ...ui,
+    Card: (props: { children: ReactNode; title?: ReactNode; aside?: ReactNode; className?: string }) => {
+      const { children } = props
+      for (const child of Array.isArray(children) ? children : [children]) {
+        if (child && typeof child === 'object' && 'type' in child && child.type === 'form') {
+          mocks.submit = (child as { props: { onSubmit: (event: FormEvent) => void } }).props.onSubmit
+        }
       }
-    }
-    return createElement('section', null, children)
-  },
-}))
+      return createElement(ui.Card, props)
+    },
+  }
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -69,9 +86,12 @@ beforeEach(() => {
   mocks.language = 'en'
   mocks.execution = { phase: 'idle' }
   mocks.contextMatches = true
+  mocks.holdingsFailed = false
+  mocks.holdingsFetching = false
   mocks.connected = { address: 'source' }
   mocks.sign = undefined
   mocks.submit = undefined
+  mocks.onRecheck = undefined
   mocks.reset.mockReturnValue(true)
   mocks.isCurrent.mockReturnValue(true)
   mocks.prepare.mockImplementation(async (build: () => Promise<DeskPlan>) => build())
@@ -139,6 +159,16 @@ describe('transfer preparation integration', () => {
   it('disables preparation while the current simulation is pending', () => {
     mocks.preparation.planning = true
     expect(render()).toMatch(/<button type="submit" class="primary" disabled="">/)
+  })
+
+  it.each(['holdingsFailed', 'holdingsFetching'] as const)('does not present cached holdings as a current hint or capture them as pre-send evidence during %s', (state) => {
+    mocks.preparation.plan = preparedPlan()
+    mocks[state] = true
+    const html = render()
+    expect(html).not.toContain('class="field-hint"')
+    expect(mocks.execute).not.toHaveBeenCalled()
+    mocks.sign!()
+    expect(mocks.execute).toHaveBeenCalledWith(mocks.preparation.plan, { balancesBefore: undefined })
   })
 
   it.each([true, false])('requires the plan to remain current before signing (current: %s)', (current) => {
@@ -223,5 +253,71 @@ describe('transfer preparation integration', () => {
     expect(html).not.toContain('data-status="complete"')
     mocks.preparation.plan = preparedPlan()
     expect(render()).not.toContain('data-status="complete"')
+  })
+
+  it('groups intent and review in one named region with no Card enclosing the decision panel', () => {
+    mocks.preparation.plan = preparedPlan()
+    const html = render()
+    expect(html).toContain(`<section class="stack" aria-label="${messages.en['transfer.title']}"><section class="card `)
+    expect(html).toContain(`</section><section aria-label="${messages.en['ux.stepReview']}"><h3>${messages.en['ux.stepReview']}</h3><div class="box decision-panel">`)
+    expect(html.indexOf(messages.en['transfer.diagnosis'])).toBeGreaterThan(html.indexOf('decision-panel'))
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('keeps wallet requirements and rejection reasons visible in review', () => {
+    mocks.preparation.plan = preparedPlan()
+    mocks.connected = { address: 'destination' }
+    mocks.execution = { phase: 'error', error: { code: 'SimulationFailed', message: 'Wallet rejected request' } }
+    const html = render()
+    expect(html).toContain(messages.en['wallet.required'])
+    expect(html).toContain(messages.en['wallet.wrong'])
+    expect(html).toContain('Wallet rejected request')
+    expect(html).toContain('<details open="">')
+    expect(html).toMatch(/<button type="button" class="primary" disabled=""/)
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('rechecks unknown evidence without preparing or sending and retains the original signature', () => {
+    mocks.execution = { phase: 'done', signature: 'original', evidence: { status: 'unknown', signature: 'original', logs: [] } }
+    const html = render()
+    expect(html).toContain('original')
+    expect(html).toContain(messages.en['evidence.unknown'])
+    expect(html).toContain(messages.en['evidence.recheckNote'])
+    expect(mocks.recheck).not.toHaveBeenCalled()
+    mocks.onRecheck!()
+    expect(mocks.recheck).toHaveBeenCalledOnce()
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.prepare).not.toHaveBeenCalled()
+    mocks.execution = { ...mocks.execution, phase: 'verifying' }
+    const rechecking = render()
+    expect(rechecking).toContain('original')
+    expect(rechecking).toContain(messages.en['evidence.unknown'])
+    expect(rechecking).toMatch(/<button type="button" disabled=""/)
+    expect(rechecking.match(/aria-current="step"/g)).toHaveLength(1)
+  })
+
+  it.each(['failed', 'unknown'] as const)('keeps %s evidence and recovery reasons visible without a prepared plan', (status) => {
+    mocks.execution = { phase: 'done', signature: 'original', evidence: { status, signature: 'original', logs: [], error: { code: 'ConfirmationUnknown', message: 'Original submission diagnostic' } } }
+    const html = render()
+    expect(html).toContain('original')
+    expect(html).toContain('ConfirmationUnknown')
+    expect(html).toContain(messages.en['reason.ConfirmationUnknown'])
+    expect(html).toContain(messages.en[`evidence.${status}`])
+    expect(mocks.sign).toBeUndefined()
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('keeps retained unknown recovery visible but disables recheck in a different context', () => {
+    mocks.contextMatches = false
+    mocks.execution = { phase: 'done', signature: 'original', evidence: { status: 'unknown', signature: 'original', logs: [] } }
+    const html = render()
+    expect(html).toContain('original')
+    expect(html).toContain(messages.en['evidence.contextChanged'])
+    expect(html).toContain(messages.en['evidence.recheckNote'])
+    expect(html).toMatch(/<button type="button" disabled="">/)
+    expect(html).not.toContain('aria-current="step"')
+    expect(mocks.recheck).not.toHaveBeenCalled()
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.prepare).not.toHaveBeenCalled()
   })
 })

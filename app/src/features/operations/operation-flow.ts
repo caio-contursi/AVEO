@@ -57,6 +57,8 @@ export function operationFlow({ plan, planning, preparationError, execution, con
     return result('ux.nextUnknown')
   }
   if (execution.phase === 'error' || execution.error) {
+    // A rejected wallet request does not undo review of the exact captured plan.
+    if (plan && plan === submissionPlan) stages[0] = stages[1] = 'complete'
     stages[2] = 'blocked'
     return result('ux.nextError')
   }

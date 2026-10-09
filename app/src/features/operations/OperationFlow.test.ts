@@ -96,6 +96,35 @@ describe('truthful operation flow', () => {
     expect(operationFlow({ ...submitted('confirmed'), submissionPlan: undefined }).stages.slice(0, 2)).toEqual(['unknown', 'unknown'])
   })
 
+  it('wallet rejection preserves review only for the exact plan captured at signing', () => {
+    const execution: ExecutionState = { phase: 'error', error: { code: 'SimulationFailed', message: 'Wallet rejected' } }
+    const props = input({ plan, submissionPlan: plan, execution })
+    expect(operationFlow(props)).toEqual({ stages: ['complete', 'complete', 'blocked', 'pending'], summary: 'ux.nextError' })
+    for (const currentPlan of [undefined, { ...plan }]) {
+      expect(operationFlow({ ...props, plan: currentPlan }).stages).toEqual(['pending', 'pending', 'blocked', 'pending'])
+    }
+    expect(operationFlow({ ...props, submissionPlan: undefined }).stages).toEqual(['pending', 'pending', 'blocked', 'pending'])
+    expect(render(props)).not.toContain('aria-current="step"')
+  })
+
+  it.each([
+    input(), input({ planning: true }), input({ plan }),
+    input({ plan, submissionPlan: plan, execution: { phase: 'signing' } }),
+    input({ plan, submissionPlan: plan, execution: { phase: 'verifying', signature: 'original' } }),
+    submitted('confirmed'), submitted('failed'), submitted('unknown'),
+    { ...submitted('unknown'), contextMatches: false },
+  ])('uses distinct visible marks with translated status text and at most one current step', (props) => {
+    const html = render(props)
+    const marks = { pending: '○', current: '›', complete: '✓', blocked: '!', unknown: '?' }
+    const labels = { pending: 'ux.stagePending', current: 'ux.stageCurrent', complete: 'ux.stageComplete', blocked: 'ux.stageBlocked', unknown: 'ux.stageUnknown' } as const
+    const items = html.match(/<li .*?<\/li>/g)!
+    operationFlow(props).stages.forEach((status, index) => {
+      expect(items[index]).toContain(`<span class="workflow-number" aria-hidden="true">${marks[status]}</span>`)
+      expect(items[index]).toContain(messages.en[labels[status]])
+    })
+    expect((html.match(/aria-current="step"/g) ?? []).length).toBeLessThanOrEqual(1)
+  })
+
   it.each(['en', 'pt'] as const)('shows RPC confirmation separately from unknown party readback (%s)', (language) => {
     const props = submitted('confirmed')
     props.execution.evidence!.readback = [

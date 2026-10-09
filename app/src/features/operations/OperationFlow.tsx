@@ -6,11 +6,13 @@ const statuses = {
   pending: 'ux.stagePending', current: 'ux.stageCurrent', complete: 'ux.stageComplete',
   blocked: 'ux.stageBlocked', unknown: 'ux.stageUnknown',
 } as const
+const marks = { pending: '○', current: '›', complete: '✓', blocked: '!', unknown: '?' } as const
 
 /** Progress reports observed facts; RPC confirmation does not assert party eligibility. */
 export function OperationFlow(props: OperationFlowInput) {
   const { t } = useI18n()
   const flow = operationFlow(props)
+  const currentStage = flow.stages.indexOf('current')
   return (
     <section className="workflow" aria-label={t('ux.flowTitle')}>
       <div className="workflow-head">
@@ -21,8 +23,8 @@ export function OperationFlow(props: OperationFlowInput) {
         {steps.map((step, index) => {
           const status = flow.stages[index]!
           return (
-            <li key={step} className={`workflow-step ${status}`} data-status={status} aria-current={status === 'current' ? 'step' : undefined}>
-              <span className="workflow-number" aria-hidden="true">{index + 1}</span>
+            <li key={step} className={`workflow-step ${status}`} data-status={status} aria-current={index === currentStage ? 'step' : undefined}>
+              <span className="workflow-number" aria-hidden="true">{marks[status]}</span>
               <span className="workflow-label">{t(step)}</span>
               <span className="workflow-status">{t(statuses[status])}</span>
             </li>
