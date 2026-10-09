@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { getBase58Decoder } from '@solana/kit'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeskPlan } from '../../api/backend'
@@ -12,13 +13,15 @@ const mocks = vi.hoisted(() => ({
   current: null as DeskIncident | null,
   prepareControl: null as PlanPreparation<Review[]> | null,
   verifyControl: null as PlanPreparation<unknown[]> | null,
+  confirmationControl: null as PlanPreparation<unknown> | null,
   hookIndex: 0, stateIndex: 0,
-  busy: undefined as 'sign' | 'verify' | undefined,
+  busy: undefined as 'sign' | 'verify' | 'recheck' | undefined,
   cleanups: [] as (() => void)[],
   buttons: [] as { onClick: () => void; children: unknown; className?: string; disabled?: boolean }[],
   planRenewBinding: vi.fn(), inspect: vi.fn(), runPlan: vi.fn(), patch: vi.fn(), capture: vi.fn(), invalidate: vi.fn(),
   language: 'en' as Language, twoProofs: false, throwPatch: false,
   policyVersion: 1n,
+  recheck: vi.fn(), connected: true,
 }))
 
 vi.mock('react', async (original) => {
@@ -53,7 +56,7 @@ const ctx = {
 vi.mock('../../app/desk', () => ({ useReadyDesk: () => ({ ctx, deployment: ctx.deployment,
   backend: { planRenewBinding: mocks.planRenewBinding, inspect: mocks.inspect },
 }) }))
-vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: { address: 'wallet', signer: {} } }) }))
+vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: mocks.connected ? { address: 'wallet', signer: {} } : undefined }) }))
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mocks.invalidate }) }))
 vi.mock('./store', () => ({ useIncidentStore: () => ({ patch: mocks.patch }) }))
 vi.mock('../../api/eligibility', () => ({ checkPayload: () => ({ reasons: [] }) }))
@@ -68,15 +71,18 @@ vi.mock('../assets/queries', () => ({
   })) } }),
 }))
 vi.mock('../operations/usePlanPreparation', () => ({ usePlanPreparation: (scope: readonly unknown[]) => {
-  const control = mocks.hookIndex++ === 0 ? mocks.prepareControl! : mocks.verifyControl!
+  const index = mocks.hookIndex++
+  const control = index === 0 ? mocks.prepareControl! : index === 1 ? mocks.verifyControl! : mocks.confirmationControl!
   const key = JSON.stringify(scope)
   control.setScope(key)
   return { ...control.state,
     prepare: (build: () => Promise<never>) => control.prepare(key, build),
     clear: () => control.clear(), isCurrent: (plan: never) => control.isCurrent(key, plan),
+    isActive: () => control.isActiveScope(key),
   }
 } }))
 vi.mock('../operations/useExecutePlan', () => ({ runPlan: mocks.runPlan }))
+vi.mock('./confirmation-recovery', () => ({ recheckIncidentSignature: mocks.recheck }))
 vi.mock('../operations/submission-journal', () => ({ getSubmissionJournal: () => ({ capture: mocks.capture }) }))
 vi.mock('../operations/SimulationSummary', () => ({ SimulationSummary: () => createElement('div', null, 'review') }))
 vi.mock('../operations/EvidenceView', () => ({ EvidenceView: () => null }))
@@ -116,7 +122,7 @@ async function prepare() {
 }
 function leave() {
   mocks.cleanups.splice(0).forEach((cleanup) => cleanup())
-  mocks.prepareControl!.deactivate(); mocks.verifyControl!.deactivate()
+  mocks.prepareControl!.deactivate(); mocks.verifyControl!.deactivate(); mocks.confirmationControl!.deactivate()
 }
 
 beforeEach(() => {
@@ -124,8 +130,10 @@ beforeEach(() => {
   mocks.current = opened(); mocks.busy = undefined; mocks.twoProofs = false; mocks.throwPatch = false
   mocks.language = 'en'; mocks.cleanups = []
   mocks.policyVersion = 1n
+  mocks.connected = true
   mocks.prepareControl = new PlanPreparation<Review[]>(() => {})
   mocks.verifyControl = new PlanPreparation<unknown[]>(() => {})
+  mocks.confirmationControl = new PlanPreparation<unknown>(() => {})
   mocks.patch.mockImplementation((_id: string, update: (incident: DeskIncident) => DeskIncident) => {
     mocks.current = update(mocks.current!)
     if (mocks.throwPatch) throw new Error('private listener failure')
@@ -311,5 +319,98 @@ describe('grouped renewal integration with controlled lifecycle callbacks', () =
     await vi.waitFor(() => expect(mocks.verifyControl!.state.planning).toBe(false))
     expect(mocks.patch).not.toHaveBeenCalled()
     expect(mocks.current?.state).toBe('open')
+  })
+})
+
+describe('same-signature incident recovery integration', () => {
+  const signature = getBase58Decoder().decode(new Uint8Array(64).fill(9))
+  function pending() {
+    mocks.current = { ...opened(), state: 'awaiting-confirmation', evidence: [{ status: 'unknown', signature, logs: [] }] }
+  }
+
+  it.each(['en', 'pt'] as const)('offers an explicit read-only signature query without a connected wallet (%s)', (language) => {
+    pending(); mocks.connected = false; mocks.language = language
+    const html = render()
+    expect(html).toContain(messages[language]['incidents.recheck'])
+    expect(html).toContain(messages[language]['incidents.recheckNote'])
+    expect(mocks.recheck).not.toHaveBeenCalled()
+    expect(mocks.runPlan).not.toHaveBeenCalled()
+  })
+
+  it.each(['confirmed', 'failed', 'unknown'] as const)('updates only the recorded signature to %s without sending or resolving', async (status) => {
+    pending(); mocks.connected = false
+    mocks.recheck.mockResolvedValue({ status, signature, slot: status === 'unknown' ? undefined : 120, logs: [] })
+    render(); button(messages.en['incidents.recheck']).onClick()
+    await vi.waitFor(() => expect(mocks.busy).toBeUndefined())
+    expect(mocks.recheck).toHaveBeenCalledOnce()
+    expect(mocks.recheck.mock.calls[0][2]).toBe(signature)
+    expect(mocks.current?.evidence).toHaveLength(1)
+    expect(mocks.current?.evidence[0]?.status).toBe(status)
+    expect(mocks.current?.state).toBe(status === 'failed' ? 'open' : 'awaiting-confirmation')
+    expect(mocks.current?.events.at(-1)).toMatchObject({ kind: 'rechecked', params: { signature, status } })
+    const label = messages.en[status === 'confirmed' ? 'evidence.confirmed' : status === 'failed' ? 'evidence.failed' : 'evidence.unknown']
+    expect(render()).toContain(messages.en['incidents.recheckRecorded'].replace('{status}', label))
+    expect(mocks.runPlan).not.toHaveBeenCalled()
+    expect(mocks.planRenewBinding).not.toHaveBeenCalled()
+    expect(mocks.inspect).not.toHaveBeenCalled()
+    expect(mocks.capture).not.toHaveBeenCalled()
+  })
+
+  it('blocks simultaneous recheck and eligibility verification before a rerender', async () => {
+    pending()
+    const reply = deferred<unknown>()
+    mocks.recheck.mockReturnValue(reply.promise)
+    render()
+    const query = button(messages.en['incidents.recheck']), verify = button(messages.en['incidents.verify'])
+    query.onClick(); query.onClick(); verify.onClick()
+    expect(mocks.recheck).toHaveBeenCalledOnce()
+    expect(mocks.inspect).not.toHaveBeenCalled()
+    reply.resolve({ status: 'unknown', signature, logs: [] })
+    await vi.waitFor(() => expect(mocks.busy).toBeUndefined())
+  })
+
+  it.each(['scope', 'unmount'] as const)('discards a late recovered confirmation after %s', async (change) => {
+    pending()
+    const before = mocks.current
+    const reply = deferred<unknown>()
+    mocks.recheck.mockReturnValue(reply.promise)
+    render(); button(messages.en['incidents.recheck']).onClick()
+    if (change === 'scope') mocks.confirmationControl!.setScope('another-network')
+    else leave()
+    reply.resolve({ status: 'confirmed', signature, slot: 120, logs: [] })
+    await vi.waitFor(() => expect(mocks.confirmationControl!.state.planning).toBe(false))
+    expect(mocks.current).toBe(before)
+    expect(mocks.patch).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite an incident resolved while confirmation was pending', async () => {
+    pending()
+    const reply = deferred<unknown>()
+    mocks.recheck.mockReturnValue(reply.promise)
+    render(); button(messages.en['incidents.recheck']).onClick()
+    mocks.current = { ...mocks.current!, state: 'resolved', resolvedSlot: 140 }
+    const resolved = mocks.current
+    reply.resolve({ status: 'failed', signature, slot: 120, logs: [] })
+    await vi.waitFor(() => expect(mocks.busy).toBeUndefined())
+    expect(mocks.current).toBe(resolved)
+  })
+
+  it('retains unknown evidence when its original receipt cannot be matched', async () => {
+    pending()
+    const before = mocks.current
+    mocks.recheck.mockResolvedValue(undefined)
+    render(); button(messages.en['incidents.recheck']).onClick()
+    await vi.waitFor(() => expect(mocks.busy).toBeUndefined())
+    expect(mocks.current).toBe(before)
+    expect(mocks.patch).not.toHaveBeenCalled()
+    expect(mocks.runPlan).not.toHaveBeenCalled()
+  })
+
+  it('does not offer recovery for ambiguous or malformed signature metadata', () => {
+    pending()
+    mocks.current = { ...mocks.current!, evidence: [...mocks.current!.evidence, ...mocks.current!.evidence] }
+    expect(render()).not.toContain(messages.en['incidents.recheck'])
+    mocks.current = { ...opened(), evidence: [{ status: 'unknown', signature: 'not-a-signature', logs: [] }] }
+    expect(render()).not.toContain(messages.en['incidents.recheck'])
   })
 })

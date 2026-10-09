@@ -2,7 +2,7 @@ import type { IncidentState } from '@aveo/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Address as SolanaAddress } from '@solana/kit'
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { DeskPlan } from '../../api/backend'
+import type { DeskEvidence, DeskPlan } from '../../api/backend'
 import { checkPayload } from '../../api/eligibility'
 import type { DeskSnapshot } from '../../api/diagnostics'
 import type { ProofRow } from '../../api/inventory'
@@ -23,6 +23,8 @@ import { applySends, applyVerification, markPrepared, type DeskIncident, type Se
 import { useIncidentStore } from './store'
 import { usePlanPreparation } from '../operations/usePlanPreparation'
 import { canPrepareRenewal, groupRenewalCandidates, hasPendingRenewal, sameRenewalIntent } from './renewal'
+import { recheckIncidentSignature } from './confirmation-recovery'
+import { applySignatureRecheck, unknownIncidentSignatures } from './confirmation-model'
 
 const STATES: IncidentState[] = ['open', 'action-prepared', 'awaiting-confirmation', 'resolved']
 const STATE_TONE = { open: 'bad', 'action-prepared': 'warn', 'awaiting-confirmation': 'accent', resolved: 'ok' } as const
@@ -63,7 +65,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const queryClient = useQueryClient()
   const { patch } = useIncidentStore()
   const { loading, candidates, policies, clockUnix } = useCandidates(incident)
-  const [actionBusy, setActionBusy] = useState<'sign' | 'verify'>()
+  const [actionBusy, setActionBusy] = useState<'sign' | 'verify' | 'recheck'>()
   const [actionError, setActionError] = useState<unknown>()
   const [journalError, setJournalError] = useState(false)
   const mounted = useRef(false)
@@ -93,6 +95,16 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     incident.id, incident.wallet, incident.proof, incident.affectedMints, incident.state,
     incident.evidence.map((item) => [item.signature, item.status, item.slot]),
   ])
+  const confirmation = usePlanPreparation<{ evidence?: DeskEvidence }>([
+    ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment,
+    incident.id, incident.key, incident.type, incident.wallet, incident.proof, incident.affectedMints,
+    incident.state, incident.evidence.map((item) => [item.signature, item.status, item.slot]),
+  ])
+  const unknownSignatures = unknownIncidentSignatures(incident)
+  const lastRecheck = [...incident.events].reverse().find((event) => event.kind === 'rechecked')
+  const recordedStatus = lastRecheck?.params?.status
+  const recordedStatusLabel = recordedStatus === 'confirmed' ? t('evidence.confirmed')
+    : recordedStatus === 'failed' ? t('evidence.failed') : recordedStatus === 'unknown' ? t('evidence.unknown') : undefined
   const plans = preparation.plan ?? NO_PLANS
   const busy = actionBusy ?? (preparation.planning ? 'prepare' : undefined)
   const signable = plans.filter((p) => p.plan.simulation.ok)
@@ -206,6 +218,32 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     }
   }
 
+  const recheck = async (signature: string) => {
+    if (actionLock.current || !confirmation.isActive() || !unknownSignatures.includes(signature)) return
+    actionLock.current = true
+    preparation.clear()
+    setActionBusy('recheck')
+    setActionError(undefined)
+    try {
+      const observation = await confirmation.prepare(async () => ({ evidence: await recheckIncidentSignature(
+        ctx, incident, signature, getSubmissionJournal(), confirmation.isActive,
+      ) }))
+      if (!observation || !confirmation.isCurrent(observation)) return
+      if (!observation.evidence) {
+        setActionError(new Error(t('incidents.recheckFailed')))
+        return
+      }
+      const evidence = observation.evidence
+      patch(incident.id, (current) => confirmation.isCurrent(observation)
+        ? applySignatureRecheck(current, incident, evidence, now()) : current)
+    } catch {
+      if (confirmation.isActive()) setActionError(new Error(t('incidents.recheckFailed')))
+    } finally {
+      actionLock.current = false
+      if (mounted.current) setActionBusy(undefined)
+    }
+  }
+
   return (
     <Card
       title={`${t(`incidentType.${incident.type}`)} · ${walletLabel}`}
@@ -308,8 +346,21 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
             </button>
           </div>
           {pendingRenewal && <p className="small warn-text" role="alert">{t('incidents.pendingRenewal')}</p>}
+          {recordedStatusLabel && <p className="small" role="status" aria-live="polite">
+            {t('incidents.recheckRecorded', { status: recordedStatusLabel })}
+          </p>}
+          {unknownSignatures.length > 0 && <div className="box">
+            <p className="small muted">{t('incidents.recheckNote')}</p>
+            {unknownSignatures.map((signature) => <div className="actions" key={signature}>
+              <Address value={signature} />
+              <button type="button" disabled={busy !== undefined} onClick={() => { void recheck(signature) }}>
+                {busy === 'recheck' && <Spinner />} {t('incidents.recheck')}
+              </button>
+            </div>)}
+          </div>}
           {preparation.error && <p className="small warn-text" role="alert">{t('operations.prepareFailed')}</p>}
           {verification.error && <p className="small warn-text" role="alert">{t('incidents.verifyFailed')}</p>}
+          {confirmation.error && <p className="small warn-text" role="alert">{t('incidents.recheckFailed')}</p>}
           {actionError !== undefined && <ErrorState error={actionError} />}
         </>
       )}
@@ -325,6 +376,9 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
                   ...event.params,
                   ...(event.params?.signature ? { signature: shortAddress(event.params.signature) } : {}),
                   ...(event.params?.slot ? { slot: formatSlot(locale, Number(event.params.slot)) } : {}),
+                  ...(event.kind === 'rechecked' && ['confirmed', 'failed', 'unknown'].includes(event.params?.status ?? '')
+                    ? { status: t(event.params!.status === 'confirmed' ? 'evidence.confirmed'
+                      : event.params!.status === 'failed' ? 'evidence.failed' : 'evidence.unknown') } : {}),
                 })}
               </span>
             </li>

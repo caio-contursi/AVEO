@@ -1,5 +1,10 @@
 // Textos da interface em português e inglês. O dicionário em inglês precisa ter as mesmas chaves (checado pelo TypeScript).
 const pt = {
+  'incidents.recheckRecorded': 'Última consulta de assinatura registrada: {status}. Verifique a elegibilidade atual separadamente.',
+  'incidents.recheck': 'Consultar assinatura original',
+  'incidents.recheckNote': 'Consulta somente leitura, sem carteira nem reenvio. Exige um recibo público no contexto original e confirmação pelo RPC; não comprova a natureza da transação nem resolve o incidente. Confirmação de sucesso ainda exige verificar a elegibilidade de todos os ativos.',
+  'incidents.recheckFailed': 'Não foi possível consultar esta assinatura com segurança. Confira o recibo e o contexto original; a evidência foi mantida, sem reenvio.',
+  'event.rechecked': 'Assinatura consultada novamente ({signature}); resultado: {status}',
   'incidents.verifyFailed': 'Não foi possível concluir a verificação. As evidências foram mantidas; consulte novamente, sem reenviar a transação.',
   'incidents.pendingRenewal': 'Há uma renovação enviada aguardando verificação ou com resultado desconhecido. Consulte a assinatura original em Recibos e verifique a elegibilidade; não prepare nem envie outra renovação para este incidente.',
   'operations.prepareFailed': 'Não foi possível preparar e simular esta ação. Nenhuma transação foi enviada; confira os dados e tente preparar novamente.',
@@ -300,6 +305,11 @@ const pt = {
 export type MessageKey = keyof typeof pt
 
 const en: Record<MessageKey, string> = {
+  'incidents.recheckRecorded': 'Last recorded signature query: {status}. Verify current eligibility separately.',
+  'incidents.recheck': 'Query original signature',
+  'incidents.recheckNote': 'Read-only query, without a wallet or resubmission. Requires a public receipt in the original context and RPC confirmation; it does not prove transaction intent or resolve the incident. Successful confirmation still requires verifying eligibility of every asset.',
+  'incidents.recheckFailed': 'Could not safely query this signature. Check its receipt and original context; evidence was retained without resubmission.',
+  'event.rechecked': 'Signature queried again ({signature}); result: {status}',
   'incidents.verifyFailed': 'Verification could not be completed. Evidence was retained; query again without resubmitting the transaction.',
   'incidents.pendingRenewal': 'A submitted renewal is awaiting verification or has an unknown result. Query the original signature in Receipts and verify eligibility; do not prepare or submit another renewal for this incident.',
   'operations.prepareFailed': 'Could not prepare and simulate this action. No transaction was sent; check the inputs and prepare again.',
