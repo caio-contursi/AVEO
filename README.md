@@ -110,6 +110,13 @@ signatures and hook errors are recorded in the ledger. It prints `PASS`, `FAIL`,
 `NOT_RUN`, and public transaction evidence; any failed expectation returns a
 nonzero exit status. Failed transactions still consume synthetic SOL fees.
 
+The runner also exercises an external Token-2022 client without a Desk plan:
+with official extra-account resolution the valid transfer succeeds; without the
+extra accounts it fails in the ledger without changing balances; with complete
+accounts but an expired proof the hook rejects it. All three checks are required
+before the receipt marks T11 `PASS`. Expected missing-account failures need a
+specific ledger error and matching program logs, not just any failed request.
+
 `demo:report` writes `app/.dev/acceptance-report.json`, an ignored runtime artifact
 with timestamps, ordered stage results, public signatures, slots and balances.
 Only explicitly allowed evidence fields are saved, never raw process logs,
@@ -146,6 +153,10 @@ frontend build. It did not change the Rust program or repeat its earlier build.
 The third round passed 223 app/script tests and 4 backend tests, production and
 test-project TypeScript checks, ESLint and the frontend build. The 21-stage local
 acceptance run remained passing after coherent-readback and bounded-read changes.
+The fourth round passed 265 app/script tests and 4 backend tests, the same type,
+lint and frontend build checks, and the expanded 24-stage acceptance run. Public
+receipt recovery was also tested across two separate Node processes against a
+real localnet signature: confirmation succeeded with zero transaction sends.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -177,11 +188,35 @@ not a subsequently edited form or a different deployment.
 Concurrent actions and resetting an unresolved submission are blocked. Network,
 RPC, program, commitment or deployment changes disable rechecking and suppress
 links to the wrong network's Explorer. Restore the original context to recheck.
-Pending submissions are kept only while the operation component remains mounted;
-navigation away or a browser reload loses this in-memory recovery state.
+The original plan and detailed readback remain in component memory only; leaving
+the component loses that operation's in-memory recovery state.
 Controller and static-render tests cover these protections; they do not replace
 interactive browser testing. A separate live localnet recheck confirmed a
 previously submitted transfer, returned two fresh readbacks and made no send calls.
+
+### Public signature recovery after reload
+
+The **Public submission receipts** tab (`#/recibos`) stores signatures from Desk
+transfers, binding changes, policy updates and grouped incident renewals in this
+browser's `localStorage`. Its receipts contain only a signature, recorded time,
+cluster, program, commitment, fixture generation and SHA-256 RPC fingerprint.
+No wallet key, RPC URL, unsigned transaction, plan, payload, log or cached
+confirmation is stored. Query the same signature after navigation/reload without
+a wallet; the receipt is never a request that can be signed or resent.
+
+Confirmation is queried manually, against a matching original context, and kept
+only for the current history page. Context changes clear old results and prevent
+wrong-network Explorer links. Browser metadata is untrusted and matching an RPC
+fingerprint does not prove the network identity or turn the history into an
+authorization source. Receipt confirmation does not resolve incidents by itself;
+their separate complete, current eligibility readback remains required.
+
+The journal is bounded to 100 receipts and never silently evicts one. Storage
+failure produces a warning and falls back to session memory; new receipts may
+not survive reload. Full storage also warns rather than overwriting earlier
+receipts. Clearing browser data removes this history. Signing failures before a
+signature is returned cannot be captured. Cross-tab synchronization and interactive
+browser tests are not implemented; Node-process recovery is not a browser test.
 
 ### Proposed backlog issues
 
@@ -189,10 +224,12 @@ previously submitted transfer, returned two fresh readbacks and made no send cal
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Persist a public pending-submission receipt so a browser reload can resume
-  read-only verification of the same signature without storing wallet keys.
 - Add controlled RPC fault injection to the local acceptance runner to exercise
   the complete T14 workflow, not only isolated timeout and inconsistency tests.
+- Offer copy/export of a selected public receipt for support or judging without
+  exposing RPC credentials or depending on the original browser's storage.
+- Add explicit archive/retention and cross-tab coordination so receipt growth
+  and simultaneous browser windows cannot obscure pending-operation history.
 
 ## Estrutura
 
