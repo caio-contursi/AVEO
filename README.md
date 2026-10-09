@@ -342,6 +342,14 @@ snapshots. Its 89 new unit/static-render tests include exact byte boundaries,
 storage-valid but export-oversized history, privacy and both languages. These
 are not interactive browser tests or live devnet acceptance. No dependencies,
 Rust code or on-chain interfaces changed; validator acceptance was not rerun.
+The fifteenth round passed 1,150 app/script tests and 4 backend tests,
+production/test TypeScript checks, ESLint and the frontend build. It adds an
+explicit native-browser public-history download with sanitized manual fallback,
+current-snapshot guards and temporary resource cleanup. The 78 new tests use
+fake browser APIs, controlled callbacks and static markup in both languages;
+they do not establish actual file saving or interactive fallback rendering.
+No dependencies, Rust code, acceptance scripts or on-chain interfaces changed;
+local-validator acceptance and live devnet checks were not repeated.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -506,7 +514,29 @@ The versioned `aveo-public-submission-history` envelope preserves receipt order
 and independently strips unknown fields from every entry. Any invalid or duplicate
 receipt rejects the entire export, never silently skipping a record. The readable
 JSON is bounded to 100 receipts and 128,000 UTF-8 bytes, including its envelope.
-An empty history disables both actions in the UI.
+An empty history disables all grouped export actions in the UI.
+
+**Download visible public history (JSON)** requests a local file named
+`aveo-public-submission-history.json` using the same validated, bounded envelope.
+`app/src/features/operations/receipt-download.ts` uses a temporary JSON Blob URL
+and checks the requesting snapshot before triggering the browser. It removes
+the temporary link and releases the URL after a requested click; setup failures
+or requests that become stale before the click release it immediately. Cleanup
+failures are best effort and never cause another download. Neither the filename
+nor JSON includes an RPC URL.
+There is no storage mutation, network request, wallet access or import. This is
+a history download only; individual receipts keep their existing copy/manual
+export actions.
+
+Feedback says **download requested**, not saved: browser policy or user choices
+can prevent a file from being saved without raising an error. An observable
+setup/click failure shows the same validated JSON for manual copy, never browser
+error details. Empty, invalid or oversized histories keep the download disabled,
+with no splitting or truncation. Download can supersede pending clipboard
+feedback, but cannot undo an already-started clipboard write. A changed visible
+snapshot or navigation discards stale feedback; the requested file, if saved,
+still describes the original snapshot. Actual browser download/save behavior is
+not established by the unit and static-render tests.
 
 These actions require no wallet, matching network context or RPC response. Denied
 clipboard access exposes the same validated JSON for manual copy. Navigation,
@@ -595,8 +625,9 @@ persistence or confirmation on chain.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Offer an explicit browser download of the same validated public JSON so denied
-  clipboard permissions do not require manual selection of a large backup.
+- Add native-browser download acceptance for denied/sandboxed downloads and
+  temporary URL cleanup, proving the rendered fallback textarea, availability
+  during copying and byte-identical saved envelope.
 - Share the exact-byte fractional-timestamp fixture across receipt tests to keep
   compact-storage and formatted-export boundary scenarios easy to maintain.
 - Group the cross-consumer receipt contract tests in a documented CI gate so
