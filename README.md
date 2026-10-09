@@ -326,6 +326,14 @@ Controlled callback tests cover stale preparations, re-opening after a returned
 signature, listener failures and retained resolution. These are not interactive
 browser or cross-tab tests. No dependencies, Rust code, acceptance scripts or
 on-chain interfaces changed; the local validator and Rust build were not rerun.
+The thirteenth round passed 983 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint and the frontend build. It adds explicit, read-only
+same-signature confirmation recovery inside incidents, with receipt/context
+checks, stale-response guards and sanitized model updates. Controlled callback
+and static-render tests cover disconnected wallets and concurrent actions;
+these are not interactive browser or live devnet acceptance. No dependencies,
+Rust code, acceptance scripts or on-chain interfaces changed; local-validator
+acceptance and the Rust build were not repeated.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -382,13 +390,48 @@ original store even after leaving the card. Pending confirmation or any current
 unknown evidence blocks another renewal; manual eligibility verification remains
 available and still requires complete, fresh eligible readback to resolve.
 
-This is deliberately conservative: querying a receipt does not update the
-incident's confirmation evidence. An unknown submission that remains ineligible
-therefore stays blocked from another renewal. A dedicated same-signature incident
-recheck is still proposed. The signature-based guard begins only after a real
+This is deliberately conservative: querying a receipt in the separate Receipts
+tab does not update incident confirmation evidence. The incident's dedicated
+same-signature action, described below, can update it without resubmission.
+The signature-based guard begins only after a real
 signature returns, not while the wallet prompt is pending. It is not a global or
 cross-tab signing lock, and incident storage still has its existing best-effort
 browser persistence behavior. Invalidating a read does not abort its RPC request.
+
+### Recovering an incident's original confirmation
+
+An unresolved incident with a unique, valid unknown signature offers **Query
+original signature**. This is an explicit read-only action, available without
+a connected wallet. `confirmation-recovery.ts` requires exactly one corresponding
+public receipt, checks its cluster/program/commitment/fixture/RPC fingerprint
+against the selected context, and requires that the same receipt object remain
+present during the request. Missing, removed, replaced or duplicated receipts,
+context changes and navigation discard the reply without changing the incident.
+Only confirmed/finalized contexts are supported; processed receipts cannot be
+promoted by this action. Confirmation uses the existing bounded RPC reader with
+a 15-second deadline. A failure to establish a terminal result remains `unknown`.
+
+`confirmation-model.ts` replaces only the matching still-unknown evidence entry,
+requires a safe fresh slot for terminal results, and rechecks the incident
+identity/affected assets against current store data. Other evidence and signed
+events remain; a separate `rechecked` event records the consultation. Provider
+messages, raw logs, readbacks and balances are not copied into recovered evidence.
+The UI reports the last recorded consultation, not an automatic authorization.
+
+Confirmed signatures leave the incident awaiting independent eligibility
+verification; they never resolve it or reconstruct a plan. A failed signature
+can return an incident to open only when no other pending/confirmed signature
+still requires verification. Unknown results continue to block another renewal.
+After confirmation, **Verify eligibility** still needs complete, fresh eligible
+observations for every affected asset. The separate Receipt tab remains read-only
+and does not update incident state.
+
+Browser receipts and incident metadata remain untrusted. Scope matching is not
+cryptographic network identification, and RPC confirmation of a recorded
+signature does not prove that its transaction renewed this incident's bindings.
+On-chain validation and fresh eligibility remain authoritative. A missing receipt
+leaves recovery blocked rather than guessing the original context. There is no
+transaction reconstruction, automatic resend, receipt import or wallet access.
 
 Transaction confirmation now honors the selected commitment (the requested
 level of agreement on a transaction), with a single deadline covering status
@@ -518,8 +561,10 @@ an independent option. Export does not free space and nothing is auto-evicted.
 
 ### Proposed backlog issues
 
-- Add incident-level same-signature confirmation recheck so terminal evidence
-  can replace an unknown submission without reconstructing or resending it.
+- Inspect confirmed transaction instructions and binding accounts before
+  attributing a recorded signature to a particular incident renewal.
+- Extract the incident action lifecycle into a focused hook so the card remains
+  a presentation component without weakening its scope and no-resend guards.
 - Coordinate pending incident signatures across card remounts and cooperating
   tabs, including the wallet-prompt interval, without treating local metadata as authorization.
 - Thread cancellation through read-only planning so obsolete preparation can
