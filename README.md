@@ -300,6 +300,14 @@ again passed seven stages; readiness passed six stages before and after acceptan
 Visible-history capacity tests cover count/byte boundaries, full versus invalid
 snapshots and session-only warnings. No dependencies, Rust code or on-chain
 interfaces changed; the Rust build and interactive browser tests were not run.
+The tenth round passed 750 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint and the frontend build. It centralizes receipt count/UTF-8 byte limits and the near-full
+threshold without sharing or weakening the independent validation schemas.
+Storage, capacity, export and translated UI labels consume the same bounds.
+Cross-consumer tests preserve no-eviction behavior, exact pretty-export envelope
+boundaries and raw UTF-8 storage checks before unknown fields are stripped.
+This round changes no dependencies, acceptance scripts or on-chain interfaces;
+it does not rerun the local-validator acceptance, Rust build or browser tests.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -380,7 +388,14 @@ be undone; any copied JSON describes the snapshot requested, not subsequent
 changes. This is not an export of all devices/tabs, proof of confirmation, an
 import format or an automatic backup. Copy/export never removes a receipt.
 
-The journal is bounded to 100 receipts and 128 KB, and never silently evicts one.
+The journal is bounded to 100 receipts and 128,000 UTF-8 bytes, and never silently evicts one.
+Shared bounds and byte measurement live in
+`app/src/features/operations/receipt-limits.ts`; validation remains independent.
+The compact stored array and the pretty public-export envelope have separate
+serialization budgets with the same numeric limit: a valid full stored snapshot
+can be too large to export as a whole. Export never silently truncates it; individual
+receipt export remains available. Raw stored text is byte-checked before unknown
+fields are stripped, whereas capacity and public export measure sanitized metadata.
 Storage failure produces a warning and falls back to session memory; new receipts may
 not survive reload. Full storage also warns rather than overwriting earlier
 receipts. Clearing browser data removes this history. Signing failures before a
@@ -430,8 +445,10 @@ an independent option. Export does not free space and nothing is auto-evicted.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Centralize the journal, public-export and capacity limits so future changes
-  cannot drift between storage, backup and operator warnings.
+- Add an explicit export-size preview so an operator can distinguish a valid
+  stored snapshot from one too large for the pretty public-export envelope.
+- Group the cross-consumer receipt contract tests in a documented CI gate so
+  changes to storage, backup and translated operator warnings stay consistent.
 - Reuse coherent-observation checks across CLI acceptance helpers so subject,
   context, fact and slot validation cannot silently diverge between scenarios.
 - Exercise interrupted SQLite writes and process crashes so recovery can
