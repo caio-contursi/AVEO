@@ -201,7 +201,8 @@ export function policyRejection(policy: IssuerPolicy, wallet: Address, attestati
 function clockFrom(account: RawAccount | null): number | undefined {
   if (!account) return undefined
   try {
-    return Number(getSysvarClockDecoder().decode(account.data).unixTimestamp)
+    const unix = Number(getSysvarClockDecoder().decode(account.data).unixTimestamp)
+    return Number.isSafeInteger(unix) && unix >= 0 ? unix : undefined
   } catch {
     return undefined
   }
@@ -255,20 +256,17 @@ async function boundProofForDisplay(
   policy: IssuerPolicy,
   clockUnix: number,
   minContextSlot: number,
-): Promise<{ slot: number; extra: Pick<DeskSnapshot, 'proof' | 'expiresAt'> } | undefined> {
+): Promise<Pick<DeskSnapshot, 'proof' | 'expiresAt'> | undefined> {
   try {
-    const { slot, accounts } = await readAccounts(ctx, [binding.credential, binding.schema, binding.attestation], minContextSlot)
+    const { accounts } = await readAccounts(ctx, [binding.credential, binding.schema, binding.attestation], minContextSlot)
     const [credentialAccount, schemaAccount, attestationAccount] = accounts
     const sas = await checkSas(binding, credentialAccount ?? null, schemaAccount ?? null, attestationAccount ?? null)
     if (!sas.ok) return undefined
     const { proof } = checkPayload(policy, wallet, sas.value, clockUnix)
     if (!proof) return undefined
     return {
-      slot,
-      extra: {
-        proof: { ...proof, attestation: binding.attestation, credential: binding.credential, schema: binding.schema },
-        expiresAt: new Date(Number(sas.value.expiry) * 1000).toISOString(),
-      },
+      proof: { ...proof, attestation: binding.attestation, credential: binding.credential, schema: binding.schema },
+      expiresAt: new Date(Number(sas.value.expiry) * 1000).toISOString(),
     }
   } catch {
     return undefined
@@ -291,10 +289,11 @@ export async function inspectEligibility(ctx: ApiContext, mint: Address, wallet:
   try {
     const first = await readAccounts(ctx, [policyAddress, mint, bindingAddress, SYSVAR_CLOCK_ID])
     const [policyAccount, mintAccount, bindingAccount, clockAccount] = first.accounts
-    const clockUnix = clockFrom(clockAccount ?? null)
+    let clockUnix = clockFrom(clockAccount ?? null)
     if (clockUnix === undefined) throw new DeskError('ReadUnverifiable', 'clock sysvar unreadable')
+    let decisionSlot = first.slot
 
-    const done = (reasons: DiagnosticReason[], extra: Partial<DeskSnapshot> = {}, slot = first.slot): DeskSnapshot => ({
+    const done = (reasons: DiagnosticReason[], extra: Partial<DeskSnapshot> = {}, slot = decisionSlot): DeskSnapshot => ({
       ...base,
       ...extra,
       read: read(slot),
@@ -324,22 +323,41 @@ export async function inspectEligibility(ctx: ApiContext, mint: Address, wallet:
       const shown = await boundProofForDisplay(ctx, b, wallet, policy.value, clockUnix, first.slot)
       return done(
         [reason('ProviderPairNotAllowed', 'verifier not accepted', { params: { asset: assetLabel(ctx, mint), verifier: verifierLabel(ctx, b.credential) } })],
-        { policyVersion, sourceAccounts, ...shown?.extra },
-        shown?.slot ?? first.slot,
+        { policyVersion, sourceAccounts, ...shown },
+        // Display-only proof reads do not advance the slot of the policy decision.
+        first.slot,
       )
     }
 
-    const second = await readAccounts(ctx, [b.credential, b.schema, b.attestation], first.slot)
-    const [credentialAccount, schemaAccount, attestationAccount] = second.accounts
+    // Discovery locates SAS accounts; the final read must contain every decision
+    // input together, rather than combining a newer proof with an older policy/Clock.
+    const second = await readAccounts(ctx, [policyAddress, mint, bindingAddress, SYSVAR_CLOCK_ID, b.credential, b.schema, b.attestation], first.slot)
+    const [currentPolicyAccount, currentMintAccount, currentBindingAccount, currentClockAccount, credentialAccount, schemaAccount, attestationAccount] = second.accounts
+    decisionSlot = second.slot
+    clockUnix = clockFrom(currentClockAccount ?? null)
+    if (clockUnix === undefined) throw new DeskError('ReadUnverifiable', 'clock sysvar unreadable')
+    const currentPolicy = checkPolicy(ctx, mint, currentPolicyAccount ?? null)
+    if (!currentPolicy.ok) return done([currentPolicy.reason])
+    const currentVersion = currentPolicy.value.policyVersion
+    const currentMint = checkMint(ctx, currentMintAccount ?? null)
+    if (!currentMint.ok) return done([currentMint.reason], { policyVersion: currentVersion })
+    const currentBinding = checkBinding(ctx, mint, wallet, currentBindingAccount ?? null)
+    if (!currentBinding.ok) return done([currentBinding.reason], { policyVersion: currentVersion })
+    if (currentBinding.value.credential !== b.credential || currentBinding.value.schema !== b.schema || currentBinding.value.attestation !== b.attestation) {
+      throw new DeskError('ReadUnverifiable', 'binding changed during account discovery; inspect again')
+    }
+    if (!currentPolicy.value.pairs.some((p) => p.credential === b.credential && p.schema === b.schema)) {
+      return done([reason('ProviderPairNotAllowed', 'verifier not accepted', { params: { asset: assetLabel(ctx, mint), verifier: verifierLabel(ctx, b.credential) } })], { policyVersion: currentVersion, sourceAccounts })
+    }
     const sas = await checkSas(b, credentialAccount ?? null, schemaAccount ?? null, attestationAccount ?? null)
-    if (!sas.ok) return done([sas.reason], { policyVersion, sourceAccounts }, second.slot)
+    if (!sas.ok) return done([sas.reason], { policyVersion: currentVersion, sourceAccounts })
 
-    const { reasons, proof } = checkPayload(policy.value, wallet, sas.value, clockUnix)
+    const { reasons, proof } = checkPayload(currentPolicy.value, wallet, sas.value, clockUnix)
     const proofInfo: ProofInfo | undefined = proof
       ? { ...proof, attestation: b.attestation, credential: b.credential, schema: b.schema }
       : undefined
     return done(reasons, {
-      policyVersion,
+      policyVersion: currentVersion,
       sourceAccounts,
       proof: proofInfo,
       expiresAt: new Date(Number(sas.value.expiry) * 1000).toISOString(),
