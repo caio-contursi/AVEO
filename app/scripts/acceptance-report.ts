@@ -59,7 +59,7 @@ const matrixCases = [
   ['T08', 'Provider removed only from Alfa; Beta remains eligible', ['issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy']],
   ['T09', 'New proof, wallet-signed rebind and verified resolution', ['issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers']],
   ['T10', 'Invalid accounts, layouts, schema and signer', []],
-  ['T11', 'External transfer with and without extra accounts', []],
+  ['T11', 'External transfer with and without extra accounts', ['external-with-extra-accounts', 'external-without-extra-accounts', 'external-expired-proof-rejected']],
   ['T12', 'Delegate transfer uses the token account owner', []],
   ['T13', 'Missing signatures and direct Execute invocation', []],
   ['T14', 'RPC/confirmation timeout and inconsistent reads', []],

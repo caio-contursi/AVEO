@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
+import { findAssociatedTokenPda, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute } from '@solana-program/token-2022'
 import {
   appendTransactionMessageInstructions,
   createTransactionMessage,
@@ -67,6 +68,28 @@ function expectHookRejection(logs: readonly string[], expectedCode: ReasonCode):
   expect(onchainReasonFromLogs(logs, AVEO_HOOK_PROGRAM_ID)?.code === expectedCode, 'Transfer must fail with the expected hook code')
 }
 
+function expectMissingExtraAccountsRejection(status: string, slot: number | undefined, error: unknown, logs: readonly string[]): void {
+  expect(status === 'failed' && slot !== undefined && Number.isSafeInteger(slot) && slot >= 0, 'Missing extras must produce a failed transaction with a ledger slot')
+  expect(error && typeof error === 'object' && 'InstructionError' in error, 'Missing extras must produce a ledger instruction error')
+  const instructionError = error.InstructionError
+  // Instruction zero is the compute budget; instruction one is the raw transfer.
+  expect(Array.isArray(instructionError) && instructionError.length === 2 && (instructionError[0] === 1 || instructionError[0] === 1n), 'Failure must originate in the external transfer instruction')
+  const code: unknown = instructionError[1]
+  const tokenFailure = `Program ${TOKEN_2022_PROGRAM_ID} failed: `
+  if (code === 'MissingAccount') {
+    expect(logs.includes(`${tokenFailure}An account required by the instruction is missing`), 'Token-2022 must report a missing required account')
+  } else if (code === 'NotEnoughAccountKeys') {
+    expect(logs.includes(`${tokenFailure}insufficient account keys for instruction`), 'Token-2022 must report insufficient account keys')
+  } else {
+    expect(code && typeof code === 'object' && 'Custom' in code, 'Unexpected error for missing extra accounts')
+    // TransferHookError::IncorrectAccount; Anchor AccountNotEnoughKeys if the hook is invoked.
+    const custom = Number(code.Custom)
+    expect(custom === 2_110_272_652 || custom === 3005, 'Custom error must identify missing required hook accounts')
+    expect(logs.includes(`${tokenFailure}custom program error: 0x${custom.toString(16)}`), 'Token-2022 failure log must match the ledger error')
+    if (custom === 3005) expect(logs.includes(`Program ${AVEO_HOOK_PROGRAM_ID} failed: custom program error: 0xbbd`), 'Anchor account error must originate in the hook')
+  }
+}
+
 function expectUnchangedAccount(before: RawAccount | null, after: RawAccount | null): void {
   expect(before && after, 'Protected account must exist before and after rejection')
   expect(before.address === after.address && before.owner === after.owner && before.lamports === after.lamports && before.executable === after.executable && bytesEqual(before.data, after.data), 'Rejected instruction changed the protected account')
@@ -100,6 +123,26 @@ async function selfTest(): Promise<void> {
   assert.throws(() => expectHookRejection(closedLogs, 'AttestationExpired'), ExpectationFailed)
   assert.throws(() => expectHookRejection(['RPC unavailable'], 'AttestationMissingOrClosed'), ExpectationFailed)
   assert.throws(() => expectHookRejection([`Program ${SAS_PROGRAM_ID} failed: custom program error: 0x1777`], 'AttestationMissingOrClosed'), ExpectationFailed)
+  const missingLogs = [`Program ${TOKEN_2022_PROGRAM_ID} failed: An account required by the instruction is missing`]
+  const missingError = { InstructionError: [1, 'MissingAccount'] }
+  expectMissingExtraAccountsRejection('failed', 42, missingError, missingLogs)
+  expectMissingExtraAccountsRejection('failed', 42, { InstructionError: [1n, 'MissingAccount'] }, missingLogs)
+  expectMissingExtraAccountsRejection('failed', 42, { InstructionError: [1, 'NotEnoughAccountKeys'] }, [`Program ${TOKEN_2022_PROGRAM_ID} failed: insufficient account keys for instruction`])
+  for (const custom of [2_110_272_652, 3005]) {
+    const logs = [`Program ${TOKEN_2022_PROGRAM_ID} failed: custom program error: 0x${custom.toString(16)}`]
+    if (custom === 3005) logs.push(`Program ${AVEO_HOOK_PROGRAM_ID} failed: custom program error: 0xbbd`)
+    expectMissingExtraAccountsRejection('failed', 42, { InstructionError: [1, { Custom: custom }] }, logs)
+  }
+  for (const status of ['confirmed', 'unknown']) assert.throws(() => expectMissingExtraAccountsRejection(status, 42, missingError, missingLogs), ExpectationFailed)
+  for (const slot of [undefined, -1, Number.NaN]) assert.throws(() => expectMissingExtraAccountsRejection('failed', slot, missingError, missingLogs), ExpectationFailed)
+  for (const error of [null, {}, { InstructionError: [] }, { InstructionError: [true, 'MissingAccount'] }, { InstructionError: [0, 'MissingAccount'] }, { InstructionError: [1, 'InsufficientFunds'] }, { InstructionError: [1, { Custom: 6008 }] }]) {
+    assert.throws(() => expectMissingExtraAccountsRejection('failed', 42, error, missingLogs), ExpectationFailed)
+  }
+  for (const logs of [[], ['RPC unavailable'], [`Program ${SAS_PROGRAM_ID} failed: An account required by the instruction is missing`], [`Program ${TOKEN_2022_PROGRAM_ID} failed: custom program error: 0x1`]]) {
+    assert.throws(() => expectMissingExtraAccountsRejection('failed', 42, missingError, logs), ExpectationFailed)
+  }
+  assert.throws(() => expectMissingExtraAccountsRejection('failed', 42, { InstructionError: [1, { Custom: 3005 }] }, [`Program ${TOKEN_2022_PROGRAM_ID} failed: custom program error: 0xbbd`]), ExpectationFailed)
+  assert.throws(() => expectMissingExtraAccountsRejection('failed', 42, { InstructionError: [1, { Custom: 2_110_272_652 }] }, missingLogs), ExpectationFailed)
   const account: RawAccount = { address: AVEO_HOOK_PROGRAM_ID, owner: AVEO_HOOK_PROGRAM_ID, lamports: 10n, executable: false, data: new Uint8Array([1, 2]) }
   expectUnchangedAccount(account, { ...account, data: new Uint8Array([1, 2]) })
   assert.throws(() => expectUnchangedAccount(account, { ...account, data: new Uint8Array([1, 3]) }), ExpectationFailed)
@@ -111,18 +154,19 @@ async function selfTest(): Promise<void> {
   assert.equal(await waitForExpiry(async () => 102, 101, async () => {}, 1), 102)
   await assert.rejects(waitForExpiry(async () => 99, 101, async () => {}, 3), ExpectationFailed)
   await assert.rejects(waitForExpiry(async () => Number.NaN, 101, async () => {}, 1), ExpectationFailed)
-  console.log('PASS self-test: loopback guards, exact balance deltas, hook rejection matching, unchanged accounts and bounded Clock polling')
+  console.log('PASS self-test: loopback guards, exact balance deltas, hook rejection matching, missing-extra ledger errors, unchanged accounts and bounded Clock polling')
 }
 
 const stages = [
-  'localnet-preconditions', 'shared-proof-X', 'successful-transfers', 'policy-differences-Y-B-Z',
+  'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
+  'external-with-extra-accounts', 'external-without-extra-accounts', 'policy-differences-Y-B-Z',
   'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
   'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping',
   'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
   'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
   'issuer-inactivates-alfa-only', 'issuer-restores-active-alfa-policy',
   'short-lived-X-proof-bound', 'validator-clock-reaches-expiry',
-  'expired-proof-rejects-both-directions', 'valid-X-proof-bindings-restored',
+  'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'valid-X-proof-bindings-restored',
 ] as const
 
 async function main(): Promise<void> {
@@ -237,6 +281,59 @@ async function main(): Promise<void> {
       evidence({ asset: asset.id, source: payer.address, destination, accepted, hookCode: expectedCode, before, after: readback.balances, slot: readback.slot })
     }
     for (const asset of assets) await transfer(asset, x.address, true)
+    pass()
+
+    // T11: an external wallet builds Token-2022 directly, without a Desk plan or builder.
+    const externalTransfer = async (withExtras: boolean, expectedCode?: ReasonCode) => {
+      const asset = assets[0]!
+      const before = (await tokenBalances(ctx, asset.mint, [treasury.address, x.address])).balances
+      expect(before[0]! > 0n, 'External source must have tokens for a meaningful transfer')
+      const [[source], [destination]] = await Promise.all([treasury.address, x.address].map((owner) => findAssociatedTokenPda({ owner, mint: asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ID })))
+      const raw = getTransferCheckedInstruction({ source, mint: asset.mint, destination, authority: treasurySigner, amount: 1n, decimals: asset.decimals })
+      expect(raw.accounts.length === 4, 'Raw external transfer must contain only the four Token-2022 accounts')
+      let instruction: Instruction = raw
+      if (withExtras) {
+        const extra = await resolveExtraAccountMetasForExecute({ rpc: ctx.rpc, transferHookProgramAddress: AVEO_HOOK_PROGRAM_ID, source, mint: asset.mint, destination, owner: treasury.address, amount: 1n })
+        expect(extra.length > 0, 'Official client must resolve the required hook accounts')
+        instruction = { ...raw, accounts: [...raw.accounts, ...extra] }
+      }
+      const accepted = withExtras && expectedCode === undefined
+      const { value: blockhash } = await ctx.rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
+      const message = pipe(
+        createTransactionMessage({ version: 0 }),
+        (m) => setTransactionMessageFeePayerSigner(treasurySigner, m),
+        (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+        (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units: 1_000_000 }), instruction], m),
+      )
+      const signed = await signTransactionMessageWithSigners(message)
+      const signature = getSignatureFromTransaction(signed)
+      await ctx.rpc.sendTransaction(getBase64EncodedWireTransaction(signed), { encoding: 'base64', skipPreflight: !accepted, preflightCommitment: 'confirmed' }).send()
+      let confirmation = await confirmSignature(ctx, signature)
+      for (let attempt = 0; confirmation.status === 'failed' && confirmation.logs.length === 0 && attempt < 10; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        confirmation = await confirmSignature(ctx, signature)
+      }
+      expect(confirmation.status === (accepted ? 'confirmed' : 'failed') && confirmation.slot !== undefined, 'External transfer must have the expected ledger status and slot')
+      if (!accepted) {
+        expect(confirmation.error, 'Rejected external transfer must have a ledger error')
+        if (expectedCode) {
+          expect(confirmation.error.code === expectedCode, 'External transfer must fail with the expected hook code')
+          expectHookRejection(confirmation.logs, expectedCode)
+        } else {
+          const { value: statuses } = await ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()
+          expect(statuses[0] && Number(statuses[0].slot) === confirmation.slot && ['confirmed', 'finalized'].includes(statuses[0].confirmationStatus ?? ''), 'Missing-extra failure must be recorded at a confirmed ledger slot')
+          expectMissingExtraAccountsRejection(confirmation.status, confirmation.slot, statuses[0].err, confirmation.logs)
+        }
+      }
+      const readback = await tokenBalances(ctx, asset.mint, [treasury.address, x.address])
+      expect(readback.slot >= confirmation.slot, 'External balances must be read at or after the ledger transaction')
+      expectBalances(before, readback.balances, accepted)
+      evidence({ signature, slot: confirmation.slot, status: confirmation.status, hookCode: expectedCode })
+      evidence({ asset: asset.id, source: treasury.address, destination: x.address, accepted, hookCode: expectedCode, before, after: readback.balances, slot: readback.slot })
+    }
+    await externalTransfer(true)
+    pass()
+    await externalTransfer(false)
     pass()
 
     for (const id of ['Y', 'Z']) {
@@ -466,6 +563,8 @@ async function main(): Promise<void> {
         await transfer(asset, x.address, false, 'AttestationExpired')
         await transfer(asset, treasury.address, false, 'AttestationExpired', xSigner)
       }
+      pass()
+      await externalTransfer(true, 'AttestationExpired')
       pass()
     } finally {
       // A failed expiry test must not strand the demo with expired bindings.

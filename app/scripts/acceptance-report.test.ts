@@ -13,6 +13,20 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 }
 
 describe('public acceptance receipt', () => {
+  it('requires successful, missing-extra and expired-proof external checks before passing T11', () => {
+    const stages = ['external-with-extra-accounts', 'external-without-extra-accounts', 'external-expired-proof-rejected']
+    const report = builder(stages)
+    report.acceptLine(`PASS ${stages[0]}`)
+    report.acceptLine(`PASS ${stages[1]}`)
+    expect(report.finish(0, NOW).matrix.find((entry) => entry.id === 'T11')?.status).toBe('NOT_RUN')
+    report.acceptLine(`PASS ${stages[2]}`)
+    expect(report.finish(0, NOW).matrix.find((entry) => entry.id === 'T11')?.status).toBe('PASS')
+    const failed = builder(stages)
+    failed.acceptLine(`PASS ${stages[0]}`)
+    failed.acceptLine(`FAIL ${stages[1]}`)
+    failed.acceptLine(`NOT_RUN ${stages[2]}`)
+    expect(failed.finish(1, NOW).matrix.find((entry) => entry.id === 'T11')?.status).toBe('FAIL')
+  })
   it('ties public evidence to stages and keeps untouched cases NOT_RUN', () => {
     const report = builder()
     report.acceptLine(`EVIDENCE ${JSON.stringify({ sharedProof: address, wallet: address, slots: [1, 2] })}`)
