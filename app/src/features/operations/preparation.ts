@@ -33,6 +33,10 @@ export class PlanPreparation<T> {
     return this.active && this.state.scope === scope && !this.state.planning && this.state.plan === plan
   }
 
+  isActiveScope(scope: string) {
+    return this.active && this.state.scope === scope
+  }
+
   async prepare(scope: string, build: () => Promise<T>): Promise<T | undefined> {
     if (!this.active || this.state.scope !== scope || this.state.planning) return undefined
     const generation = ++this.generation

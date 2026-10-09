@@ -17,6 +17,20 @@ function setup() {
 }
 
 describe('read-only plan preparation lifecycle', () => {
+  it('checks active scope independently of an in-flight plan and rejects detached scopes', async () => {
+    const { preparation } = setup()
+    const reply = deferred<{ intent: string }>()
+    const request = preparation.prepare('first-scope', () => reply.promise)
+    expect(preparation.isActiveScope('first-scope')).toBe(true)
+    expect(preparation.isActiveScope('other-scope')).toBe(false)
+    preparation.setScope('other-scope')
+    expect(preparation.isActiveScope('first-scope')).toBe(false)
+    expect(preparation.isActiveScope('other-scope')).toBe(true)
+    preparation.deactivate()
+    expect(preparation.isActiveScope('other-scope')).toBe(false)
+    reply.resolve({ intent: 'obsolete' })
+    expect(await request).toBeUndefined()
+  })
   it('publishes the current plan only after preparation completes', async () => {
     const { preparation, publish } = setup()
     const reply = deferred<{ intent: string }>()
