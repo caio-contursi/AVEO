@@ -96,6 +96,7 @@ fixtures and run the acceptance checks without opening the Desk:
 pnpm fixtures
 pnpm demo:check
 pnpm demo:report  # reruns the checks and writes a public JSON receipt
+pnpm demo:faults  # read-only faults/recovery, after a passing current demo:report
 ```
 
 `demo:check` checks shared proof reuse, successful transfers, the Alfa/Beta policy
@@ -117,6 +118,14 @@ accounts but an expired proof the hook rejects it. All three checks are required
 before the receipt marks T11 `PASS`. Expected missing-account failures need a
 specific ledger error and matching program logs, not just any failed request.
 
+T12 adds a fresh synthetic delegate, with no Aveo binding or SAS proof. X grants
+it a 10-token spending allowance. The delegate signs a transfer, but the hook
+checks X, the token account owner, not the signer. A successful transfer consumes
+one token and one unit of allowance. After X's proof expires, the delegated
+transfer fails with `AttestationExpired`; neither balances nor allowance change.
+X revokes the temporary approval in a `finally` cleanup and the runner verifies
+that no delegate or allowance remains. The delegate never receives issuer powers.
+
 `demo:report` writes `app/.dev/acceptance-report.json`, an ignored runtime artifact
 with timestamps, ordered stage results, public signatures, slots and balances.
 Only explicitly allowed evidence fields are saved, never raw process logs,
@@ -125,6 +134,22 @@ marks incomplete matrix cases `NOT_RUN`; a passing run is not a passing full
 security matrix. A failed or interrupted runner cannot produce a passing receipt.
 Each execution replaces the previous receipt. These synthetic localnet receipts
 are demonstration evidence, not independent attestations or devnet explorer links.
+
+`demo:faults` requires a passing receipt from the current fixture generation and
+matching mints, plus an actual confirmed external-transfer signature. It reads
+the real local validator and injects unavailable reads, account/confirmation
+timeouts and below-minimum slots at the SDK boundary. It checks that diagnoses
+remain `unknown`, grouped incidents stay unresolved, suspended requests abort,
+and the same signature can be confirmed later without signing or sending again.
+Only a complete fresh eligibility readback can resolve the read-unverifiable
+incident. This runner holds no wallet keys, blocks transaction submission and
+records zero send calls throughout the successful seven-stage workflow.
+
+Its separate ignored `app/.dev/fault-report.json` maps these core checks to T14.
+This is controlled SDK fault injection, not an HTTP outage, browser interaction
+test or independent network attestation. The two receipts are not merged: T14
+remains `NOT_RUN` in `acceptance-report.json`, and unrelated matrix cases remain
+`NOT_RUN` in `fault-report.json`. No single receipt claims the complete matrix.
 
 The runner changes synthetic localnet state: it closes X's proofs and creates a
 replacement. Regenerate fixtures to restore the original demonstration scenario.
@@ -157,6 +182,12 @@ The fourth round passed 265 app/script tests and 4 backend tests, the same type,
 lint and frontend build checks, and the expanded 24-stage acceptance run. Public
 receipt recovery was also tested across two separate Node processes against a
 real localnet signature: confirmation succeeded with zero transaction sends.
+The fifth round passed 336 app/script tests and 4 backend tests, production and
+test-project TypeScript checks, ESLint, frontend build and runner self-tests.
+The real local acceptance run passed all 27 stages, including T12 owner-based
+delegate checks and approval cleanup. The separate seven-stage SDK fault and
+read-only recovery run passed, including T14's core workflow with zero sends.
+This round did not change or rebuild the Rust program or add dependencies.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -168,7 +199,8 @@ requests, log requests and polling. Requests are aborted at the deadline, and
 timeouts return `unknown`, never success or an automatic transaction resend.
 If logs are unavailable for a confirmed failure, the result remains a failure
 without inventing a specific hook error. These RPC failure modes are covered by
-unit tests, not claimed as complete end-to-end T14 coverage.
+unit tests and the controlled SDK acceptance workflow described above, not
+claimed as browser or HTTP-level end-to-end T14 coverage.
 
 Account reads have a 10-second deadline, cancel their pending request and reject
 invalid or stale slots and incomplete account lists. Eligibility inspection uses
@@ -211,6 +243,15 @@ fingerprint does not prove the network identity or turn the history into an
 authorization source. Receipt confirmation does not resolve incidents by itself;
 their separate complete, current eligibility readback remains required.
 
+Each receipt offers **Copy public receipt** and **Export JSON for manual copy**,
+with English/Portuguese feedback. Export uses an independent validated allowlist
+and a versioned `aveo-public-submission-receipt` envelope, never including RPC
+URLs, plans, raw logs or cached confirmation claims. Copy/export is user-triggered
+and needs no RPC response or wallet, even when the current context does not match.
+If clipboard access is unavailable or denied, a read-only text area exposes the
+same validated JSON for manual copy. Exported metadata remains untrusted; there
+is no import, transaction reconstruction or authorization from this JSON.
+
 The journal is bounded to 100 receipts and never silently evicts one. Storage
 failure produces a warning and falls back to session memory; new receipts may
 not survive reload. Full storage also warns rather than overwriting earlier
@@ -224,12 +265,12 @@ browser tests are not implemented; Node-process recovery is not a browser test.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Add controlled RPC fault injection to the local acceptance runner to exercise
-  the complete T14 workflow, not only isolated timeout and inconsistency tests.
-- Offer copy/export of a selected public receipt for support or judging without
-  exposing RPC credentials or depending on the original browser's storage.
 - Add explicit archive/retention and cross-tab coordination so receipt growth
   and simultaneous browser windows cannot obscure pending-operation history.
+- Add interactive browser coverage for denied clipboard permission, manual-copy
+  focus and network changes while confirmation is pending, without new runtime dependencies.
+- Exercise the same fault/recovery workflow through a controlled HTTP transport
+  outage to complement SDK injection without involving a public RPC or real funds.
 
 ## Estrutura
 
