@@ -1,5 +1,6 @@
 import { isAddress, isSignature } from '@solana/kit'
 import { z } from 'zod'
+import { MAX_RECEIPTS, MAX_RECEIPT_BYTES, receiptUtf8Bytes } from './receipt-limits'
 
 // Independent allowlist: browser metadata is never proof of chain confirmation.
 const publicReceiptSchema = z.object({
@@ -13,17 +14,14 @@ const publicReceiptSchema = z.object({
   rpcFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 })
 
-const MAX_HISTORY_RECEIPTS = 100
-const MAX_HISTORY_BYTES = 128_000
-
 /** Export one bounded snapshot, never a partial collection of valid-looking records. */
 export function exportPublicReceiptHistory(receipts: unknown): string | undefined {
   try {
-    if (!Array.isArray(receipts) || receipts.length > MAX_HISTORY_RECEIPTS) return undefined
-    const parsed = z.array(publicReceiptSchema).max(MAX_HISTORY_RECEIPTS).safeParse(receipts)
+    if (!Array.isArray(receipts) || receipts.length > MAX_RECEIPTS) return undefined
+    const parsed = z.array(publicReceiptSchema).max(MAX_RECEIPTS).safeParse(receipts)
     if (!parsed.success || new Set(parsed.data.map((receipt) => receipt.signature)).size !== parsed.data.length) return undefined
     const text = JSON.stringify({ version: 1, kind: 'aveo-public-submission-history', receipts: parsed.data }, null, 2)
-    return new TextEncoder().encode(text).length <= MAX_HISTORY_BYTES ? text : undefined
+    return receiptUtf8Bytes(text) <= MAX_RECEIPT_BYTES ? text : undefined
   } catch {
     return undefined
   }

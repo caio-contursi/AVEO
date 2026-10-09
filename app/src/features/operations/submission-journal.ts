@@ -2,10 +2,9 @@
 import { isAddress, isSignature, type Address, type Commitment } from '@solana/kit'
 import { z } from 'zod'
 import type { ApiContext } from '../../api/context'
+import { MAX_RECEIPTS, MAX_RECEIPT_BYTES, receiptUtf8Bytes } from './receipt-limits'
 
 const STORAGE_KEY = 'aveo.desk.submissions.v1'
-const MAX_RECEIPTS = 100
-const MAX_STORAGE_BYTES = 128_000
 type JournalStorage = Pick<Storage, 'getItem' | 'setItem'>
 export type JournalCoordinationLock = (operation: () => Promise<void>) => Promise<void>
 const SESSION_WARNING = 'Public receipt is available only in this session.'
@@ -67,7 +66,7 @@ export class SubmissionJournal {
     try { text = this.storage.getItem(STORAGE_KEY) } catch { throw new JournalFailure('storage-unavailable', SESSION_WARNING) }
     try {
       if (text === null) return []
-      if (new TextEncoder().encode(text).length > MAX_STORAGE_BYTES) throw new Error('oversized journal')
+      if (receiptUtf8Bytes(text) > MAX_RECEIPT_BYTES) throw new Error('oversized journal')
       const parsed = z.array(receiptSchema).max(MAX_RECEIPTS).parse(JSON.parse(text))
       // Do not accept duplicate signatures as separate recovery actions.
       if (new Set(parsed.map((entry) => entry.signature)).size !== parsed.length) throw new Error('duplicate signature')
@@ -122,7 +121,7 @@ export class SubmissionJournal {
   }
 
   private checkCapacity(entries: readonly SubmissionReceipt[]): void {
-    if (entries.length > MAX_RECEIPTS || new TextEncoder().encode(JSON.stringify(entries)).length > MAX_STORAGE_BYTES) {
+    if (entries.length > MAX_RECEIPTS || receiptUtf8Bytes(JSON.stringify(entries)) > MAX_RECEIPT_BYTES) {
       throw new JournalFailure('storage-full', 'Public submission journal is full.')
     }
   }

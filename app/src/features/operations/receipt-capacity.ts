@@ -1,7 +1,5 @@
 import { exportPublicReceipt } from './receipt-export'
-
-const MAX_RECEIPTS = 100
-const MAX_BYTES = 128_000
+import { MAX_RECEIPTS, MAX_RECEIPT_BYTES, NEAR_FULL_RATIO, receiptUtf8Bytes } from './receipt-limits'
 
 /** Measures only sanitized visible metadata, never storage availability or browser quota. */
 export function receiptCapacity(receipts: unknown): {
@@ -20,12 +18,12 @@ export function receiptCapacity(receipts: unknown): {
       sanitized.push(entry)
     }
     // Journal storage is a compact array, not the pretty public export envelope.
-    const bytes = new TextEncoder().encode(JSON.stringify(sanitized)).length
-    if (bytes > MAX_BYTES) return undefined
+    const bytes = receiptUtf8Bytes(JSON.stringify(sanitized))
+    if (bytes > MAX_RECEIPT_BYTES) return undefined
     return {
       count: sanitized.length, bytes,
-      nearFull: sanitized.length >= 90 || bytes >= MAX_BYTES * 0.9,
-      full: sanitized.length === MAX_RECEIPTS || bytes === MAX_BYTES,
+      nearFull: sanitized.length >= MAX_RECEIPTS * NEAR_FULL_RATIO || bytes >= MAX_RECEIPT_BYTES * NEAR_FULL_RATIO,
+      full: sanitized.length === MAX_RECEIPTS || bytes === MAX_RECEIPT_BYTES,
     }
   } catch {
     return undefined
