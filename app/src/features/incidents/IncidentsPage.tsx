@@ -60,6 +60,7 @@ export function IncidentsPage() {
           </button>
         }
       >
+        {!data.lastScan && <p className="quiet-note" role="note">{t('ux.scanFirst')}</p>}
         <p className="small">
           {data.lastScan
             ? `${t('incidents.lastScan', { slot: formatSlot(locale, data.lastScan.slot) })} · ${new Date(data.lastScan.at).toLocaleString(locale)}`

@@ -240,13 +240,16 @@ function ReceiptView({ receipt, result, busy, disabled, onRecheck, onRemove, mat
         {explorer && <a href={explorer} target="_blank" rel="noreferrer">{t('evidence.explorer')}</a>}
         {result?.matches === true && receipt.cluster === 'localnet' && <span className="muted">{t('evidence.noExplorer')}</span>}
       </p>
-      <dl className="small mono-wrap">
-        <dt>{t('receipts.submittedAt')}</dt><dd>{receipt.submittedAt}</dd>
-        <dt>{t('config.cluster')}</dt><dd>{receipt.cluster}</dd>
-        <dt>{t('config.program')}</dt><dd>{receipt.programId}</dd>
-        <dt>{t('config.commitment')}</dt><dd>{receipt.commitment}</dd>
-        <dt>{t('receipts.deployment')}</dt><dd>{receipt.deploymentGeneratedAt}</dd>
-      </dl>
+      <details className="technical-details">
+        <summary>{t('ux.receiptContext')}</summary>
+        <dl className="small mono-wrap">
+          <dt>{t('receipts.submittedAt')}</dt><dd>{receipt.submittedAt}</dd>
+          <dt>{t('config.cluster')}</dt><dd>{receipt.cluster}</dd>
+          <dt>{t('config.program')}</dt><dd>{receipt.programId}</dd>
+          <dt>{t('config.commitment')}</dt><dd>{receipt.commitment}</dd>
+          <dt>{t('receipts.deployment')}</dt><dd>{receipt.deploymentGeneratedAt}</dd>
+        </dl>
+      </details>
       {result?.matches === false && <p className="warn-text" role="status">{t('evidence.contextChanged')}</p>}
       {result?.matches === true && result.confirmation?.slot !== undefined && <p className="small">{t('evidence.slot', { slot: result.confirmation.slot })}</p>}
       <button type="button" disabled={disabled || removing || result?.matches !== true} onClick={onRecheck}>
@@ -339,7 +342,6 @@ function ScopedHistory({ ctx }: { ctx: ApiContext | null }) {
       <p className="small muted">{t('receipts.note', receiptLimitParams)}</p>
       <p className="small muted">{t('receipts.scopeNote')}</p>
       <SubmissionHistoryCapacity receipts={receipts} error={journal.error} />
-      <SubmissionHistoryExport receipts={receipts} getSnapshot={journal.getSnapshot} />
       {journal.error && <p className="warn-text" role="alert">{t(`receipts.${journal.error}`, receiptLimitParams)}</p>}
       <p className="small" role="status" aria-live="polite" aria-atomic="true">{removed && t('receipts.removed')}</p>
       {receipts.length === 0 && <EmptyState>{t('receipts.empty')}</EmptyState>}
@@ -347,6 +349,10 @@ function ScopedHistory({ ctx }: { ctx: ApiContext | null }) {
         result={results[receipt.signature]} busy={checking === receipt.signature} disabled={checking !== undefined}
         matching={matching.has(receipt.signature)} onRemove={removeReceipt}
         onRecheck={() => { void recheck(receipt) }} />)}
+      <details className="technical-details">
+        <summary>{t('ux.receiptTools')}</summary>
+        <SubmissionHistoryExport receipts={receipts} getSnapshot={journal.getSnapshot} />
+      </details>
     </Card>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import type { DeskSnapshot } from '../../api/diagnostics'
 import { useReadyDesk } from '../../app/desk'
 import { formatAmount } from '../../components/format'
@@ -19,8 +20,10 @@ function Matrix() {
   const holdings = useHoldingsQuery()
   const pairs = deployment.wallets.flatMap((w) => deployment.assets.map((a) => ({ mint: a.mint, wallet: w.address })))
   const results = useInspectQueries(pairs)
-  const snapshotOf = (mint: string, wallet: string): DeskSnapshot | undefined =>
-    results[pairs.findIndex((p) => p.mint === mint && p.wallet === wallet)]?.data
+  const snapshotOf = (mint: string, wallet: string): DeskSnapshot | undefined => {
+    const query = results[pairs.findIndex((p) => p.mint === mint && p.wallet === wallet)]
+    return query?.error || query?.isFetching ? undefined : query?.data
+  }
   const selectedSnapshot = selected ? snapshotOf(selected.mint, selected.wallet) : undefined
 
   return (
@@ -44,7 +47,7 @@ function Matrix() {
                 {deployment.assets.map((a) => {
                   const index = pairs.findIndex((p) => p.mint === a.mint && p.wallet === w.address)
                   const query = results[index]
-                  const snapshot = query?.data
+                  const snapshot = query?.error || query?.isFetching ? undefined : query?.data
                   const amount = holdings.data?.holdings.find((h) => h.mint === a.mint && h.wallet === w.address)?.amount
                   const isSelected = selected?.mint === a.mint && selected.wallet === w.address
                   const primary = snapshot?.reasons.find((r) => !r.hint)
@@ -88,23 +91,33 @@ export function AssetsPage() {
   const assets = useAssetsQuery()
   return (
     <div className="stack">
-      <Card title={t('assets.policies')} aside={<span className="muted small">{t('assets.policiesHint')}</span>}>
-        {assets.isLoading && <LoadingState />}
-        {assets.error && <ErrorState error={assets.error} onRetry={() => void assets.refetch()} />}
-        {assets.data && (
-          <div className="policy-grid">
-            {assets.data.assets.map((state) => (
-              <PolicyCard key={state.asset.mint} state={state} />
-            ))}
-          </div>
-        )}
-      </Card>
-      <Card title={t('assets.proofs')} aside={<span className="muted small">{t('assets.proofsHint')}</span>}>
-        <ProofsTable />
-      </Card>
       <Card title={t('assets.matrix')} aside={<span className="muted small">{t('assets.matrixHint')}</span>}>
+        <p className="section-kicker">{t('ux.inspectFirst')}</p>
         <Matrix />
+        <div className="decision-actions">
+          <Link className="section-link" to="/transferencia">{t('ux.continueTransfer')} <span aria-hidden="true">→</span></Link>
+          <Link className="section-link" to="/incidentes">{t('ux.continueIncidents')}</Link>
+        </div>
       </Card>
+      <details className="technical-details">
+        <summary>{t('ux.configureDetails')}</summary>
+        <div className="stack">
+          <Card title={t('assets.policies')} aside={<span className="muted small">{t('assets.policiesHint')}</span>}>
+            {assets.isLoading && <LoadingState />}
+            {assets.error && <ErrorState error={assets.error} onRetry={() => void assets.refetch()} />}
+            {assets.data && !assets.error && (
+              <div className="policy-grid">
+                {assets.data.assets.map((state) => (
+                  <PolicyCard key={state.asset.mint} state={state} />
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card title={t('assets.proofs')} aside={<span className="muted small">{t('assets.proofsHint')}</span>}>
+            <ProofsTable />
+          </Card>
+        </div>
+      </details>
     </div>
   )
 }

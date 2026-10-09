@@ -56,6 +56,24 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('read-only visible snapshot capacity markup', () => {
+  it.each(['en', 'pt'] as const)('keeps signatures and storage warnings before expandable backup tools (%s)', async (language) => {
+    await receipt()
+    mocks.ctx = null
+    mocks.journal!.error = 'storage-unavailable'
+    const html = render(createElement(SubmissionHistory), language)
+    const backupPosition = html.indexOf(`<summary>${messages[language]['ux.receiptTools']}</summary>`)
+    expect(backupPosition).toBeGreaterThan(0)
+    const primaryContent = html.slice(0, backupPosition)
+    expect(primaryContent).toContain(messages[language]['ux.receiptContext'])
+    expect(primaryContent).toContain(messages[language]['receipts.storage-unavailable'])
+    expect(primaryContent).toContain('role="alert"')
+    expect(primaryContent).toContain(messages[language]['evidence.signature'])
+    expect(html).toMatch(/<details class="technical-details"><summary>/)
+    expect(html).not.toMatch(/<details[^>]*\bopen=/)
+    expect(html).toContain(messages[language]['receipts.downloadHistory'])
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
   it.each(['en', 'pt'] as const)('interpolates both limits in a full-journal warning (%s)', (language) => {
     mocks.journal!.error = 'storage-full'
     const html = render(createElement(SubmissionHistory), language)

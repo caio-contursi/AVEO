@@ -8,6 +8,14 @@ import { ReasonList } from '../../components/reasons'
 import { Badge, Card, ErrorState, LoadingState } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 
+/** Show provenance without copying endpoint paths or credentials into the screen. */
+function rpcOrigin(value: string): string {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : '—'
+  } catch { return '—' }
+}
+
 function NetworkCard() {
   const { t, locale } = useI18n()
   const desk = useDesk()
@@ -16,7 +24,7 @@ function NetworkCard() {
     <Card title={t('status.network')}>
       {status.isLoading && <LoadingState />}
       {status.error && <ErrorState error={status.error} onRetry={() => void status.refetch()} />}
-      {status.data && (
+      {status.data && !status.error && (
         <>
           <dl className="kv">
             <dt>{t('status.slot')}</dt>
@@ -56,7 +64,7 @@ function AssetsCard() {
     <Card title={t('status.assets')}>
       {assets.isLoading && <LoadingState />}
       {assets.error && <ErrorState error={assets.error} onRetry={() => void assets.refetch()} />}
-      {assets.data && (
+      {assets.data && !assets.error && (
         <div className="table-wrap">
           <table>
             <thead>
@@ -104,35 +112,38 @@ export function StatusPage() {
   const desk = useDesk()
   return (
     <div className="stack">
-      <Card title={t('config.title')}>
-        <dl className="kv">
-          <dt>{t('config.cluster')}</dt>
-          <dd>{desk.env.VITE_CLUSTER}</dd>
-          <dt>{t('config.rpc')}</dt>
-          <dd>
-            <code>{desk.env.VITE_RPC_URL}</code>
-          </dd>
-          <dt>{t('config.commitment')}</dt>
-          <dd>{desk.commitment}</dd>
-          <dt>{t('config.backend')}</dt>
-          <dd>{desk.env.VITE_BACKEND}</dd>
-          <dt>{t('config.program')}</dt>
-          <dd>
-            <Address value={desk.programId} />
-          </dd>
-          <dt>{t('config.manifest')}</dt>
-          <dd>
-            <code>{desk.env.VITE_DEPLOYMENT_URL}</code>
-            {desk.deployment && (
-              <span className="muted small"> · {t('config.generatedAt', { date: new Date(desk.deployment.generatedAt).toLocaleString(locale) })}</span>
-            )}
-          </dd>
-        </dl>
-      </Card>
       <NetworkCard />
       <RequireDeployment>
         <AssetsCard />
       </RequireDeployment>
+      <details className="technical-details">
+        <summary>{t('config.title')} · {t('ux.technicalDetails')}</summary>
+        <Card title={t('config.title')}>
+          <dl className="kv">
+            <dt>{t('config.cluster')}</dt>
+            <dd>{desk.env.VITE_CLUSTER}</dd>
+            <dt>{t('ux.rpcOrigin')}</dt>
+            <dd>
+              <code>{rpcOrigin(desk.env.VITE_RPC_URL)}</code>
+            </dd>
+            <dt>{t('config.commitment')}</dt>
+            <dd>{desk.commitment}</dd>
+            <dt>{t('config.backend')}</dt>
+            <dd>{desk.env.VITE_BACKEND}</dd>
+            <dt>{t('config.program')}</dt>
+            <dd>
+              <Address value={desk.programId} />
+            </dd>
+            <dt>{t('config.manifest')}</dt>
+            <dd>
+              <code>{desk.env.VITE_DEPLOYMENT_URL}</code>
+              {desk.deployment && (
+                <span className="muted small"> · {t('config.generatedAt', { date: new Date(desk.deployment.generatedAt).toLocaleString(locale) })}</span>
+              )}
+            </dd>
+          </dl>
+        </Card>
+      </details>
     </div>
   )
 }

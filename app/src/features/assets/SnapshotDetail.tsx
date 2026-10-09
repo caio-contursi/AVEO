@@ -66,7 +66,7 @@ export function SnapshotDetail({ snapshot, onClose }: { snapshot: DeskSnapshot; 
             <p className="muted">{t('detail.noProof')}</p>
           )}
           <h3>{t('detail.reasons')}</h3>
-          {snapshot.reasons.length === 0 ? <p className="ok-text">{t('detail.allGood')}</p> : <ReasonList reasons={snapshot.reasons} showDetail />}
+          {snapshot.verdict === 'eligible' && snapshot.reasons.length === 0 ? <p className="ok-text">{t('detail.allGood')}</p> : <ReasonList reasons={snapshot.reasons} showDetail />}
           {bindable && <BindProofAction snapshot={snapshot} proof={bindable} />}
         </div>
         <div>
