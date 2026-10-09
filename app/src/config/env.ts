@@ -1,11 +1,16 @@
 // Variáveis de ambiente do front, validadas na inicialização. Ver app/.env.example.
+import { isAddress } from '@solana/kit'
 import { z } from 'zod'
 
 const envSchema = z.object({
   VITE_CLUSTER: z.enum(['localnet', 'devnet']).default('localnet'),
   VITE_RPC_URL: z.url().default('http://127.0.0.1:8899'),
   VITE_COMMITMENT: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
-  VITE_AVEO_PROGRAM_ID: z.string().trim().optional(),
+  VITE_AVEO_PROGRAM_ID: z
+    .string()
+    .trim()
+    .refine((value) => value === '' || isAddress(value), 'Invalid Solana program address')
+    .optional(),
   VITE_DEPLOYMENT_URL: z.string().trim().min(1).default('/dev/deployment.json'),
   // mpl3643 fica not-integrated até o gate A (spec v3): o Desk só mostra o aviso.
   VITE_BACKEND: z.enum(['aveo-sas-hook', 'mpl3643']).default('aveo-sas-hook'),

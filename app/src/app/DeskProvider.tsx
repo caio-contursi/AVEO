@@ -11,8 +11,8 @@ import { DeskContext, type DeskServices } from './desk'
 export function DeskProvider({ env, children }: { env: AppEnv; children: ReactNode }) {
   const programId = env.VITE_AVEO_PROGRAM_ID ? address(env.VITE_AVEO_PROGRAM_ID) : AVEO_HOOK_PROGRAM_ID
   const deployment = useQuery({
-    queryKey: ['deployment', env.VITE_DEPLOYMENT_URL],
-    queryFn: () => fetchDeployment(env.VITE_DEPLOYMENT_URL),
+    queryKey: ['deployment', env.VITE_DEPLOYMENT_URL, env.VITE_CLUSTER, programId],
+    queryFn: () => fetchDeployment(env.VITE_DEPLOYMENT_URL, { cluster: env.VITE_CLUSTER, programId }),
     retry: false,
     staleTime: Infinity,
   })
