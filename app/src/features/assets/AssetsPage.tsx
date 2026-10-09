@@ -28,27 +28,31 @@ function Matrix() {
 
   return (
     <>
+      {results.some((query) => query.error) && <ErrorState title={t('ux.inspectUnavailable')} onRetry={() => {
+        for (const query of results) if (query.error) void query.refetch()
+      }} />}
       <div className="table-wrap">
         <table className="matrix">
+          <caption className="sr-only">{t('assets.matrix')}</caption>
           <thead>
             <tr>
-              <th>{t('assets.wallet')}</th>
+              <th scope="col">{t('assets.wallet')}</th>
               {deployment.assets.map((a) => (
-                <th key={a.mint}>{a.label}</th>
+                <th key={a.mint} scope="col">{a.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {deployment.wallets.map((w) => (
               <tr key={w.address}>
-                <td>
+                <th scope="row">
                   <strong>{w.label}</strong>
-                </td>
+                </th>
                 {deployment.assets.map((a) => {
                   const index = pairs.findIndex((p) => p.mint === a.mint && p.wallet === w.address)
                   const query = results[index]
                   const snapshot = query?.error || query?.isFetching ? undefined : query?.data
-                  const amount = holdings.data?.holdings.find((h) => h.mint === a.mint && h.wallet === w.address)?.amount
+                  const amount = holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings.find((h) => h.mint === a.mint && h.wallet === w.address)?.amount
                   const isSelected = selected?.mint === a.mint && selected.wallet === w.address
                   const primary = snapshot?.reasons.find((r) => !r.hint)
                   return (
@@ -56,11 +60,13 @@ function Matrix() {
                       <button
                         type="button"
                         className={`cell ${isSelected ? 'selected' : ''}`}
+                        disabled={!snapshot}
                         aria-pressed={isSelected}
+                        aria-label={t('ux.inspectCell', { wallet: w.label, asset: a.label, verdict: snapshot ? t(`verdict.${snapshot.verdict}`) : query?.isFetching && !query.error ? t('state.loading') : t('verdict.unknown') })}
                         onClick={() => setSelected(isSelected ? null : { mint: a.mint, wallet: w.address })}
                       >
                         <span className="cell-top">
-                          {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.error ? <VerdictBadge verdict="unknown" /> : <span className="muted small">…</span>}
+                          {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.isFetching && !query.error ? <span className="muted small">{t('state.loading')}</span> : <VerdictBadge verdict="unknown" />}
                           <span className="muted small">
                             {amount !== undefined ? `${formatAmount(locale, amount, a.decimals)} ${a.symbol}` : ''}
                           </span>

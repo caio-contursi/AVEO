@@ -167,6 +167,11 @@ describe('accessible desk shell', () => {
     expect(html).toContain('slot 123,456')
     expect(html).not.toContain('data-status="complete"')
   })
+
+  it('does not announce the polling heartbeat over operation progress', () => {
+    const html = render()
+    expect(html).toMatch(/class="pill network-status" role="status" data-status="pending" aria-live="off"/)
+  })
 })
 
 describe('shared CSS contracts', () => {

@@ -64,7 +64,7 @@ export function Layout() {
           </div>
         </div>
         <div className="topbar-right">
-          <span className="pill network-status" role="status" data-status={networkState}>
+          <span className="pill network-status" role="status" data-status={networkState} aria-live="off">
             {desk.env.VITE_CLUSTER}
             {' · '}
             {networkState === 'blocked' ? t('ux.networkUnavailable') : networkState === 'pending' ? t('ux.networkLoading') : `slot ${formatSlot(locale, status.data!.slot)}`}
