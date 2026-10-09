@@ -170,6 +170,55 @@ actual wallet popups or a complete browser walkthrough. This redesign needs
 Caio's Desk review and native-browser acceptance before claiming production UX
 or a judging-ready live demonstration.
 
+### Second interface review and provisional jury assessment
+
+This refinement uses an AVEO-owned design system, not an imported ecosystem UI
+library. [Solana's official brand guide](https://solana.com/branding) provides
+the purple/green identity reference; purple is deepened or lightened for text
+contrast, while green remains a success signal rather than an action color.
+[Jupiter's documented transaction flow](https://developers.jup.ag/docs/guides/how-to-build-a-custom-swap-with-metis)
+provides a prepare-before-sign reference. Applying those references to a
+compliance console is our interpretation, not a claim to reproduce either
+product's design system or to have their endorsement. The existing AVEO shield
+is retained; no third-party logos, fonts, frameworks or dependencies are added.
+
+Spacing/radius tokens, neutral surfaces and smaller route headings reduce visual
+weight. State-specific marks supplement workflow text and color; wallet
+rejection retains reviewed steps only for the exact plan captured at signing.
+Intent and review stay adjacent, without a redundant surrounding review card.
+The eligibility matrix names each wallet/asset/verdict, uses scoped table
+headers and provides an explicit read-only retry for failed queries. It neither
+offers empty diagnoses nor treats an idle missing read as an active fetch.
+Cached holdings during failed/in-flight reads are not shown as current balances
+or captured as pre-send balance observations. None of these display refinements
+authorizes a transfer; backend simulation and existing execution guards remain.
+
+Shared single-control fields associate labels, hints and errors with the actual
+control and mark invalid input. Policy checkboxes use a named fieldset rather
+than nested labels. Polling network slots no longer interrupt operation live
+announcements. Authored light/dark colors are tested at 4.5:1 normal-text
+contrast, including actual badge, button and workflow declarations; source
+contracts also check focus, shrinking grids and reduced motion. These are not
+computed browser styles, an accessibility certification or proof of no mobile
+overflow.
+
+Provisional technical assessment, based on source/static rendering rather than
+a visual browser session; each category has equal weight:
+
+| Criterion | Score / 10 | Evidence and remaining objection |
+| --- | --- | --- |
+| Visual architecture | 8.0 | Shared tokens and decision-first hierarchy; browser layout/zoom still unmeasured. |
+| Elegance and consistency | 8.0 | Less panel nesting, coherent action/status colors and native controls; actual rendered polish still needs review. |
+| Flow clarity and fluidity | 6.5 | Truthful steps, accessible labels and read-only recovery tested; timing, wallet popups and first-time usability not measured. |
+
+Overall provisional score: **7.5 / 10**. Honest reviewer comment: the structure is
+coherent and the failure paths are substantially clearer, but code-level checks
+are not sufficient evidence of exceptional UX. I would not award a 9 or 10, or
+call the live demo judging-ready, without a bilingual browser rehearsal with
+wallet rejection, RPC failure and recovery of the original signature. Caio's
+Desk review is still required. No browser was available for this round; no
+real-wallet, local-validator, Rust-build or live devnet acceptance was run.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -454,6 +503,14 @@ These checks use unit tests, static rendering and controlled event callbacks;
 native-browser visual/mobile/keyboard acceptance and real wallet popups remain
 pending. No dependencies, Rust code or on-chain/backend interfaces changed;
 the validator, Rust build and live devnet acceptance were not rerun.
+The eighteenth round passed the final root `pnpm verify`: workspace and
+frontend-test TypeScript, ESLint, 1,382 app/script tests across 53 files,
+4 backend tests and the frontend production build. This includes 34 stylesheet
+tests covering authored light/dark text contrast and interaction contracts,
+8 shared-field tests and new matrix/transfer recovery regressions. No
+dependencies or on-chain/backend interfaces changed. Its 7.5/10 provisional
+UX assessment and outstanding browser acceptance are recorded above, not
+presented as measured usability or an accessibility certification.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -717,6 +774,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
+- Extend browser acceptance to 320px and 200% zoom in both themes, including
+  unknown matrix cells, read-only retries and explicit field-error announcements.
+- Re-score this provisional UX assessment after a timed first-use wallet
+  walkthrough, recording task failures and confusion rather than only screenshots.
 - Run a bilingual, keyboard-first browser walkthrough of all five routes at
   narrow/mobile and desktop widths in both themes, including interrupted reads,
   wallet rejection and retained-signature recovery; capture screenshots as review evidence.
