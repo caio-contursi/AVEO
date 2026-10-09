@@ -9,6 +9,8 @@
     "build:program": "cargo build-sbf --tools-version v1.53 && anchor idl build -o target/idl/aveo_hook.json",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
+    "test:receipts": "pnpm --filter @aveo/app test:receipts",
+    "verify": "pnpm typecheck && pnpm --filter @aveo/app typecheck:tests && pnpm --filter @aveo/app lint && pnpm test && pnpm --filter @aveo/app build",
     "fixtures": "pnpm --filter @aveo/app fixtures",
     "scenario": "pnpm --filter @aveo/app scenario",
     "scan:once": "pnpm --filter @aveo/app scan:once",
