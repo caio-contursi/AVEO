@@ -14,6 +14,7 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 
 describe('public acceptance receipt', () => {
   it.each([
+    ['T15', ['persistence-initial-save', 'persistence-process-restart', 'persistence-repeated-scan']],
     ['T12', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],
     ['T13', ['direct-hook-execute-rejected', 'unsigned-policy-update-rejected', 'unsigned-binding-rejected']],
     ['T16', ['boundary-zero-amount', 'boundary-excessive-amount', 'boundary-max-u64-rejected', 'boundary-exact-balance', 'boundary-same-owner-distinct-accounts', 'boundary-fixtures-restored']],
@@ -28,6 +29,14 @@ describe('public acceptance receipt', () => {
     failed.acceptLine(`FAIL ${stages[0]}`)
     for (const stage of stages.slice(1)) failed.acceptLine(`NOT_RUN ${stage}`)
     expect(failed.finish(1, NOW).matrix.find((entry) => entry.id === id)?.status).toBe('FAIL')
+  })
+  it('marks only T15 PASS when only persistence stages ran', () => {
+    const stages = ['persistence-initial-save', 'persistence-process-restart', 'persistence-repeated-scan']
+    const report = builder(stages)
+    for (const stage of stages) report.acceptLine(`PASS ${stage}`)
+    const result = report.finish(0, NOW)
+    expect(result.matrix.filter((entry) => entry.status === 'PASS').map((entry) => entry.id)).toEqual(['T15'])
+    expect(result.matrix.filter((entry) => entry.id !== 'T15').every((entry) => entry.status === 'NOT_RUN')).toBe(true)
   })
   it('retains validated public allowance and fault counters, not transport details', () => {
     const report = builder(['one'])

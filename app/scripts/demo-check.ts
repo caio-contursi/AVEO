@@ -38,6 +38,7 @@ import { findProofsForWallet } from '../src/api/proofs'
 import { buildInstructions, confirmSignature, simulate, tokenBalances } from '../src/api/transactions'
 import { hexToBytes, parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applyVerification } from '../src/features/incidents/model'
+import { checkIncidentPersistence, PERSISTENCE_STAGES } from './persistence-check'
 import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send } from './lib'
 
 class ExpectationFailed extends Error {}
@@ -192,7 +193,7 @@ const stages = [
   'external-with-extra-accounts', 'external-without-extra-accounts', ...AUTHORIZATION_STAGES, ...BOUNDARY_STAGES,
   'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
   'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
-  'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping',
+  'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping', ...PERSISTENCE_STAGES,
   'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
   'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
   'issuer-inactivates-alfa-only', 'issuer-restores-active-alfa-policy',
@@ -504,6 +505,12 @@ async function main(): Promise<void> {
       expect(repeated.incidents.length === scan.incidents.length, 'Repeated scan must not duplicate incidents')
       evidence({ incidentType: grouped[0]!.type, proof: sharedProof, affectedMints: grouped[0]!.affectedMints })
       pass()
+
+      // Persist the actual closed-proof incident, not fabricated prior eligibility.
+      await checkIncidentPersistence(scan, closed, evidence, (stage) => {
+        expect(stages[current] === stage, 'Persistence stage order must match the acceptance report')
+        pass()
+      })
 
       const verifierA = deployment.verifiers.find((verifier) => verifier.id === 'A')
       expect(verifierA, 'Missing verifier A')

@@ -71,7 +71,7 @@ const matrixCases = [
   ['T12', 'Delegate transfer uses the token account owner', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],
   ['T13', 'Missing signatures and direct Execute invocation', ['direct-hook-execute-rejected', 'unsigned-policy-update-rejected', 'unsigned-binding-rejected']],
   ['T14', 'RPC/confirmation timeout and inconsistent reads', ['fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident', 'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open', 'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves']],
-  ['T15', 'Repeated scans and persistence after restart', []],
+  ['T15', 'Repeated scans and persistence after restart', ['persistence-initial-save', 'persistence-process-restart', 'persistence-repeated-scan']],
   ['T16', 'Same owner and boundary transfer amounts', ['boundary-zero-amount', 'boundary-excessive-amount', 'boundary-max-u64-rejected', 'boundary-exact-balance', 'boundary-same-owner-distinct-accounts', 'boundary-fixtures-restored']],
   ['T17', 'Inactive policy, paused schema and expiry boundaries', []],
 ] as const
