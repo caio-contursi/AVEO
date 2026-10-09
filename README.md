@@ -84,6 +84,44 @@ pnpm scenario -- status
 pnpm scan:once          # incidentes em app/.dev/incidents.sqlite
 ```
 
+### Repeatable local verification
+
+With Node 22 or newer, the pinned pnpm 10.33.3 and installed workspace
+dependencies, run these from the repository root:
+
+```bash
+pnpm verify         # workspace types, frontend test types, lint, all tests, Desk build
+pnpm test:receipts  # focused receipt/journal/history/backup regressions only
+```
+
+`pnpm verify` runs the existing checks in that order and stops at the first
+nonzero exit code. No later stage runs after a failed check. It uses the existing
+`app/tsconfig.test.json` for frontend tests (`src/**/*.test.ts`); CLI/script tests
+still run in the full suite but are not included in that separate test-typecheck
+configuration. The backend's SQLite tests use temporary local fixtures. The
+command builds the frontend, not the Rust/SBF program, and does not deploy,
+generate deployment fixtures, start a validator, request a connected wallet or
+install anything. Some unit tests generate ephemeral in-memory signers; those
+are not deployment keypairs or a funding/signing workflow against a live network.
+Failure reports keep the failing check's diagnostics and a nonzero exit status.
+
+`pnpm test:receipts` uses the installed Vitest in run mode and includes receipt
+limit/capacity/contract/export/download tests, the submission journal, and all
+`SubmissionHistory` tests. Path-substring filters include future `receipt-` or
+`SubmissionHistory` test files without maintaining a fixed list. It does not run
+unrelated transfer/incident/execution tests or replace full verification. Its
+configuration is checked by `app/src/features/operations/receipt-gate.test.ts`;
+the full command's order and fail-fast behavior are checked by
+`app/src/features/operations/verification-gate.test.ts` with a fake pnpm boundary.
+Those fixture checks do not recursively invoke the real verification command.
+Execution-fixture tests exercise Linux `/bin/sh`; other platforms retain the
+configuration checks but skip those shell-execution tests.
+
+These are reusable local/CI-ready commands, not a connected hosted CI workflow
+or branch-protection rule. A CI runner needs an approved setup, Node/pnpm and a
+frozen-lockfile installation first. They establish neither actual browser
+interaction, devnet deployment, live acceptance nor MPL-3643 certification.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -240,10 +278,8 @@ not verify which network a proxy forwards to; use the project's local validator.
 
 ```bash
 pnpm demo:check --self-test  # checks runner assertions without a validator
-pnpm typecheck
-pnpm test
-pnpm --filter @aveo/app lint
-pnpm --filter @aveo/app build
+pnpm verify
+pnpm test:receipts          # optional focused receipt regression gate
 cargo test -p aveo-hook --locked
 ```
 
@@ -350,6 +386,13 @@ fake browser APIs, controlled callbacks and static markup in both languages;
 they do not establish actual file saving or interactive fallback rendering.
 No dependencies, Rust code, acceptance scripts or on-chain interfaces changed;
 local-validator acceptance and live devnet checks were not repeated.
+The sixteenth round ran the new root `pnpm verify` command successfully:
+workspace/frontend-test TypeScript, ESLint, 1,162 app/script tests, 4 backend
+tests and the frontend build passed. `pnpm test:receipts` separately passed
+401 tests across 12 files. Twelve new gate tests check coverage selection,
+configuration and Linux fail-fast execution at every stage. No dependencies,
+hosted CI workflow, Rust code or on-chain interfaces changed. Browser/devnet
+acceptance, the validator and the Rust build were not rerun.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -630,8 +673,10 @@ persistence or confirmation on chain.
   during copying and byte-identical saved envelope.
 - Share the exact-byte fractional-timestamp fixture across receipt tests to keep
   compact-storage and formatted-export boundary scenarios easy to maintain.
-- Group the cross-consumer receipt contract tests in a documented CI gate so
-  changes to storage, backup and translated operator warnings stay consistent.
+- Connect `pnpm verify` to an approved hosted CI workflow and required branch
+  check so regressions block merges rather than relying on a manual command.
+- Add a dedicated TypeScript check for CLI/script tests so their compile-time
+  coverage complements the frontend test project without hiding existing gaps.
 - Reuse coherent-observation checks across CLI acceptance helpers so subject,
   context, fact and slot validation cannot silently diverge between scenarios.
 - Exercise interrupted SQLite writes and process crashes so recovery can
