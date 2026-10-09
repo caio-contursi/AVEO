@@ -30,6 +30,12 @@ function evidence(props: Partial<Parameters<typeof EvidenceView>[0]> = {}) {
 }
 
 describe('unknown evidence actions', () => {
+  it('warns about failed receipt persistence without changing transaction evidence', () => {
+    const html = render(evidence({ persistenceWarning: true }))
+    expect(html).toContain(messages.en['receipts.storage-unavailable'])
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('original-signature')
+  })
   it.each(['en', 'pt'] as const)('offers optional recheck and explains the same signature without sending (%s)', (language) => {
     const html = render(evidence({ onRecheck: () => {} }), language)
     expect(html).toContain(messages[language]['evidence.recheck'])

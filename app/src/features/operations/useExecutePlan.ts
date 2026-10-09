@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useLayoutEffect, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { DeskPlan } from '../../api/backend'
 import { useReadyDesk } from '../../app/desk'
 import { useWallet } from '../../wallet/context'
 
 import { PlanExecution, type ExecutionState } from './execution'
+import { getSubmissionJournal } from './submission-journal'
 
 export { runPlan } from './execution'
 export type { ExecutionPhase, ExecutionState, RunResult } from './execution'
@@ -15,11 +16,26 @@ export function useExecutePlan() {
   const { connected } = useWallet()
   const queryClient = useQueryClient()
   const [state, setState] = useState<ExecutionState>({ phase: 'idle' })
-  const [execution] = useState(() => new PlanExecution(setState))
+  const [journalError, setJournalError] = useState(false)
+  const active = useRef(false)
+  const [execution] = useState(() => new PlanExecution(setState, (submissionContext, signature) => {
+    const journal = getSubmissionJournal()
+    // Capture even after navigation; only React updates depend on this hook remaining mounted.
+    void journal.capture(submissionContext, signature).then(() => {
+      if (active.current && journal.error === undefined) setJournalError(false)
+    }).catch(() => {
+      // Keep RPC details out of persistence warnings; this never retries the send.
+      if (active.current) setJournalError(true)
+    })
+  }))
 
   useLayoutEffect(() => {
+    active.current = true
     execution.activate()
-    return () => execution.deactivate()
+    return () => {
+      active.current = false
+      execution.deactivate()
+    }
   }, [execution])
   useLayoutEffect(() => { execution.setContext(ctx) }, [execution, ctx])
 
@@ -40,5 +56,5 @@ export function useExecutePlan() {
   }, [ctx, execution, queryClient])
 
   const reset = useCallback(() => execution.reset(), [execution])
-  return { state, execute, recheck, reset, contextMatches: execution.matchesContext(ctx), displayMetadata: execution.displayMetadata }
+  return { state, execute, recheck, reset, journalError, contextMatches: execution.matchesContext(ctx), displayMetadata: execution.displayMetadata }
 }

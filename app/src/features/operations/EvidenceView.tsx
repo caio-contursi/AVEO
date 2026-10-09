@@ -9,13 +9,14 @@ import { useI18n } from '../../i18n/context'
 const TONE = { confirmed: 'ok', failed: 'bad', unknown: 'unknown' } as const
 
 /** Transaction status, readback and logs, with optional read-only confirmation recheck. */
-export function EvidenceView({ evidence, decimals = 0, labelOf, onRecheck, rechecking = false, contextMatches = true }: {
+export function EvidenceView({ evidence, decimals = 0, labelOf, onRecheck, rechecking = false, contextMatches = true, persistenceWarning = false }: {
   evidence: DeskEvidence
   decimals?: number
   labelOf: (address: string) => string
   onRecheck?: () => void
   rechecking?: boolean
   contextMatches?: boolean
+  persistenceWarning?: boolean
 }) {
   const { t, locale } = useI18n()
   const desk = useDesk()
@@ -39,6 +40,7 @@ export function EvidenceView({ evidence, decimals = 0, labelOf, onRecheck, reche
         </p>
       )}
       {evidence.error && <ReasonList reasons={[evidence.error]} showDetail />}
+      {persistenceWarning && <p className="warn-text" role="alert">{t('receipts.storage-unavailable')}</p>}
       {evidence.status === 'unknown' && evidence.signature && onRecheck && (
         <div>
           <div className="actions">

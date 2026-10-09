@@ -11,6 +11,7 @@ const NAV: { to: string; label: MessageKey }[] = [
   { to: '/carteiras', label: 'nav.assets' },
   { to: '/transferencia', label: 'nav.transfer' },
   { to: '/incidentes', label: 'nav.incidents' },
+  { to: '/recibos', label: 'nav.receipts' },
   { to: '/rede', label: 'nav.status' },
 ]
 

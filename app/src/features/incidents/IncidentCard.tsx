@@ -1,7 +1,7 @@
 import type { IncidentState } from '@aveo/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Address as SolanaAddress } from '@solana/kit'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DeskPlan } from '../../api/backend'
 import { checkPayload } from '../../api/eligibility'
 import type { ProofRow } from '../../api/inventory'
@@ -17,6 +17,7 @@ import { EvidenceView } from '../operations/EvidenceView'
 import { labelFor } from '../operations/labels'
 import { SimulationSummary } from '../operations/SimulationSummary'
 import { runPlan } from '../operations/useExecutePlan'
+import { getSubmissionJournal } from '../operations/submission-journal'
 import { applySends, applyVerification, markPrepared, type DeskIncident, type SendOutcome } from './model'
 import { useIncidentStore } from './store'
 
@@ -56,6 +57,12 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const [plans, setPlans] = useState<{ key: string; title: string; plan: DeskPlan }[]>([])
   const [busy, setBusy] = useState<'prepare' | 'sign' | 'verify'>()
   const [actionError, setActionError] = useState<unknown>()
+  const [journalError, setJournalError] = useState(false)
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   const resolved = incident.state === 'resolved'
   const walletLabel = labelFor(deployment, incident.wallet)
@@ -107,7 +114,16 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     setBusy('sign')
     const outcomes: SendOutcome[] = []
     for (const { plan } of signable) {
-      const result = await runPlan(ctx, backend, connected.signer, plan)
+      const result = await runPlan(ctx, backend, connected.signer, plan, {
+        onSent: (signature) => {
+          // Keep grouped renewal signatures recoverable, even after leaving this card.
+          void getSubmissionJournal().capture(ctx, signature).then(() => {
+            if (mounted.current) setJournalError(getSubmissionJournal().error !== undefined)
+          }).catch(() => {
+            if (mounted.current) setJournalError(true)
+          })
+        },
+      })
       outcomes.push('error' in result ? { error: result.error } : { evidence: result.evidence })
     }
     patch(incident.id, (i) => applySends(i, outcomes, now()))
@@ -154,6 +170,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
 
       <h3>{t('incidents.cause')}</h3>
       <ReasonList reasons={[incident.cause]} showDetail />
+      {journalError && <p className="warn-text" role="alert">{t('receipts.storage-unavailable')}</p>}
 
       <h3>
         {t('incidents.affected')} <span className="small muted">({t('incidents.hint')})</span>

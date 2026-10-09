@@ -115,7 +115,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
           onSign={() => void execution.execute(plan)}
         />
       )}
-      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} />}
+      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} persistenceWarning={execution.journalError} />}
     </div>
   )
 }

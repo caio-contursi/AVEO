@@ -187,7 +187,7 @@ export function TransferPage() {
 
       {execution.state.evidence && (
         <Card title={t('transfer.result')}>
-          <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals ?? asset.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} />
+          <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals ?? asset.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} persistenceWarning={execution.journalError} />
         </Card>
       )}
     </div>
