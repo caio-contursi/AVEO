@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiContext } from '../../api/context'
 import { I18nContext } from '../../i18n/context'
 import { messages, type Language } from '../../i18n/messages'
-import { confirmReceipt, createHistoryExport, createReceiptRemoval, SubmissionHistory, SubmissionHistoryExport, SubmissionReceiptView } from './SubmissionHistory'
+import { confirmReceipt, createHistoryExport, createReceiptRemoval, SubmissionHistory, SubmissionHistoryCapacity, SubmissionHistoryExport, SubmissionReceiptView } from './SubmissionHistory'
 import { SubmissionJournal, type SubmissionReceipt } from './submission-journal'
 
 const mocks = vi.hoisted(() => ({
@@ -50,6 +50,97 @@ beforeEach(() => {
 })
 
 afterEach(() => { vi.unstubAllGlobals() })
+
+describe('read-only visible snapshot capacity markup', () => {
+  it.each(['en', 'pt'] as const)('renders empty SSR counters and translated snapshot limitations (%s)', (language) => {
+    mocks.ctx = null
+    const html = render(createElement(SubmissionHistory), language)
+    expect(html).toContain(messages[language]['receipts.capacityNote'])
+    expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '0').replace('{bytes}', '2'))
+    expect(html).not.toContain(messages[language]['receipts.capacityNearFull'])
+    expect(html).not.toContain(messages[language]['receipts.capacityUnavailable'])
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'pt'] as const)('measures session-only receipts without saving, copying or querying (%s)', async (language) => {
+    const setItem = vi.fn(), writeText = vi.fn()
+    const journal = new SubmissionJournal({ getItem: () => null, setItem }, null)
+    await expect(journal.capture(ctx, signature)).rejects.toThrow()
+    mocks.journal = journal
+    mocks.ctx = null
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const entries = journal.getSnapshot()
+    const bytes = new TextEncoder().encode(JSON.stringify(entries)).length
+    const html = render(createElement(SubmissionHistory), language)
+    expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '1').replace('{bytes}', String(bytes)))
+    expect(html).toContain(messages[language]['receipts.capacityVolatile'])
+    expect(html).toContain(messages[language]['receipts.storage-unavailable'])
+    expect(journal.getSnapshot()).toBe(entries)
+    expect(setItem).not.toHaveBeenCalled()
+    expect(writeText).not.toHaveBeenCalled()
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'pt'] as const)('hides metrics for invalid storage even when an older valid snapshot remains (%s)', async (language) => {
+    const entry = await receipt()
+    let stored = JSON.stringify([entry])
+    const journal = new SubmissionJournal({ getItem: () => stored, setItem: () => {} })
+    mocks.journal = journal
+    stored = 'invalid'
+    journal.refreshFromStorage()
+    expect(journal.error).toBe('invalid-records')
+    const html = render(createElement(SubmissionHistory), language)
+    expect(journal.getSnapshot()).toEqual([entry])
+    expect(html).toContain(messages[language]['receipts.capacityUnavailable'])
+    expect(html).not.toContain(messages[language]['receipts.capacityCounter'].split('{count}')[0])
+    expect(html).not.toContain(messages[language]['receipts.capacityNearFull'])
+  })
+
+  it.each(['en', 'pt'] as const)('distinguishes near-full at 90 receipts from a measured full snapshot at 100 (%s)', async (language) => {
+    const entry = await receipt()
+    const entries = Array.from({ length: 100 }, (_, index) => ({
+      ...entry, signature: getBase58Decoder().decode(new Uint8Array(64).fill(index + 1)),
+    }))
+    const near = render(createElement(SubmissionHistoryCapacity, { receipts: entries.slice(0, 90) }), language)
+    expect(near).toContain(messages[language]['receipts.capacityNearFull'])
+    expect(near).toContain('90 / 100')
+    const full = render(createElement(SubmissionHistoryCapacity, { receipts: entries }), language)
+    expect(full).toContain(messages[language]['receipts.capacityFull'])
+    expect(full).not.toContain(messages[language]['receipts.capacityUnavailable'])
+    expect(full).toContain('100 / 100')
+    expect(full).not.toContain('<button')
+  })
+
+  it('shows a static unavailable state for malformed, duplicate and oversized visible snapshots', async () => {
+    const entry = await receipt()
+    for (const entries of [[null], [entry, entry], [{ ...entry, submittedAt: `2026-10-09T12:00:00.${'0'.repeat(128000)}Z` }]]) {
+      const html = render(createElement(SubmissionHistoryCapacity, { receipts: entries }))
+      expect(html).toContain(messages.en['receipts.capacityUnavailable'])
+      expect(html).not.toContain('Visible snapshot:')
+      expect(html).not.toContain('<button')
+    }
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'pt'] as const)('warns at 90 percent of bytes and reports a measured full state at the exact byte limit (%s)', async (language) => {
+    const entry = await receipt()
+    const originalBytes = new TextEncoder().encode(JSON.stringify([entry])).length
+    for (const bytes of [115199, 115200, 127999, 128000]) {
+      const enlarged = { ...entry, submittedAt: `2026-10-09T12:00:00.${'0'.repeat(3 + bytes - originalBytes)}Z` }
+      const html = render(createElement(SubmissionHistoryCapacity, { receipts: [enlarged] }), language)
+      if (bytes === 128000) {
+        expect(html).toContain(messages[language]['receipts.capacityFull'])
+        expect(html).toContain('1 / 100')
+        expect(html).toContain('128000 / 128000')
+      } else {
+        expect(html).toContain(messages[language]['receipts.capacityCounter'].replace('{count}', '1').replace('{bytes}', String(bytes)))
+        expect(html.includes(messages[language]['receipts.capacityNearFull'])).toBe(bytes >= 115200)
+      }
+      expect(html).not.toContain('<button')
+    }
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+})
 
 describe('explicit visible history export', () => {
   it.each(['en', 'pt'] as const)('offers manual export without network context and explains snapshot limits (%s)', async (language) => {

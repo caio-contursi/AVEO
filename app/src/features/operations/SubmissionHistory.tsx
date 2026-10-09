@@ -8,8 +8,27 @@ import { Badge, Card, EmptyState, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
 import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
+import { receiptCapacity } from './receipt-capacity'
 
 type HistoryExportState = { status: ReceiptCopyResult['status'] | 'manualExport' | 'copying'; text?: string }
+
+export function SubmissionHistoryCapacity({ receipts, error }: {
+  receipts: unknown; error?: SubmissionJournal['error']
+}) {
+  const { t } = useI18n()
+  const capacity = error === 'invalid-records' ? undefined : receiptCapacity(receipts)
+  return <div className="box" role="status" aria-live="polite" aria-atomic="true">
+    <p className="small muted">{t('receipts.capacityNote')}</p>
+    {!capacity
+      ? <p className="warn-text">{t('receipts.capacityUnavailable')}</p>
+      : <>
+        <p className="small">{t('receipts.capacityCounter', { count: capacity.count, bytes: capacity.bytes })}</p>
+        {capacity.full ? <p className="warn-text">{t('receipts.capacityFull')}</p>
+          : capacity.nearFull && <p className="warn-text">{t('receipts.capacityNearFull')}</p>}
+      </>}
+    {error === 'storage-unavailable' && <p className="warn-text">{t('receipts.capacityVolatile')}</p>}
+  </div>
+}
 
 /** Explicit requests only; invalidate replies when their visible snapshot or session changes. */
 // eslint-disable-next-line react-refresh/only-export-components -- Exported for isolated clipboard lifecycle tests.
@@ -289,6 +308,7 @@ function ScopedHistory({ ctx }: { ctx: ApiContext | null }) {
     <Card title={t('receipts.title')}>
       <p className="small muted">{t('receipts.note')}</p>
       <p className="small muted">{t('receipts.scopeNote')}</p>
+      <SubmissionHistoryCapacity receipts={receipts} error={journal.error} />
       <SubmissionHistoryExport receipts={receipts} getSnapshot={journal.getSnapshot} />
       {journal.error && <p className="warn-text" role="alert">{t(`receipts.${journal.error}`)}</p>}
       <p className="small" role="status" aria-live="polite" aria-atomic="true">{removed && t('receipts.removed')}</p>
