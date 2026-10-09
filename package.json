@@ -13,6 +13,7 @@
     "scenario": "pnpm --filter @aveo/app scenario",
     "scan:once": "pnpm --filter @aveo/app scan:once",
     "demo:check": "pnpm --filter @aveo/app demo:check",
+    "demo:report": "pnpm --filter @aveo/app demo:report",
     "dev": "pnpm --filter @aveo/app dev"
   },
   "pnpm": {

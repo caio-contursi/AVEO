@@ -95,16 +95,29 @@ fixtures and run the acceptance checks without opening the Desk:
 ```bash
 pnpm fixtures
 pnpm demo:check
+pnpm demo:report  # reruns the checks and writes a public JSON receipt
 ```
 
 `demo:check` checks shared proof reuse, successful transfers, the Alfa/Beta policy
 differences, issuer and binding authorization, authorized SAS close, rejected
 inbound/outbound transfers with unchanged token balances, grouped incidents, and
-wallet-signed renewal across both assets in one transaction. Expected failures
+wallet-signed renewal across both assets in one transaction. It also removes a
+provider from Alfa without affecting Beta, temporarily deactivates Alfa, and
+waits for an actual short-lived proof to expire against the validator clock.
+Policies and bindings are restored after these checks. Expected failures
 are submitted with preflight disabled only in this local runner, so their
 signatures and hook errors are recorded in the ledger. It prints `PASS`, `FAIL`,
 `NOT_RUN`, and public transaction evidence; any failed expectation returns a
 nonzero exit status. Failed transactions still consume synthetic SOL fees.
+
+`demo:report` writes `app/.dev/acceptance-report.json`, an ignored runtime artifact
+with timestamps, ordered stage results, public signatures, slots and balances.
+Only explicitly allowed evidence fields are saved, never raw process logs,
+RPC URLs or private keys. The receipt maps covered scenarios to T01–T17 and
+marks incomplete matrix cases `NOT_RUN`; a passing run is not a passing full
+security matrix. A failed or interrupted runner cannot produce a passing receipt.
+Each execution replaces the previous receipt. These synthetic localnet receipts
+are demonstration evidence, not independent attestations or devnet explorer links.
 
 The runner changes synthetic localnet state: it closes X's proofs and creates a
 replacement. Regenerate fixtures to restore the original demonstration scenario.
@@ -126,12 +139,22 @@ runner exercises the deployed local programs. Neither alone proves every scenari
 in the T01–T17 matrix or an official MPL-3643 integration.
 
 Local verification on 2026-10-09 used Node 22, Agave 2.3.0 and platform-tools
-v1.53: 23 Rust tests, 98 frontend tests and 4 backend tests passed, as did the
-13-stage acceptance runner, TypeScript checks, ESLint and the SBF/frontend builds.
+v1.53: 23 Rust tests passed with the SBF build in the first readiness round.
+The second round passed 137 app/script tests, 4 backend tests, the 21-stage
+acceptance runner and receipt generation, TypeScript checks, ESLint and the
+frontend build. It did not change the Rust program or repeat its earlier build.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
 T01–T17 security matrix.
+
+Transaction confirmation now honors the selected commitment (the requested
+level of agreement on a transaction), with a single deadline covering status
+requests, log requests and polling. Requests are aborted at the deadline, and
+timeouts return `unknown`, never success or an automatic transaction resend.
+If logs are unavailable for a confirmed failure, the result remains a failure
+without inventing a specific hook error. These RPC failure modes are covered by
+unit tests, not claimed as complete end-to-end T14 coverage.
 
 ### Proposed backlog issues
 

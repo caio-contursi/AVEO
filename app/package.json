@@ -21,7 +21,8 @@
     "fixtures": "tsx scripts/fixtures.ts",
     "scenario": "tsx scripts/scenario.ts",
     "scan:once": "tsx scripts/scan-once.ts",
-    "demo:check": "tsx scripts/demo-check.ts"
+    "demo:check": "tsx scripts/demo-check.ts",
+    "demo:report": "tsx scripts/demo-report.ts"
   },
   "dependencies": {
     "@aveo/backend-aveo": "workspace:*",
