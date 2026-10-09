@@ -240,32 +240,64 @@ export interface Confirmation {
   error?: DiagnosticReason
 }
 
-/** Consulta a assinatura até confirmar ou esgotar o tempo. Resultado desconhecido não autoriza reenvio. */
+/** Poll until the selected commitment or deadline. An unknown result never authorizes resubmission. */
 export async function confirmSignature(ctx: ApiContext, signature: Signature, timeoutMs = 45_000): Promise<Confirmation> {
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  const timedOut = Symbol('confirmation deadline')
+  // Bound every RPC await, including logs, even if the transport never settles.
+  async function withinDeadline<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T | typeof timedOut> {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        request(controller.signal),
+        new Promise<typeof timedOut>((resolve) => {
+          timer = setTimeout(() => {
+            // Settle the timeout first so an abort rejection cannot win the race.
+            resolve(timedOut)
+            controller.abort()
+          }, Math.max(0, deadline - Date.now()))
+        }),
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  while (Date.now() < deadline) {
     let status
     try {
-      const { value } = await ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()
-      status = value[0]
+      const response = await withinDeadline((signal) =>
+        ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send({ abortSignal: signal }),
+      )
+      if (response === timedOut) break
+      status = response.value[0]
     } catch {
       status = undefined
     }
-    if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized' || status.err)) {
-      const logs = await transactionLogs(ctx, signature)
+    const reachedCommitment = status && (
+      status.confirmationStatus === 'finalized' ||
+      (ctx.commitment !== 'finalized' && status.confirmationStatus === 'confirmed') ||
+      (ctx.commitment === 'processed' && status.confirmationStatus === 'processed' && !status.err)
+    )
+    // A processed error can disappear with its fork; require at least confirmed failure evidence.
+    if (status && reachedCommitment) {
+      const logs = await withinDeadline((signal) => transactionLogs(ctx, signature, signal))
+      if (logs === timedOut) break
       if (status.err) return { status: 'failed', slot: Number(status.slot), logs, error: failureReason(status.err, logs, ctx.programId) }
       return { status: 'confirmed', slot: Number(status.slot), logs }
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    const remaining = deadline - Date.now()
+    if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(1200, remaining)))
   }
   return { status: 'unknown', logs: [], error: reason('ConfirmationUnknown', 'confirmation timed out') }
 }
 
-async function transactionLogs(ctx: ApiContext, signature: Signature): Promise<string[]> {
+async function transactionLogs(ctx: ApiContext, signature: Signature, signal?: AbortSignal): Promise<string[]> {
   try {
     const tx = await ctx.rpc
-      .getTransaction(signature, { encoding: 'json', maxSupportedTransactionVersion: 0, commitment: 'confirmed' })
-      .send()
+      .getTransaction(signature, { encoding: 'json', maxSupportedTransactionVersion: 0, commitment: ctx.commitment === 'finalized' ? 'finalized' : 'confirmed' })
+      .send({ abortSignal: signal })
     return [...(tx?.meta?.logMessages ?? [])]
   } catch {
     return []
