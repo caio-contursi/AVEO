@@ -15,6 +15,8 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 describe('public acceptance receipt', () => {
   it.each([
     ['T12', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],
+    ['T13', ['direct-hook-execute-rejected', 'unsigned-policy-update-rejected', 'unsigned-binding-rejected']],
+    ['T16', ['boundary-zero-amount', 'boundary-excessive-amount', 'boundary-max-u64-rejected', 'boundary-exact-balance', 'boundary-same-owner-distinct-accounts', 'boundary-fixtures-restored']],
     ['T14', ['fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident', 'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open', 'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves']],
   ])('requires every stage before passing %s', (id, stages) => {
     const report = builder(stages)
@@ -29,7 +31,8 @@ describe('public acceptance receipt', () => {
   })
   it('retains validated public allowance and fault counters, not transport details', () => {
     const report = builder(['one'])
-    const publicFields = { delegatedAllowanceBefore: '10', delegatedAllowanceAfter: '9', rpcReadCalls: 4, sendCalls: 0, abortedRequests: 1 }
+    const publicFields = { delegatedAllowanceBefore: '10', delegatedAllowanceAfter: '9', rpcReadCalls: 4, sendCalls: 0, abortedRequests: 1,
+      faultTransport: 'http-loopback', validatorError: 'TokenInsufficientFunds', amount: '18446744073709551615' }
     report.acceptLine(`EVIDENCE ${JSON.stringify({ ...publicFields, rpcUrl: 'secret', request: 'secret' })}`)
     report.acceptLine('PASS one')
     expect(report.finish(0, NOW).stages[0]?.evidence).toEqual([publicFields])
@@ -87,6 +90,9 @@ describe('public acceptance receipt', () => {
     { rpcReadCalls: 1.5 },
     { sendCalls: -1 },
     { abortedRequests: Number.MAX_SAFE_INTEGER + 1 },
+    { faultTransport: 'public-rpc' },
+    { amount: '18446744073709551616.5' },
+    { validatorError: 'anything-failed' },
   ])('fails closed on malformed evidence without storing it (%j)', (evidence) => {
     const report = builder(['one'])
     report.acceptLine(`EVIDENCE ${JSON.stringify(evidence)}`)

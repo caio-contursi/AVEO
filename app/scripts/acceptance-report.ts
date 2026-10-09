@@ -31,6 +31,7 @@ const evidenceSchema = z.object({
   accountUnchanged: z.boolean().optional(),
   before: z.array(amount).length(2).optional(),
   after: z.array(amount).length(2).optional(),
+  amount: amount.optional(),
   delegatedAllowanceBefore: amount.optional(),
   delegatedAllowanceAfter: amount.optional(),
   incidentType: z.enum(['PROOF_CLOSED', 'PROOF_EXPIRED', 'PROVIDER_REMOVED', 'POLICY_CHANGED', 'READ_UNVERIFIABLE']).optional(),
@@ -42,6 +43,8 @@ const evidenceSchema = z.object({
   rpcReadCalls: slot.optional(),
   sendCalls: slot.optional(),
   abortedRequests: slot.optional(),
+  faultTransport: z.enum(['sdk-injected', 'http-loopback']).optional(),
+  validatorError: z.enum(['SignatureVerificationFailure', 'TokenInsufficientFunds']).optional(),
 })
 
 export type PublicEvidence = z.infer<typeof evidenceSchema>
@@ -66,10 +69,10 @@ const matrixCases = [
   ['T10', 'Invalid accounts, layouts, schema and signer', []],
   ['T11', 'External transfer with and without extra accounts', ['external-with-extra-accounts', 'external-without-extra-accounts', 'external-expired-proof-rejected']],
   ['T12', 'Delegate transfer uses the token account owner', ['delegate-approved-owner-transfer', 'delegate-expired-owner-rejected', 'delegate-approval-revoked']],
-  ['T13', 'Missing signatures and direct Execute invocation', []],
+  ['T13', 'Missing signatures and direct Execute invocation', ['direct-hook-execute-rejected', 'unsigned-policy-update-rejected', 'unsigned-binding-rejected']],
   ['T14', 'RPC/confirmation timeout and inconsistent reads', ['fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident', 'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open', 'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves']],
   ['T15', 'Repeated scans and persistence after restart', []],
-  ['T16', 'Same owner and boundary transfer amounts', []],
+  ['T16', 'Same owner and boundary transfer amounts', ['boundary-zero-amount', 'boundary-excessive-amount', 'boundary-max-u64-rejected', 'boundary-exact-balance', 'boundary-same-owner-distinct-accounts', 'boundary-fixtures-restored']],
   ['T17', 'Inactive policy, paused schema and expiry boundaries', []],
 ] as const
 
