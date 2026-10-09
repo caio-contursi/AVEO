@@ -74,7 +74,7 @@ export async function runPlan(
     const reason = logs.length > 0 ? failureReason(error, logs, ctx.programId) : { code: 'SimulationFailed' as const, message: error instanceof Error ? error.message : String(error) }
     return { error: withDiagnosticParams(reason, plan) }
   }
-  options.onSent?.(signature)
+  try { options.onSent?.(signature) } catch { /* Callback failures must not interrupt verification of an already sent transaction. */ }
   return { signature, evidence: await recheckSubmission({ ctx, backend, plan, signature, balancesBefore: options.balancesBefore }) }
 }
 

@@ -112,6 +112,20 @@ describe('runPlan and retained recheck', () => {
     expect(onSent).toHaveBeenCalledExactlyOnceWith(signature)
   })
 
+  it.each(['unknown', 'confirmed', 'failed'] as const)('still returns %s evidence when the direct runPlan onSent callback throws', async (status) => {
+    const evidence: DeskEvidence = { status, signature, logs: ['verification logs'], slot: 123 }
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue(evidence) }
+    const onSent = vi.fn(() => { throw new Error('private callback details') })
+
+    const result = await runPlan(ctx, backend, signer, plan, { onSent })
+
+    expect(result).toEqual({ signature, evidence })
+    expect(JSON.stringify(result)).not.toContain('private callback details')
+    expect(onSent).toHaveBeenCalledExactlyOnceWith(signature)
+    expect(backend.verifyOutcome).toHaveBeenCalledExactlyOnceWith({ cluster: ctx.cluster, plan, signature, balancesBefore: undefined })
+    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42)
+  })
+
   it('does not verify a rejected send and allows a deliberate retry after reset', async () => {
     const { execution, backend } = setup()
     vi.mocked(signAndSend).mockRejectedValueOnce(new Error('Wallet rejected'))
