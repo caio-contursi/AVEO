@@ -13,6 +13,22 @@ const publicReceiptSchema = z.object({
   rpcFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 })
 
+const MAX_HISTORY_RECEIPTS = 100
+const MAX_HISTORY_BYTES = 128_000
+
+/** Export one bounded snapshot, never a partial collection of valid-looking records. */
+export function exportPublicReceiptHistory(receipts: unknown): string | undefined {
+  try {
+    if (!Array.isArray(receipts) || receipts.length > MAX_HISTORY_RECEIPTS) return undefined
+    const parsed = z.array(publicReceiptSchema).max(MAX_HISTORY_RECEIPTS).safeParse(receipts)
+    if (!parsed.success || new Set(parsed.data.map((receipt) => receipt.signature)).size !== parsed.data.length) return undefined
+    const text = JSON.stringify({ version: 1, kind: 'aveo-public-submission-history', receipts: parsed.data }, null, 2)
+    return new TextEncoder().encode(text).length <= MAX_HISTORY_BYTES ? text : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Strip unknown fields and reject malformed known fields without exposing input or errors. */
 export function exportPublicReceipt(receipt: unknown): string | undefined {
   try {
@@ -35,6 +51,19 @@ export async function copyPublicReceipt(
 ): Promise<ReceiptCopyResult | undefined> {
   if (!isCurrent()) return undefined
   const text = exportPublicReceipt(receipt)
+  return copyExportedText(text, isCurrent)
+}
+
+/** Snapshot export only; no import, storage mutation, network, or wallet access. */
+export async function copyPublicReceiptHistory(
+  receipts: unknown, isCurrent: () => boolean = () => true,
+): Promise<ReceiptCopyResult | undefined> {
+  if (!isCurrent()) return undefined
+  return copyExportedText(exportPublicReceiptHistory(receipts), isCurrent)
+}
+
+async function copyExportedText(text: string | undefined, isCurrent: () => boolean): Promise<ReceiptCopyResult | undefined> {
+  if (!isCurrent()) return undefined
   if (text === undefined) return { status: 'invalidExport' }
   let result: ReceiptCopyResult
   try {
