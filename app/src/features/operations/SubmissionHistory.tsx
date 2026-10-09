@@ -7,7 +7,7 @@ import { Address } from '../../components/Address'
 import { Badge, Card, EmptyState, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
-import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
+import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, inspectPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
 import { receiptCapacity } from './receipt-capacity'
 import { MAX_RECEIPTS, MAX_RECEIPT_BYTES } from './receipt-limits'
 
@@ -80,11 +80,22 @@ export function SubmissionHistoryExport({ receipts, getSnapshot }: {
   }, [exporter, receipts])
   // Check the store directly as well: a publish can precede React's next commit.
   const isCurrent = () => active.current && getSnapshot() === receipts
+  const preview = inspectPublicReceiptHistory(receipts)
+  const exportable = receipts.length > 0 && preview.status === 'ready'
   return <div className="box">
     <p className="small muted">{t('receipts.historyExportNote')}</p>
-    <button type="button" disabled={receipts.length === 0 || state?.status === 'copying'}
+    <div role="status" aria-live="polite" aria-atomic="true">
+      <p className="small muted">{t('receipts.historyPreviewNote')}</p>
+      {preview.status === 'invalid'
+        ? <p className="small warn-text">{t('receipts.historyPreviewInvalid')}</p>
+        : <>
+          <p className="small">{t('receipts.historyPreviewCounter', { bytes: preview.bytes, maxBytes: preview.maxBytes })}</p>
+          {preview.status === 'tooLarge' && <p className="small warn-text">{t('receipts.historyPreviewTooLarge')}</p>}
+        </>}
+    </div>
+    <button type="button" disabled={!exportable || state?.status === 'copying'}
       onClick={() => { void exporter.copy(receipts, isCurrent) }}>{t('receipts.copyHistory')}</button>{' '}
-    <button type="button" disabled={receipts.length === 0}
+    <button type="button" disabled={!exportable}
       onClick={() => { exporter.manual(receipts, isCurrent) }}>{t('receipts.exportHistory')}</button>
     <p className="small" role="status" aria-live="polite" aria-atomic="true">
       {state && t(state.status === 'copying' ? 'receipts.historyCopying'
