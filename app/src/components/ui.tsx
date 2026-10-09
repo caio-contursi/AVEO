@@ -1,5 +1,5 @@
 import type { Verdict } from '@aveo/contracts'
-import type { ReactNode } from 'react'
+import { cloneElement, useId, type AriaAttributes, type ReactElement, type ReactNode } from 'react'
 import { useI18n } from '../i18n/context'
 
 export function Card(props: { title?: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
@@ -63,17 +63,36 @@ export function EmptyState({ children }: { children?: ReactNode }) {
   return <p className="state empty">{children ?? t('state.empty')}</p>
 }
 
-export function Field(props: { label: string; error?: string; hint?: ReactNode; children: ReactNode }) {
+type FieldControl = ReactElement<Pick<AriaAttributes, 'aria-describedby' | 'aria-invalid'> & { id?: string }>
+
+/** Associate supporting text with the actual control, not only its visual label. */
+export function Field(props: { label: string; error?: string; hint?: ReactNode; children: FieldControl }) {
+  const generatedId = useId()
+  const id = props.children.props.id ?? generatedId
+  const noteId = `${generatedId}-note`
+  const describedBy = [props.children.props['aria-describedby'], props.error || props.hint ? noteId : undefined].filter(Boolean).join(' ') || undefined
   return (
-    <label className={`field ${props.error ? 'has-error' : ''}`}>
+    <label htmlFor={id} className={`field ${props.error ? 'has-error' : ''}`}>
       <span className="field-label">{props.label}</span>
-      {props.children}
-      {props.hint && !props.error && <span className="field-hint">{props.hint}</span>}
+      {cloneElement(props.children, { id, 'aria-describedby': describedBy, 'aria-invalid': props.error ? true : props.children.props['aria-invalid'] })}
+      {props.hint && !props.error && <span id={noteId} className="field-hint">{props.hint}</span>}
       {props.error && (
-        <span className="field-error" role="alert">
+        <span id={noteId} className="field-error" role="alert">
           {props.error}
         </span>
       )}
     </label>
+  )
+}
+
+/** A named checkbox group must not nest labels inside another label. */
+export function FieldGroup(props: { label: string; error?: string; children: ReactNode }) {
+  const noteId = useId()
+  return (
+    <fieldset className={`field ${props.error ? 'has-error' : ''}`} aria-describedby={props.error ? noteId : undefined}>
+      <legend className="field-label">{props.label}</legend>
+      {props.children}
+      {props.error && <span id={noteId} className="field-error" role="alert">{props.error}</span>}
+    </fieldset>
   )
 }

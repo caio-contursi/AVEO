@@ -5,7 +5,7 @@ import type { AssetState } from '../../api/inventory'
 import { useReadyDesk } from '../../app/desk'
 import { Address } from '../../components/Address'
 import { ReasonList } from '../../components/reasons'
-import { Badge, Field, Spinner } from '../../components/ui'
+import { Badge, FieldGroup, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { useWallet } from '../../wallet/context'
 import { EvidenceView } from '../operations/EvidenceView'
@@ -81,7 +81,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
     <div className="box">
       <strong>{t('policy.title', { asset: state.asset.label })}</strong>
       <p className="small warn-text">{t('policy.warning')}</p>
-      <Field label={t('policy.verifiers')} error={error}>
+      <FieldGroup label={t('policy.verifiers')} error={error}>
         <div className="checks">
           {deployment.verifiers.map((v) => (
             <label key={v.credential}>
@@ -90,7 +90,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
             </label>
           ))}
         </div>
-      </Field>
+      </FieldGroup>
       <div className="checks" style={{ marginTop: 8 }}>
         <label>
           <input type="checkbox" checked={form.requireKyc} onChange={(e) => { const checked = e.target.checked; updateForm((f) => ({ ...f, requireKyc: checked })) }} />
