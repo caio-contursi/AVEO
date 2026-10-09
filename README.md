@@ -308,10 +308,44 @@ Cross-consumer tests preserve no-eviction behavior, exact pretty-export envelope
 boundaries and raw UTF-8 storage checks before unknown fields are stripped.
 This round changes no dependencies, acceptance scripts or on-chain interfaces;
 it does not rerun the local-validator acceptance, Rust build or browser tests.
+The eleventh round passed 810 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint and the frontend build. It protects read-only plan preparation for transfer, policy
+editing and proof binding. A common lifecycle discards stale replies after
+form/context changes or unmount, blocks duplicate preparation synchronously,
+and requires a current reviewed plan before requesting signature.
+Preparation errors expose a static translated message rather than raw provider
+details. These tests use controlled promises, component callbacks and static
+markup, not interactive browser coverage. No dependencies, acceptance scripts,
+Rust code or on-chain interfaces changed; local-validator acceptance and the
+Rust build were not repeated.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
 T01–T17 security matrix.
+
+### Read-only plan preparation
+
+`app/src/features/operations/preparation.ts` and `usePlanPreparation.ts` separate
+building/simulating an intent from the existing signature/submission lifecycle.
+Transfer, policy editing and proof binding share this control. Starting another
+preparation clears the old review; simultaneous clicks do not start duplicate
+requests. Changes to the form, connected wallet, network, program, commitment or
+deployment invalidate pending replies and prepared plans. Policy editing also
+tracks policy version; binding tracks the selected proof, subject, mint and
+observation slot. A changed scope hides the old plan during render, before the
+layout effect updates the lifecycle. Closing a screen invalidates its replies.
+
+The operator must explicitly prepare again and review the current plan before
+requesting a signature. Failed preparation produces a static English/Portuguese
+alert without retaining provider errors. It never signs, sends or retries a
+transaction. Changing a form still respects the execution reset guard: unresolved
+submissions are not discarded. Their evidence and same-signature recheck remain
+managed by the separate existing execution lifecycle.
+
+Invalidating preparation does not abort a read/simulation already issued to the
+RPC, make an earlier observation current, or guarantee a future transfer.
+On-chain checks remain authoritative. Grouped incident preparation has not yet
+been migrated to this control, and actual browser lifecycle tests remain pending.
 
 Transaction confirmation now honors the selected commitment (the requested
 level of agreement on a transaction), with a single deadline covering status
@@ -441,6 +475,10 @@ an independent option. Export does not free space and nothing is auto-evicted.
 
 ### Proposed backlog issues
 
+- Apply the same scoped preparation lifecycle to grouped incident renewal,
+  retaining incident evidence and never patching an obsolete prepared action.
+- Thread cancellation through read-only planning so obsolete preparation can
+  stop pending RPC work without altering submission or confirmation semantics.
 - Extract the network adapter and incident model into shared packages so the
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
