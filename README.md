@@ -318,6 +318,14 @@ details. These tests use controlled promises, component callbacks and static
 markup, not interactive browser coverage. No dependencies, acceptance scripts,
 Rust code or on-chain interfaces changed; local-validator acceptance and the
 Rust build were not repeated.
+The twelfth round passed 869 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint and the frontend build. It adds scoped grouped incident preparation and verification,
+immediate provisional signature evidence, synchronous sign/verify guards and
+interruption of unsent groups after context changes or unknown outcomes.
+Controlled callback tests cover stale preparations, re-opening after a returned
+signature, listener failures and retained resolution. These are not interactive
+browser or cross-tab tests. No dependencies, Rust code, acceptance scripts or
+on-chain interfaces changed; the local validator and Rust build were not rerun.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -344,8 +352,43 @@ managed by the separate existing execution lifecycle.
 
 Invalidating preparation does not abort a read/simulation already issued to the
 RPC, make an earlier observation current, or guarantee a future transfer.
-On-chain checks remain authoritative. Grouped incident preparation has not yet
-been migrated to this control, and actual browser lifecycle tests remain pending.
+On-chain checks remain authoritative. Grouped incident preparation and manual
+eligibility verification also use scoped lifecycles; actual browser lifecycle
+tests remain pending.
+
+### Grouped incident renewal safety
+
+`app/src/features/incidents/renewal.ts` groups candidates by proof, preserving
+order and deduplicating repeated mints. Conflicting proof choices for one mint
+reject the preparation rather than producing overlapping actions. The card
+tracks context, wallet, incident identity/affected assets, candidate proofs and
+policy versions. A late reply cannot mark an obsolete incident prepared.
+Changing `open` to `action-prepared` does not invalidate its own current review.
+Sign/verify have a synchronous, card-local lock in addition to disabled buttons.
+
+Each returned signature is immediately recorded as provisional `unknown`
+evidence in the captured incident store and separately captured by the public
+receipt journal, before confirmation completes. Later same-signature evidence
+replaces that provisional entry without duplicating the signed event; unrelated
+evidence remains. Late submission outcomes never demote a resolved incident.
+An exception in receipt recording cannot interrupt verification of an already
+submitted transaction. Store-listener errors do not leave the card lock stuck.
+
+Before each group, the card checks that the reviewed batch is still current.
+Navigation/context changes stop groups not yet submitted; they cannot cancel
+an existing wallet request or transaction. Unknown verification also stops the
+remaining groups. Evidence for already submitted groups is retained in their
+original store even after leaving the card. Pending confirmation or any current
+unknown evidence blocks another renewal; manual eligibility verification remains
+available and still requires complete, fresh eligible readback to resolve.
+
+This is deliberately conservative: querying a receipt does not update the
+incident's confirmation evidence. An unknown submission that remains ineligible
+therefore stays blocked from another renewal. A dedicated same-signature incident
+recheck is still proposed. The signature-based guard begins only after a real
+signature returns, not while the wallet prompt is pending. It is not a global or
+cross-tab signing lock, and incident storage still has its existing best-effort
+browser persistence behavior. Invalidating a read does not abort its RPC request.
 
 Transaction confirmation now honors the selected commitment (the requested
 level of agreement on a transaction), with a single deadline covering status
@@ -475,8 +518,10 @@ an independent option. Export does not free space and nothing is auto-evicted.
 
 ### Proposed backlog issues
 
-- Apply the same scoped preparation lifecycle to grouped incident renewal,
-  retaining incident evidence and never patching an obsolete prepared action.
+- Add incident-level same-signature confirmation recheck so terminal evidence
+  can replace an unknown submission without reconstructing or resending it.
+- Coordinate pending incident signatures across card remounts and cooperating
+  tabs, including the wallet-prompt interval, without treating local metadata as authorization.
 - Thread cancellation through read-only planning so obsolete preparation can
   stop pending RPC work without altering submission or confirmation semantics.
 - Extract the network adapter and incident model into shared packages so the
