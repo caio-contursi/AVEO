@@ -122,6 +122,54 @@ or branch-protection rule. A CI runner needs an approved setup, Node/pnpm and a
 frozen-lockfile installation first. They establish neither actual browser
 interaction, devnet deployment, live acceptance nor MPL-3643 certification.
 
+### Guided Desk experience
+
+The Desk keeps a single operator story: inspect eligibility, prepare a read-only
+simulation, review its decision, explicitly sign, then query the original
+submission. `app/src/app/Layout.tsx` gives each of the five routes a heading and
+next-step context, while keeping wallet, selected cluster and the synthetic-demo
+warning visible. The network pill distinguishes a pending read or failed refresh
+from an observed slot; RPC availability is never a compliance verdict. The skip
+control focuses content without changing the hash router's destination. The
+wallet disclosure keeps copy controls outside selection buttons and preserves
+explicit connection and Escape focus-return behavior.
+
+`app/src/features/operations/operation-flow.ts` derives the transfer's four
+visible stages from actual preparation/execution state. There are no elapsed-time
+percentages or simulated progress. The UI records the exact prepared-plan
+reference at an explicit signing action, so a retained signature cannot borrow
+completed steps from a new form. Pending wallet actions, signature checks and
+unresolved submissions lock intent controls instead of accepting apparent edits
+that the existing execution guard would reject. A confirmed RPC result still
+does not assert that either party is eligible. Unknown and mismatched-context
+results never complete the verification stage; the same-signature recheck stays
+read-only.
+
+Eligibility is the primary surface in `AssetsPage.tsx`; policy/proof controls are
+available in expandable details. Failed/in-flight matrix reads do not display
+cached eligibility as a current green decision. Diagnostics expand for blocked,
+failed or unknown transfer outcomes, and decision reasons remain outside closed
+technical output. `EvidenceView.tsx` keeps confirmation separate from readback;
+retained readback in another context is neutral and labels its original verdict.
+Blocked plans disable signing even if an inconsistent simulation says it passed.
+An unscanned incident list explains that empty is not equivalent to verified.
+
+Receipts remain visible before grouped backup tools. Their context and bulk
+backup are expandable; storage warnings, unknown status and recovery actions
+remain primary. Network observations precede technical configuration. The
+configuration displays only HTTP(S) RPC origin, omitting path, credentials,
+query and fragment. This display redaction is not a security boundary for
+client-side environment values or a guarantee about provider error messages.
+
+`app/src/styles.css` supplies shared light/dark surfaces, typography, shrinking
+grid tracks, visible focus, touch-sized primary controls and reduced-motion
+rules. Text accompanies every workflow status, so color alone is not required
+to understand it. Unit/static-render and controlled-callback tests cover these
+contracts, not pixel appearance, measured mobile overflow, screen-reader output,
+actual wallet popups or a complete browser walkthrough. This redesign needs
+Caio's Desk review and native-browser acceptance before claiming production UX
+or a judging-ready live demonstration.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -393,6 +441,19 @@ tests and the frontend build passed. `pnpm test:receipts` separately passed
 configuration and Linux fail-fast execution at every stage. No dependencies,
 hosted CI workflow, Rust code or on-chain interfaces changed. Browser/devnet
 acceptance, the validator and the Rust build were not rerun.
+The seventeenth round redesigned the five-route Desk hierarchy and added
+state-derived transfer progress, explicit decision/confirmation separation,
+neutral stale-context results and valid wallet disclosure controls. The final
+`pnpm verify` passed workspace/frontend-test TypeScript, ESLint, 1,309 app/script
+tests across 51 files, 4 backend tests and the frontend production build.
+`pnpm test:receipts` separately passed 403 tests across 12 files. Review caught
+and fixed cached green decisions after read errors, unknown diagnoses described
+as successful, hidden distinct blocking reasons, retained eligible readback in
+another context, a hash-router skip-link conflict and nested wallet buttons.
+These checks use unit tests, static rendering and controlled event callbacks;
+native-browser visual/mobile/keyboard acceptance and real wallet popups remain
+pending. No dependencies, Rust code or on-chain/backend interfaces changed;
+the validator, Rust build and live devnet acceptance were not rerun.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -656,6 +717,11 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
+- Run a bilingual, keyboard-first browser walkthrough of all five routes at
+  narrow/mobile and desktop widths in both themes, including interrupted reads,
+  wallet rejection and retained-signature recovery; capture screenshots as review evidence.
+- Observe a first-time operator completing inspect → simulate → verify and use
+  measured confusion points to refine hierarchy without inventing progress or hiding blockers.
 - Inspect confirmed transaction instructions and binding accounts before
   attributing a recorded signature to a particular incident renewal.
 - Extract the incident action lifecycle into a focused hook so the card remains
