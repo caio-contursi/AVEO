@@ -4,7 +4,7 @@ import type { Incident, IncidentType } from '@aveo/contracts'
 import type { DeskEvidence } from '../../api/backend'
 import type { DeskSnapshot, DiagnosticReason, ReasonCode } from '../../api/diagnostics'
 
-export type EventKind = 'detected' | 'prepared' | 'signed' | 'sendFailed' | 'resolved' | 'stillBlocked' | 'unknown'
+export type EventKind = 'detected' | 'prepared' | 'signed' | 'sendFailed' | 'resolved' | 'stillBlocked' | 'unknown' | 'rechecked'
 
 export interface IncidentEvent {
   at: string
