@@ -66,6 +66,7 @@ pnpm install
 pnpm solana:build
 pnpm solana:validator
 pnpm fixtures
+pnpm demo:health  # read-only readiness before opening the Desk
 pnpm dev
 ```
 
@@ -188,7 +189,24 @@ workflow with zero sends. These are controlled local transport failures, not
 public-RPC load testing, browser-wallet testing or evidence of devnet readiness.
 The three independent reports are not merged into a full security-matrix claim.
 
-The runner changes synthetic localnet state: it closes X's proofs and creates a
+### Read-only demonstration readiness
+
+`pnpm demo:health` checks the current synthetic localnet state without reading
+wallet keys, simulating, signing or sending a transaction. Six stages require
+the supported executable programs; current eligible treasury/X bindings in
+Alfa and Beta; at least two minutes of proof validity against the validator
+Clock; one shared proof per subject across both assets; positive initialized
+Token-2022 accounts with correct owners/mints; and no leftover delegate approval.
+Run it after fixtures, and again after acceptance to check the restored state.
+
+The ignored `app/.dev/health-report.json` contains allowlisted public observations.
+Unknown, stale, blocked or incomplete reads produce a failed report and nonzero
+exit status, never a readiness success. It is a point-in-time observation, not a
+promise that a later transfer will succeed, an automatic repair or a security
+matrix approval. All T01–T17 entries stay `NOT_RUN` in this separate health report.
+
+The acceptance runner (`demo:check`/`demo:report`) changes synthetic localnet state:
+it closes X's proofs and creates a
 replacement. Regenerate fixtures to restore the original demonstration scenario.
 It requires loopback RPC/WebSocket endpoints and a localnet manifest, and does
 not deploy programs or authorize use with real assets. A loopback URL alone does
@@ -231,6 +249,15 @@ passed all 36 stages, adding T13 authority and direct-hook checks and T16 bounda
 and same-owner checks. Both the SDK and actual loopback HTTP recovery workflows
 passed seven stages independently, with zero sends. No Rust program or dependency
 was changed in this round; the earlier Rust build was not repeated.
+The seventh round passed 493 app/script tests and 4 backend tests, production/test
+TypeScript checks, ESLint, frontend build and runner self-tests. It adds coordinated
+receipt retention/removal and read-only readiness checks. Local acceptance still
+passed all 36 stages; both recovery workflows passed seven stages independently.
+Readiness passed six stages before
+and after acceptance. Browser coordination is tested using injected locks/events,
+not claimed as interactive multi-tab browser verification.
+No dependencies or Rust program were changed; the earlier Rust build was not
+repeated in this round.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -295,12 +322,39 @@ If clipboard access is unavailable or denied, a read-only text area exposes the
 same validated JSON for manual copy. Exported metadata remains untrusted; there
 is no import, transaction reconstruction or authorization from this JSON.
 
-The journal is bounded to 100 receipts and never silently evicts one. Storage
-failure produces a warning and falls back to session memory; new receipts may
+The journal is bounded to 100 receipts and 128 KB, and never silently evicts one.
+Storage failure produces a warning and falls back to session memory; new receipts may
 not survive reload. Full storage also warns rather than overwriting earlier
 receipts. Clearing browser data removes this history. Signing failures before a
-signature is returned cannot be captured. Cross-tab synchronization and interactive
-browser tests are not implemented; Node-process recovery is not a browser test.
+signature is returned cannot be captured. Interactive browser tests remain
+unimplemented; Node-process recovery is not a browser test.
+
+Browser writes use native Web Locks, a browser mechanism that lets cooperating
+tabs take turns updating the same storage record. Each capture/removal rereads
+and validates current storage inside that lock, preserving other tabs' receipts
+instead of writing a stale snapshot. Storage events are refresh hints only;
+their payload is not trusted. Session-only captures are kept separately so a
+refresh does not lose them. An unrelated capture/removal never automatically
+flushes other session-only receipts into storage: another tab may have saved and
+removed one before this tab received a refresh hint. Pending receipts remain in
+memory with a warning and should be exported before leaving. An explicit
+same-signature capture can retry saving its public metadata, never resend a
+transaction; there is no bulk storage-retry action in the UI.
+Malformed storage or conflicting contexts are never silently overwritten.
+
+Without Web Locks or with denied lock/storage access, new captures remain in
+session memory with a warning. Previously saved receipts can still be read;
+removal of persisted records is rejected when safe coordination is unavailable.
+This does not synchronize different browsers/devices or protect against other
+applications that modify the storage key without using the same lock.
+
+**Remove local receipt** requires an explicit warning followed by Confirm/Cancel.
+Copy/export first if you want an independent record: removing it discards this
+browser's recovery metadata, not the blockchain transaction. No confirmation
+query, wallet action or transaction is triggered by removal, and unknown receipts
+are never deleted automatically. Failed removal keeps the receipt available;
+successful removal can free capacity. Session-only receipts can be explicitly
+removed from session memory. There is no automatic archive or bulk deletion.
 
 ### Proposed backlog issues
 
@@ -308,12 +362,13 @@ browser tests are not implemented; Node-process recovery is not a browser test.
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
-- Add explicit archive/retention and cross-tab coordination so receipt growth
-  and simultaneous browser windows cannot obscure pending-operation history.
+- Offer a bounded public history export before manual retention decisions, so
+  operators can keep an independent record without storing plans or credentials.
 - Add interactive browser coverage for denied clipboard permission, manual-copy
   focus and network changes while confirmation is pending, without new runtime dependencies.
-- Add an explicit post-suite fixture-health check across both assets to make
-  repeated demonstrations and synthetic recovery prerequisites easy to verify.
+- Add a real multi-tab browser test for simultaneous capture/removal, coalesced
+  storage hints and denied Web Locks, proving the user-visible fallback as well
+  as the storage model.
 - Document the security matrix's error vocabulary next to the deployed program
   names so judging evidence cannot confuse transfer-context and signature failures.
 
