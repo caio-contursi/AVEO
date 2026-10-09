@@ -1,11 +1,11 @@
 import { getAddressDecoder, getBase58Decoder } from '@solana/kit'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiContext } from '../../api/context'
 import { I18nContext } from '../../i18n/context'
 import { messages, type Language } from '../../i18n/messages'
-import { confirmReceipt, createReceiptRemoval, SubmissionHistory, SubmissionReceiptView } from './SubmissionHistory'
+import { confirmReceipt, createHistoryExport, createReceiptRemoval, SubmissionHistory, SubmissionHistoryExport, SubmissionReceiptView } from './SubmissionHistory'
 import { SubmissionJournal, type SubmissionReceipt } from './submission-journal'
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +47,132 @@ beforeEach(() => {
   mocks.ctx = ctx
   mocks.journal = new SubmissionJournal({ getItem: () => null, setItem: () => {} })
   mocks.confirmSignature.mockResolvedValue({ status: 'confirmed', slot: 42, logs: [] })
+})
+
+afterEach(() => { vi.unstubAllGlobals() })
+
+describe('explicit visible history export', () => {
+  it.each(['en', 'pt'] as const)('offers manual export without network context and explains snapshot limits (%s)', async (language) => {
+    await receipt()
+    mocks.ctx = null
+    const writeText = vi.fn()
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const html = render(createElement(SubmissionHistory), language)
+    expect(html).toContain(messages[language]['receipts.historyExportNote'])
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.copyHistory']}</button>`)
+    expect(html).toContain(`<button type="button">${messages[language]['receipts.exportHistory']}</button>`)
+    expect(html).not.toContain('<textarea')
+    expect(html).not.toContain('aveo-public-submission-history')
+    expect(writeText).not.toHaveBeenCalled()
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+    expect(mocks.explorerUrl).not.toHaveBeenCalled()
+  })
+
+  it.each(['en', 'pt'] as const)('disables both history export actions for an empty snapshot (%s)', (language) => {
+    const html = render(createElement(SubmissionHistoryExport, { receipts: [], getSnapshot: () => [] }), language)
+    expect(html).toContain(`<button type="button" disabled="">${messages[language]['receipts.copyHistory']}</button>`)
+    expect(html).toContain(`<button type="button" disabled="">${messages[language]['receipts.exportHistory']}</button>`)
+  })
+
+  it('does nothing until requested and ignores empty or inactive requests', async () => {
+    const changed = vi.fn(), writeText = vi.fn()
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const exporter = createHistoryExport(changed), entry = await receipt()
+    expect(changed).not.toHaveBeenCalled()
+    await exporter.copy([], () => true)
+    exporter.manual([], () => true)
+    await exporter.copy([entry], () => false)
+    exporter.manual([entry], () => false)
+    expect(changed).not.toHaveBeenCalled()
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('returns sanitized manual JSON without clipboard, wallet or RPC access', async () => {
+    const entry = await receipt(), changed = vi.fn(), writeText = vi.fn()
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    createHistoryExport(changed).manual([{ ...entry, rpcUrl: ctx.rpcUrl, confirmation: 'confirmed', keys: ['private'] } as SubmissionReceipt], () => true)
+    const state = changed.mock.calls[0]![0]
+    expect(state.status).toBe('manualExport')
+    expect(JSON.parse(state.text)).toEqual({ version: 1, kind: 'aveo-public-submission-history', receipts: [entry] })
+    expect(state.text).not.toContain('private')
+    expect(state.text).not.toContain('confirmation')
+    expect(state.text).not.toContain('rpcUrl')
+    expect(writeText).not.toHaveBeenCalled()
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it('offers manual JSON after denied clipboard access', async () => {
+    const entry = await receipt(), changed = vi.fn()
+    const writeText = vi.fn(async (_text: string) => { throw new Error('private clipboard details') })
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    await createHistoryExport(changed).copy([entry], () => true)
+    expect(changed.mock.calls[0]).toEqual([{ status: 'copying' }])
+    const state = changed.mock.calls[1]![0]
+    expect(state.status).toBe('copyFailed')
+    expect(state.text).toBe(writeText.mock.calls[0]![0])
+    expect(JSON.parse(state.text).receipts).toEqual([entry])
+    expect(JSON.stringify(changed.mock.calls)).not.toContain('private clipboard details')
+  })
+
+  it('rejects the entire invalid history and leaves the clipboard untouched', async () => {
+    const entry = await receipt(), changed = vi.fn(), writeText = vi.fn()
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const exporter = createHistoryExport(changed)
+    exporter.manual([entry, entry], () => true)
+    expect(changed).toHaveBeenLastCalledWith({ status: 'invalidExport' })
+    await exporter.copy([entry, { ...entry, signature: 'invalid' }], () => true)
+    expect(changed).toHaveBeenLastCalledWith({ status: 'invalidExport' })
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it.each(['copied', 'copyFailed'] as const)('discards late %s on navigation, context or snapshot change', async (status) => {
+    const entry = await receipt()
+    for (const reason of ['navigation', 'context', 'snapshot'] as const) {
+      const changed = vi.fn()
+      let resolve!: () => void, reject!: (error: Error) => void
+      const writeText = vi.fn(() => new Promise<void>((done, fail) => { resolve = done; reject = fail }))
+      vi.stubGlobal('navigator', { clipboard: { writeText } })
+      let current = true
+      const exporter = createHistoryExport(changed)
+      const pending = exporter.copy([entry], () => current)
+      if (reason === 'snapshot') current = false
+      else exporter.invalidate()
+      if (status === 'copied') resolve()
+      else reject(new Error('private details'))
+      await pending
+      expect(changed.mock.calls).toEqual([[{ status: 'copying' }]])
+    }
+  })
+
+  it('guards double clicks and allows manual export to supersede a pending copy', async () => {
+    const entry = { ...await receipt() }, changed = vi.fn()
+    let resolve!: () => void
+    const writeText = vi.fn((_text: string) => new Promise<void>((done) => { resolve = done }))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const exporter = createHistoryExport(changed), originalTime = entry.submittedAt
+    const pending = exporter.copy([entry], () => true)
+    await exporter.copy([entry], () => true)
+    expect(writeText).toHaveBeenCalledTimes(1)
+    entry.submittedAt = '2026-10-10T12:00:00.000Z'
+    expect(JSON.parse(writeText.mock.calls[0]![0]).receipts[0].submittedAt).toBe(originalTime)
+    exporter.manual([entry], () => true)
+    expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'manualExport' }))
+    resolve()
+    await pending
+    expect(changed).toHaveBeenCalledTimes(2)
+    expect(mocks.confirmSignature).not.toHaveBeenCalled()
+  })
+
+  it('reports successful copying only for the current snapshot and supports a subsequent request', async () => {
+    const entry = await receipt(), changed = vi.fn(), writeText = vi.fn(async (_text: string) => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const exporter = createHistoryExport(changed)
+    await exporter.copy([entry], () => true)
+    expect(changed.mock.calls).toEqual([[{ status: 'copying' }], [{ status: 'copied' }]])
+    await exporter.copy([entry], () => true)
+    expect(writeText).toHaveBeenCalledTimes(2)
+    expect(changed).toHaveBeenLastCalledWith({ status: 'copied' })
+  })
 })
 
 describe('read-only receipt confirmation', () => {

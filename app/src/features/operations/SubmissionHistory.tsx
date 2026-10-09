@@ -7,7 +7,72 @@ import { Address } from '../../components/Address'
 import { Badge, Card, EmptyState, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
-import { copyPublicReceipt, exportPublicReceipt, type ReceiptCopyResult } from './receipt-export'
+import { copyPublicReceipt, copyPublicReceiptHistory, exportPublicReceipt, exportPublicReceiptHistory, type ReceiptCopyResult } from './receipt-export'
+
+type HistoryExportState = { status: ReceiptCopyResult['status'] | 'manualExport' | 'copying'; text?: string }
+
+/** Explicit requests only; invalidate replies when their visible snapshot or session changes. */
+// eslint-disable-next-line react-refresh/only-export-components -- Exported for isolated clipboard lifecycle tests.
+export function createHistoryExport(onChange: (state: HistoryExportState) => void) {
+  let generation = 0
+  let copying = false
+  function invalidate() { generation += 1; copying = false }
+  return {
+    invalidate,
+    async copy(receipts: readonly SubmissionReceipt[], isCurrent: () => boolean) {
+      if (copying || receipts.length === 0 || !isCurrent()) return
+      copying = true
+      const started = ++generation
+      const current = () => generation === started && isCurrent()
+      const snapshot = receipts.map((receipt) => ({ ...receipt }))
+      onChange({ status: 'copying' })
+      try {
+        const result = await copyPublicReceiptHistory(snapshot, current)
+        if (result && current()) onChange(result)
+      } finally {
+        if (generation === started) copying = false
+      }
+    },
+    manual(receipts: readonly SubmissionReceipt[], isCurrent: () => boolean) {
+      if (receipts.length === 0 || !isCurrent()) return
+      // Manual export stays available and supersedes an outstanding clipboard request.
+      invalidate()
+      const text = exportPublicReceiptHistory(receipts)
+      onChange(text === undefined ? { status: 'invalidExport' } : { status: 'manualExport', text })
+    },
+  }
+}
+
+export function SubmissionHistoryExport({ receipts, getSnapshot }: {
+  receipts: readonly SubmissionReceipt[]; getSnapshot: () => readonly SubmissionReceipt[]
+}) {
+  const { t } = useI18n()
+  const [state, setState] = useState<HistoryExportState>()
+  const [exporter] = useState(() => createHistoryExport(setState))
+  const active = useRef(false)
+  useLayoutEffect(() => {
+    active.current = true
+    exporter.invalidate()
+    setState(undefined)
+    return () => { active.current = false; exporter.invalidate() }
+  }, [exporter, receipts])
+  // Check the store directly as well: a publish can precede React's next commit.
+  const isCurrent = () => active.current && getSnapshot() === receipts
+  return <div className="box">
+    <p className="small muted">{t('receipts.historyExportNote')}</p>
+    <button type="button" disabled={receipts.length === 0 || state?.status === 'copying'}
+      onClick={() => { void exporter.copy(receipts, isCurrent) }}>{t('receipts.copyHistory')}</button>{' '}
+    <button type="button" disabled={receipts.length === 0}
+      onClick={() => { exporter.manual(receipts, isCurrent) }}>{t('receipts.exportHistory')}</button>
+    <p className="small" role="status" aria-live="polite" aria-atomic="true">
+      {state && t(state.status === 'copying' ? 'receipts.historyCopying'
+        : state.status === 'copied' ? 'receipts.historyCopied'
+          : state.status === 'invalidExport' ? 'receipts.historyInvalidExport' : `receipts.${state.status}`)}
+    </p>
+    {state?.text !== undefined && <textarea aria-label={t('receipts.historyManualText')} readOnly rows={16}
+      value={state.text} onFocus={(event) => { event.currentTarget.select() }} />}
+  </div>
+}
 
 type ReceiptResult = { matches: boolean; confirmation?: Confirmation }
 type RemovalState = 'idle' | 'confirming' | 'removing' | 'removeFailed' | 'removed'
@@ -162,7 +227,7 @@ function ReceiptView({ receipt, result, busy, disabled, onRecheck, onRemove, mat
   )
 }
 
-function ScopedHistory({ ctx }: { ctx: ApiContext }) {
+function ScopedHistory({ ctx }: { ctx: ApiContext | null }) {
   const { t } = useI18n()
   const journal = getSubmissionJournal()
   const receipts = useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot)
@@ -184,7 +249,7 @@ function ScopedHistory({ ctx }: { ctx: ApiContext }) {
     let current = true
     setMatching(new Set(receipts.map((receipt) => receipt.signature)))
     void Promise.all(receipts.map(async (receipt) => {
-      const matches = await journal.matches(ctx, receipt).catch(() => false)
+      const matches = ctx ? await journal.matches(ctx, receipt).catch(() => false) : false
       if (current) setResults((previous) => ({
         ...previous, [receipt.signature]: { matches, confirmation: matches ? previous[receipt.signature]?.confirmation : undefined },
       }))
@@ -198,7 +263,7 @@ function ScopedHistory({ ctx }: { ctx: ApiContext }) {
   }, [ctx, journal, receipts])
 
   async function recheck(receipt: SubmissionReceipt) {
-    if (busy.current || !active.current) return
+    if (!ctx || busy.current || !active.current) return
     busy.current = true
     setChecking(receipt.signature)
     const started = generation.current
@@ -224,6 +289,7 @@ function ScopedHistory({ ctx }: { ctx: ApiContext }) {
     <Card title={t('receipts.title')}>
       <p className="small muted">{t('receipts.note')}</p>
       <p className="small muted">{t('receipts.scopeNote')}</p>
+      <SubmissionHistoryExport receipts={receipts} getSnapshot={journal.getSnapshot} />
       {journal.error && <p className="warn-text" role="alert">{t(`receipts.${journal.error}`)}</p>}
       <p className="small" role="status" aria-live="polite" aria-atomic="true">{removed && t('receipts.removed')}</p>
       {receipts.length === 0 && <EmptyState>{t('receipts.empty')}</EmptyState>}
@@ -237,8 +303,7 @@ function ScopedHistory({ ctx }: { ctx: ApiContext }) {
 
 export function SubmissionHistory() {
   const { ctx } = useDesk()
-  if (!ctx) return null
   // A scope change remounts the session and discards every old confirmation reply.
-  const scope = JSON.stringify([ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment])
+  const scope = ctx ? JSON.stringify([ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment]) : 'no-context'
   return <ScopedHistory key={scope} ctx={ctx} />
 }
