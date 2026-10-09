@@ -143,6 +143,9 @@ v1.53: 23 Rust tests passed with the SBF build in the first readiness round.
 The second round passed 137 app/script tests, 4 backend tests, the 21-stage
 acceptance runner and receipt generation, TypeScript checks, ESLint and the
 frontend build. It did not change the Rust program or repeat its earlier build.
+The third round passed 223 app/script tests and 4 backend tests, production and
+test-project TypeScript checks, ESLint and the frontend build. The 21-stage local
+acceptance run remained passing after coherent-readback and bounded-read changes.
 The frontend build retains two existing Zod/Rollup annotation warnings; Node 22
 also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
@@ -156,12 +159,40 @@ If logs are unavailable for a confirmed failure, the result remains a failure
 without inventing a specific hook error. These RPC failure modes are covered by
 unit tests, not claimed as complete end-to-end T14 coverage.
 
+Account reads have a 10-second deadline, cancel their pending request and reject
+invalid or stale slots and incomplete account lists. Eligibility inspection uses
+its first read to discover proof addresses, then rereads policy, mint, binding,
+Clock and SAS accounts together. The final decision uses only this shared
+observation slot, including the final policy version and chain timestamp. A
+binding replaced during discovery returns `unknown`; inspect again rather than
+combining the replacement with the previous proof. Display-only proof reads do
+not advance the observation slot of a rejected-provider policy decision.
+
+For transfer, binding and policy operations, an unknown submitted transaction
+offers **Recheck confirmation** (Portuguese: **Verificar novamente**). This action
+only verifies the retained signature using its original plan and backend; it
+does not sign or send a new transaction and works with the wallet disconnected.
+Evidence labels and decimal precision remain those of the submitted asset,
+not a subsequently edited form or a different deployment.
+Concurrent actions and resetting an unresolved submission are blocked. Network,
+RPC, program, commitment or deployment changes disable rechecking and suppress
+links to the wrong network's Explorer. Restore the original context to recheck.
+Pending submissions are kept only while the operation component remains mounted;
+navigation away or a browser reload loses this in-memory recovery state.
+Controller and static-render tests cover these protections; they do not replace
+interactive browser testing. A separate live localnet recheck confirmed a
+previously submitted transfer, returned two fresh readbacks and made no send calls.
+
 ### Proposed backlog issues
 
 - Extract the network adapter and incident model into shared packages so the
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
   parser and diagnosis differences before they reach a demonstration or pilot.
+- Persist a public pending-submission receipt so a browser reload can resume
+  read-only verification of the same signature without storing wallet keys.
+- Add controlled RPC fault injection to the local acceptance runner to exercise
+  the complete T14 workflow, not only isolated timeout and inconsistency tests.
 
 ## Estrutura
 
