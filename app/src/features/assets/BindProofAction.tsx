@@ -26,8 +26,8 @@ export function BindProofAction({ snapshot, proof }: { snapshot: DeskSnapshot; p
   const assetLabel = labelFor(deployment, snapshot.mint)
 
   const prepare = async () => {
+    if (!execution.reset()) return
     setPlanning(true)
-    execution.reset()
     try {
       setPlan(await backend.planRenewBinding({ cluster: ctx.cluster, mint: snapshot.mint, wallet: snapshot.wallet, attestation: proof.address }))
     } finally {
@@ -52,7 +52,7 @@ export function BindProofAction({ snapshot, proof }: { snapshot: DeskSnapshot; p
           onSign={() => void execution.execute(plan)}
         />
       )}
-      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} labelOf={(a) => labelFor(deployment, a)} />}
+      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} />}
     </div>
   )
 }

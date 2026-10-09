@@ -183,6 +183,10 @@ const pt = {
   'evidence.readback': 'Readback',
   'evidence.logs': 'Logs',
   'evidence.slot': 'slot {slot}',
+  'evidence.recheck': 'Verificar novamente',
+  'evidence.rechecking': 'Verificando…',
+  'evidence.recheckNote': 'Consulta a mesma assinatura na rede original. Não pede assinatura à carteira nem envia outra transação.',
+  'evidence.contextChanged': 'O contexto da rede mudou. Volte à rede, RPC, programa e configuração originais para verificar esta assinatura.',
 
   'policy.title': 'Editar política de {asset}',
   'policy.verifiers': 'Verificadores aceitos (no máximo 2)',
@@ -436,6 +440,10 @@ const en: Record<MessageKey, string> = {
   'evidence.readback': 'Readback',
   'evidence.logs': 'Logs',
   'evidence.slot': 'slot {slot}',
+  'evidence.recheck': 'Recheck confirmation',
+  'evidence.rechecking': 'Rechecking…',
+  'evidence.recheckNote': 'Checks the same signature on the original network. No wallet signature or new transaction is requested.',
+  'evidence.contextChanged': 'The network context changed. Restore the original network, RPC, program and configuration to recheck this signature.',
 
   'policy.title': 'Edit the {asset} policy',
   'policy.verifiers': 'Accepted verifiers (at most 2)',

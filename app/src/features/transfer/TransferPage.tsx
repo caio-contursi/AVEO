@@ -56,20 +56,21 @@ export function TransferPage() {
   const [planning, setPlanning] = useState(false)
   const [planError, setPlanError] = useState<unknown>()
 
-  // Ao conectar uma carteira do manifest, ela vira a origem sugerida.
+  // Suggest a connected manifest wallet only before an operation starts.
   useEffect(() => {
+    if (execution.state.phase !== 'idle' || execution.state.sendBlocked) return
     if (connected && deployment.wallets.some((w) => w.address === connected.address)) {
       setForm((f) => (f.from === connected.address ? f : { ...f, from: connected.address }))
     }
-  }, [connected, deployment.wallets])
+  }, [connected, deployment.wallets, execution.state.phase, execution.state.sendBlocked])
 
   const asset = deployment.assets.find((a) => a.id === form.asset)!
   const balanceOf = (wallet: string) => holdings.data?.holdings.find((h) => h.mint === asset.mint && h.wallet === wallet)?.amount
 
   const update = (patch: Partial<FormState>) => {
+    if (!execution.reset()) return
     setForm((f) => ({ ...f, ...patch }))
     setPlan(undefined)
-    execution.reset()
   }
 
   const validate = (): bigint | undefined => {
@@ -97,9 +98,9 @@ export function TransferPage() {
     event.preventDefault()
     const amount = validate()
     if (amount === undefined) return
+    if (!execution.reset()) return
     setPlanning(true)
     setPlanError(undefined)
-    execution.reset()
     try {
       setPlan(await backend.planTransfer({ cluster: ctx.cluster, mint: asset.mint, sourceOwner: form.from, destinationOwner: form.to, amount }))
     } catch (error) {
@@ -186,7 +187,7 @@ export function TransferPage() {
 
       {execution.state.evidence && (
         <Card title={t('transfer.result')}>
-          <EvidenceView evidence={execution.state.evidence} decimals={asset.decimals} labelOf={(a) => labelFor(deployment, a)} />
+          <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals ?? asset.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} />
         </Card>
       )}
     </div>

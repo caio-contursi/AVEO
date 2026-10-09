@@ -51,8 +51,8 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
       return
     }
     setError(undefined)
+    if (!execution.reset()) return
     setPlanning(true)
-    execution.reset()
     try {
       const pairs = parsed.data.credentials.map((credential) => {
         const verifier = deployment.verifiers.find((v) => v.credential === credential)!
@@ -115,7 +115,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
           onSign={() => void execution.execute(plan)}
         />
       )}
-      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} labelOf={(a) => labelFor(deployment, a)} />}
+      {execution.state.evidence && <EvidenceView evidence={execution.state.evidence} decimals={execution.displayMetadata?.decimals} labelOf={(a) => labelFor(execution.displayMetadata?.deployment ?? deployment, a)} onRecheck={() => void execution.recheck()} rechecking={execution.state.phase === 'verifying'} contextMatches={execution.contextMatches} />}
     </div>
   )
 }
@@ -174,7 +174,7 @@ export function PolicyCard({ state }: { state: AssetState }) {
           </button>
         </div>
       )}
-      {isIssuer && editing && <PolicyEditor state={state} onClose={() => setEditing(false)} />}
+      {editing && <PolicyEditor state={state} onClose={() => setEditing(false)} />}
     </article>
   )
 }

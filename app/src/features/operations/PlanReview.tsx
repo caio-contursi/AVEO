@@ -25,7 +25,7 @@ export function PlanReview({
   const required = plan.requiredSigners[0]
   const isSigner = connected?.address === required
   const busy = execution.phase === 'signing' || execution.phase === 'verifying'
-  const sent = execution.phase === 'done'
+  const sent = execution.phase === 'done' || !!execution.signature || execution.sendBlocked === true
 
   return (
     <div className="box">
