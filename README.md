@@ -261,6 +261,44 @@ more consistent, but mobile density and the untested signing/recovery journey
 prevent an exceptional-UX or judging-ready claim. This is a subjective technical
 review, not evidence of a hackathon jury's assessment.
 
+### Discoverable matrix scrolling and manual backup selection
+
+`app/src/components/MatrixScrollRegion.tsx` measures the actual table overflow
+and adds a bilingual instruction associated with its named region. Only an
+overflowing matrix receives an extra keyboard tab stop; native arrow scrolling
+is preserved. Resize, table changes and font loading remeasure the region;
+observers/listeners are removed on unmount and late callbacks are ignored.
+The wallet/asset headers, caption and verdict controls retain their semantics.
+This addresses the earlier missing-scroll-cue objection without changing any
+eligibility or MPL-3643 authorization rule.
+
+`app/src/components/ManualCopyText.tsx` provides an explicitly labeled read-only
+JSON field and a native selection button for individual receipts and visible
+history backups. The button focuses the field and selects its complete contents;
+rendering a fallback does not autofocus it. Selection neither writes to the
+clipboard nor changes serialization, storage, confirmation or submission guards.
+
+The integrated verification passed 1,423 app/script tests in 57 files, four
+backend tests, types, lint and build. The existing Zod/Rollup annotation and
+Node SQLite experimental warnings remain; no new dependency was added.
+An isolated real Chromium session passed ten bilingual checks with synthetic
+public receipt metadata: browser clipboard permission denied through CDP,
+fallback without automatic text focus, explicit full-text selection, separate
+individual-receipt selection, byte-identical public downloads and native matrix
+arrow scrolling followed by removal of the tab stop/instruction when resized
+to fit. An additional 80 visual scenarios and five interaction regressions
+passed without measured page overflow, JavaScript errors or attempted writes.
+Downloads retained the original journal and contained no keys or RPC URL.
+
+Reviewer limits: temporarily disabling a copying button can lose keyboard focus
+in Chromium; the fallback does not promise to preserve that button's focus.
+Horizontal scrolling can move wallet labels out of view. The browser artifacts
+remain temporary and are not maintained CI. These checks use mobile emulation,
+not physical devices or screen-reader acceptance. They do not test wallet
+signing or interrupted on-chain recovery; no transaction was sent and no wallet
+keys were accessed. Caio's UI review remains required. The prior 7.8/10 score
+is not increased merely for these focused reliability improvements.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -816,8 +854,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
-- Add an accessible horizontal-scroll cue to the narrow matrix so additional
-  assets are discoverable without sacrificing readable wallet/verdict columns.
+- Keep wallet row headers visible during internal horizontal matrix scrolling
+  so operators retain wallet/asset context at either edge.
+- Preserve keyboard focus during a pending clipboard request without stealing
+  focus if the operator moves elsewhere before the request completes.
 - Turn the isolated Chromium checks into a maintained browser acceptance workflow,
   including restored language and first-use task timing, subject to tooling approval.
 - Extend browser acceptance to 320px and 200% zoom in both themes, including
