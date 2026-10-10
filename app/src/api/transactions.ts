@@ -29,6 +29,7 @@ import {
   type TransactionSigner,
 } from '@solana/kit'
 import { readAccounts, rpcCall } from './accounts'
+import { throwIfReadAborted, withReadAbort } from './cancellation'
 import type { PolicyArgs } from './codecs'
 import type { ApiContext } from './context'
 import { reason, type DiagnosticReason } from './diagnostics'
@@ -100,6 +101,7 @@ export async function tokenAccountsFor(mint: Address, owners: Address[]): Promis
 
 /** Monta as instruções de um pedido. `signer` é a carteira real ou um NoopSigner (para simular). */
 export async function buildInstructions(ctx: ApiContext, request: PlanRequest, signer: TransactionSigner): Promise<Instruction[]> {
+  throwIfReadAborted(ctx.readAbortSignal)
   switch (request.kind) {
     case 'set-binding':
       return Promise.all(
@@ -133,9 +135,18 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
       })
       let extra
       try {
+        // The Token-2022 resolver has no signal parameter; adapt only its one read method.
+        const rpc: Pick<ApiContext['rpc'], 'getAccountInfo'> = ctx.readAbortSignal ? {
+          // Preserve SDK overloads: arguments, response and reactive store pass through unchanged.
+          getAccountInfo: ((...args: Parameters<ApiContext['rpc']['getAccountInfo']>) => {
+            const [account, config] = args
+            const pending = ctx.rpc.getAccountInfo(account, config)
+            return { ...pending, send: (options?: Parameters<typeof pending.send>[0]) => withReadAbort(ctx.readAbortSignal, () => pending.send({ ...options, abortSignal: ctx.readAbortSignal })) }
+          }) as ApiContext['rpc']['getAccountInfo'],
+        } : ctx.rpc
         // Resolução oficial a partir da ExtraAccountMetaList do mint (owner → binding → contas SAS).
         extra = await resolveExtraAccountMetasForExecute({
-          rpc: ctx.rpc,
+          rpc,
           transferHookProgramAddress: ctx.programId,
           source: source!,
           mint: request.mint,
@@ -144,6 +155,7 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
           amount: request.amount,
         })
       } catch (error) {
+        throwIfReadAborted(ctx.readAbortSignal)
         throw new PlanBlockedError(
           reason('MissingExtraAccounts', error instanceof Error ? error.message : String(error), { params: { stage: 'resolve' } }),
         )
@@ -157,7 +169,9 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
 }
 
 async function latestBlockhash(ctx: ApiContext) {
-  return rpcCall(async () => (await ctx.rpc.getLatestBlockhash({ commitment: ctx.commitment }).send()).value)
+  return withReadAbort(ctx.readAbortSignal, () => rpcCall(async () => (await ctx.rpc.getLatestBlockhash({ commitment: ctx.commitment }).send(
+    ctx.readAbortSignal ? { abortSignal: ctx.readAbortSignal } : undefined,
+  )).value))
 }
 
 /** Simula sem assinatura (sigVerify desligado) e devolve logs, consumo e o erro já traduzido. */
@@ -170,11 +184,11 @@ export async function simulate(ctx: ApiContext, instructions: Instruction[], fee
     (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units: SIMULATION_CU_LIMIT }), ...instructions], m),
   )
   const wire = getBase64EncodedWireTransaction(compileTransaction(message))
-  const { value } = await rpcCall(() =>
+  const { value } = await withReadAbort(ctx.readAbortSignal, () => rpcCall(() =>
     ctx.rpc
       .simulateTransaction(wire, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: ctx.commitment })
-      .send(),
-  )
+      .send(ctx.readAbortSignal ? { abortSignal: ctx.readAbortSignal } : undefined),
+  ))
   const logs = [...(value.logs ?? [])]
   const unitsConsumed = value.unitsConsumed !== undefined && value.unitsConsumed !== null ? Number(value.unitsConsumed) : undefined
   if (value.err) return { ok: false, logs, unitsConsumed, error: failureReason(value.err, logs, ctx.programId) }
@@ -194,9 +208,12 @@ export async function unsignedTransaction(ctx: ApiContext, instructions: Instruc
 }
 
 export async function planRequest(ctx: ApiContext, request: PlanRequest) {
+  throwIfReadAborted(ctx.readAbortSignal)
   const feePayer = requiredSignerOf(request)
   const instructions = await buildInstructions(ctx, request, createNoopSigner(feePayer))
+  throwIfReadAborted(ctx.readAbortSignal)
   const simulation = await simulate(ctx, instructions, feePayer)
+  throwIfReadAborted(ctx.readAbortSignal)
   const transaction = await unsignedTransaction(ctx, instructions, feePayer)
   return { instructions, simulation, transaction }
 }

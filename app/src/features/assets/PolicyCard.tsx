@@ -63,7 +63,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
       return
     }
     setError(undefined)
-    await preparation.prepare(() => {
+    await preparation.prepare((signal) => {
       const pairs = parsed.data.credentials.map((credential) => {
         const verifier = deployment.verifiers.find((v) => v.credential === credential)!
         return { credential: verifier.credential, schema: verifier.schema }
@@ -73,7 +73,7 @@ function PolicyEditor({ state, onClose }: { state: AssetState; onClose: () => vo
         authority: policy.issuerAuthority,
         args: { proofDomain: new Uint8Array(policy.proofDomain), pairs, requireKyc: parsed.data.requireKyc, requireAccredited: parsed.data.requireAccredited, active: parsed.data.active },
       }
-      return backend.planUpdatePolicy(input)
+      return backend.planUpdatePolicy(input, signal)
     })
   }
 

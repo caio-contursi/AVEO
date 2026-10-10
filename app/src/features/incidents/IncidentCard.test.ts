@@ -170,7 +170,7 @@ describe('grouped renewal integration with controlled lifecycle callbacks', () =
 
   it('groups both assets into one proof request and keeps review after marking prepared', async () => {
     await prepare()
-    expect(mocks.planRenewBinding).toHaveBeenCalledExactlyOnceWith({ cluster: 'localnet', mint: 'alfa', mints: ['alfa', 'beta'], wallet: 'wallet', attestation: 'proof-A' })
+    expect(mocks.planRenewBinding).toHaveBeenCalledExactlyOnceWith({ cluster: 'localnet', mint: 'alfa', mints: ['alfa', 'beta'], wallet: 'wallet', attestation: 'proof-A' }, expect.any(AbortSignal))
     expect(mocks.current?.events.at(-1)).toMatchObject({ kind: 'prepared', params: { n: '2' } })
     expect(mocks.prepareControl?.state.plan).toHaveLength(1)
     expect(mocks.runPlan).not.toHaveBeenCalled()

@@ -109,7 +109,7 @@ export function TransferPage() {
     if (!execution.reset()) return
     submissionPlan.current = undefined
     const request = { cluster: ctx.cluster, mint: asset.mint, sourceOwner: form.from, destinationOwner: form.to, amount }
-    await preparation.prepare(() => backend.planTransfer(request))
+    await preparation.prepare((signal) => backend.planTransfer(request, signal))
   }
 
   const sign = () => {

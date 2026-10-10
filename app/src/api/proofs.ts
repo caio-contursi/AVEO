@@ -2,6 +2,7 @@
 // Usa getProgramAccounts com filtros memcmp: discriminador de Attestation e o sujeito do payload.
 import { getBase58Decoder, getBase64Encoder, type Address, type Base58EncodedBytes } from '@solana/kit'
 import { rpcCall } from './accounts'
+import { withReadAbort } from './cancellation'
 import { decodeEligibilityPayload, decodeSasAttestation, type EligibilityPayload, type SasAttestation } from './codecs'
 import { ATTESTATION_SUBJECT_OFFSET, SAS_DISCRIMINATOR, SAS_PROGRAM_ID } from './constants'
 import type { ApiContext } from './context'
@@ -18,7 +19,7 @@ const base58 = getBase58Decoder()
 
 export async function findProofsForWallet(ctx: ApiContext, wallet: Address): Promise<ProofCandidate[]> {
   const discriminator = base58.decode(new Uint8Array([SAS_DISCRIMINATOR.attestation])) as Base58EncodedBytes
-  const accounts = await rpcCall(() =>
+  const accounts = await withReadAbort(ctx.readAbortSignal, () => rpcCall(() =>
     ctx.rpc
       .getProgramAccounts(SAS_PROGRAM_ID, {
         encoding: 'base64',
@@ -28,8 +29,8 @@ export async function findProofsForWallet(ctx: ApiContext, wallet: Address): Pro
           { memcmp: { offset: BigInt(ATTESTATION_SUBJECT_OFFSET), bytes: wallet as unknown as Base58EncodedBytes, encoding: 'base58' } },
         ],
       })
-      .send(),
-  )
+      .send(ctx.readAbortSignal ? { abortSignal: ctx.readAbortSignal } : undefined),
+  ))
 
   const known = new Map(ctx.deployment.verifiers.map((v) => [v.credential as string, v]))
   const candidates: ProofCandidate[] = []

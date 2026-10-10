@@ -30,7 +30,7 @@ export function BindProofAction({ snapshot, proof }: { snapshot: DeskSnapshot; p
 
   const prepare = async () => {
     if (!execution.reset()) return
-    await preparation.prepare(() => backend.planRenewBinding({ cluster: ctx.cluster, mint: snapshot.mint, wallet: snapshot.wallet, attestation: proof.address }))
+    await preparation.prepare((signal) => backend.planRenewBinding({ cluster: ctx.cluster, mint: snapshot.mint, wallet: snapshot.wallet, attestation: proof.address }, signal))
   }
 
   return (

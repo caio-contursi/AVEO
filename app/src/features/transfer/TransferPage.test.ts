@@ -94,7 +94,7 @@ beforeEach(() => {
   mocks.onRecheck = undefined
   mocks.reset.mockReturnValue(true)
   mocks.isCurrent.mockReturnValue(true)
-  mocks.prepare.mockImplementation(async (build: () => Promise<DeskPlan>) => build())
+  mocks.prepare.mockImplementation(async (build: (signal: AbortSignal) => Promise<DeskPlan>) => build(new AbortController().signal))
   mocks.planTransfer.mockResolvedValue({})
 })
 
@@ -134,7 +134,7 @@ describe('transfer preparation integration', () => {
     expect(mocks.prepare).toHaveBeenCalledOnce()
     expect(mocks.planTransfer).toHaveBeenCalledWith({
       cluster: 'localnet', mint: 'mint', sourceOwner: 'source', destinationOwner: 'destination', amount: 1n,
-    })
+    }, expect.any(AbortSignal))
     expect(mocks.execute).not.toHaveBeenCalled()
   })
 

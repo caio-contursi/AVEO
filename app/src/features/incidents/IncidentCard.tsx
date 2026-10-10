@@ -115,7 +115,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
   const prepare = async () => {
     if (actionLock.current || loading || !canPrepareRenewal(incident) || rebindable.length === 0) return
     setActionError(undefined)
-    const built = await preparation.prepare(async () => {
+    const built = await preparation.prepare(async (signal) => {
       const groups = groupRenewalCandidates(rebindable)
       return Promise.all(
         groups.map(async ({ key, attestation, mints }) => ({
@@ -127,7 +127,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
             mints,
             wallet: incident.wallet,
             attestation,
-          }),
+          }, signal),
         })),
       )
     })
@@ -206,7 +206,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     setActionBusy('verify')
     setActionError(undefined)
     try {
-      const snapshots = await verification.prepare(() => Promise.all(incident.affectedMints.map((mint) => backend.inspect({ cluster: ctx.cluster, mint, wallet: incident.wallet }))))
+      const snapshots = await verification.prepare((signal) => Promise.all(incident.affectedMints.map((mint) => backend.inspect({ cluster: ctx.cluster, mint, wallet: incident.wallet }, signal))))
       if (!snapshots || !verification.isCurrent(snapshots)) return
       patch(incident.id, (i) => applyVerification(i, snapshots, now()))
       await queryClient.invalidateQueries()

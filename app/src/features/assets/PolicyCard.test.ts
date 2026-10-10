@@ -87,8 +87,8 @@ beforeEach(() => {
   mocks.preparation = { planning: false, error: undefined, plan: undefined }
   mocks.reset.mockReturnValue(true)
   mocks.isCurrent.mockReturnValue(true)
-  mocks.prepare.mockImplementation(async (build: () => Promise<DeskPlan>) => {
-    try { return await build() } catch { return undefined }
+  mocks.prepare.mockImplementation(async (build: (signal: AbortSignal) => Promise<DeskPlan>) => {
+    try { return await build(new AbortController().signal) } catch { return undefined }
   })
   mocks.planUpdatePolicy.mockResolvedValue({ id: 'prepared-policy' })
 })
@@ -151,7 +151,7 @@ describe('policy preparation integration', () => {
         proofDomain: new Uint8Array(32).fill(1), pairs: [{ credential: 'credential', schema: 'schema' }],
         requireKyc: true, requireAccredited: false, active: true,
       },
-    })
+    }, expect.any(AbortSignal))
     expect(mocks.execute).not.toHaveBeenCalled()
   })
 
