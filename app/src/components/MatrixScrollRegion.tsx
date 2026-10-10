@@ -41,6 +41,12 @@ export function MatrixScrollRegion({ children }: { children: ReactNode }) {
         aria-label={t('assets.matrixScrollRegion')}
         aria-describedby={overflows ? hintId : undefined}
         tabIndex={overflows ? 0 : undefined}
+        onFocusCapture={(event) => {
+          // Native focus scrolling does not account for the pinned wallet column.
+          if (overflows && event.target instanceof HTMLButtonElement && event.target.classList.contains('cell')) {
+            event.target.scrollIntoView({ block: 'nearest', inline: 'start', behavior: 'instant' })
+          }
+        }}
       >
         {children}
       </div>

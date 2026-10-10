@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type FocusEventHandler } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nContext } from '../i18n/context'
@@ -12,7 +12,16 @@ const mocks = vi.hoisted(() => ({
   region: { scrollWidth: 600, clientWidth: 600, querySelector: vi.fn() },
   effects: [] as (() => (() => void) | void)[],
   setState: vi.fn(),
+  focus: undefined as FocusEventHandler<HTMLDivElement> | undefined,
 }))
+vi.mock('react/jsx-dev-runtime', async (original) => {
+  const actual = await original<typeof import('react/jsx-dev-runtime')>()
+  return { ...actual, jsxDEV: (...args: Parameters<typeof actual.jsxDEV>) => {
+    const props = args[1] as { className?: string; onFocusCapture?: FocusEventHandler<HTMLDivElement> }
+    if (props.className === 'table-wrap matrix-scroll-region') mocks.focus = props.onFocusCapture
+    return actual.jsxDEV(...args)
+  } }
+})
 vi.mock('react', async (original) => {
   const actual = await original<typeof import('react')>()
   return { ...actual,
@@ -55,6 +64,7 @@ beforeEach(() => {
   mocks.region.scrollWidth = 600
   mocks.region.clientWidth = 600
   mocks.effects = []
+  mocks.focus = undefined
   cleanups = []
   table = {}
   mocks.region.querySelector.mockReturnValue(table)
@@ -162,5 +172,42 @@ describe('matrix layout detection', () => {
     render()
     mountEffect()
     expect(mocks.overflows).toBe(true)
+  })
+})
+
+describe('pinned column focus clearance', () => {
+  class Button {
+    constructor(readonly cell = true) {}
+    classList = { contains: (name: string) => name === 'cell' && this.cell }
+    scrollIntoView = vi.fn()
+  }
+
+  function focus(target: object) {
+    vi.stubGlobal('HTMLButtonElement', Button)
+    mocks.focus!({ target } as Parameters<FocusEventHandler<HTMLDivElement>>[0])
+  }
+
+  it('aligns an overflowing diagnosis next to the pinned wallet without smooth motion', () => {
+    mocks.overflows = true
+    render()
+    const target = new Button()
+    focus(target)
+    expect(target.scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'start', behavior: 'instant' })
+  })
+
+  it('does not reposition controls when the matrix fits', () => {
+    render()
+    const target = new Button()
+    focus(target)
+    expect(target.scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('ignores region focus and non-diagnosis buttons', () => {
+    mocks.overflows = true
+    render()
+    const target = new Button(false)
+    focus(target)
+    focus({})
+    expect(target.scrollIntoView).not.toHaveBeenCalled()
   })
 })

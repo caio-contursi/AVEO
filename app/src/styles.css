@@ -1277,18 +1277,46 @@ summary {
   /* Scroll inside the existing wrapper rather than compressing evidence. */
   .matrix {
     table-layout: auto;
-    min-width: 560px;
+    width: max-content;
+    min-width: 0;
   }
 
   .matrix th:first-child,
   .matrix td:first-child {
-    width: 120px;
-    min-width: 120px;
+    width: var(--matrix-wallet-width);
+    min-width: var(--matrix-wallet-width);
     overflow-wrap: anywhere;
   }
 
+  /* Keep wallet context over scrolling evidence without changing table semantics. */
+  .matrix thead th:first-child,
+  .matrix tbody th[scope='row'] {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 1;
+    background: var(--surface-2);
+    color: var(--muted);
+    box-shadow: 1px 0 0 var(--border);
+  }
+
+  .matrix-scroll-region {
+    --matrix-wallet-width: 120px;
+    /* Current mobile gutters: 32px outside + 32px card padding + 2px border. */
+    --matrix-asset-width: min(220px, calc(100vw - 66px - var(--matrix-wallet-width)));
+    /* Reserve the wallet column plus focus clearance, bounded by the viewport. */
+    scroll-padding-inline-start: min(calc(var(--matrix-wallet-width) + 8px), 50%);
+    scroll-padding-inline-end: 8px;
+  }
+
+  .matrix .cell:focus-visible {
+    /* An inset ring remains visible at the edges of the scroll viewport. */
+    outline-offset: -3px;
+  }
+
   .matrix td {
-    min-width: 220px;
+    width: var(--matrix-asset-width);
+    min-width: var(--matrix-asset-width);
+    max-width: var(--matrix-asset-width);
   }
 
   .matrix td,
@@ -1297,7 +1325,7 @@ summary {
   }
 
   .cell {
-    padding: 8px;
+    padding: 6px;
   }
 
   .cell-top {
@@ -1343,6 +1371,12 @@ summary {
 }
 
 /* Wrap all five destinations without horizontal navigation scrolling. */
+@media (max-width: 360px) {
+  .matrix-scroll-region {
+    --matrix-wallet-width: 104px;
+  }
+}
+
 @media (max-width: 520px) {
   .tabs {
     overflow-x: visible;

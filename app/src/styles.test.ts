@@ -159,9 +159,9 @@ describe('responsive and interaction stylesheet contracts', () => {
       'overflow-x': 'auto', 'max-width': '100%', 'min-width': '0',
     })
     expect(rule('.matrix', mobile)['table-layout']).toBe('auto')
-    expect(Number.parseFloat(rule('.matrix', mobile)['min-width'])).toBeGreaterThan(320)
-    expect(Number.parseFloat(rule('.matrix td', mobile)['min-width'])).toBeGreaterThanOrEqual(200)
-    expect(Number.parseFloat(rule('.matrix th:first-child', mobile)['min-width'])).toBeGreaterThanOrEqual(120)
+    expect(rule('.matrix', mobile)).toMatchObject({ width: 'max-content', 'min-width': '0' })
+    expect(rule('.matrix td', mobile)).toMatchObject({ width: 'var(--matrix-asset-width)', 'min-width': 'var(--matrix-asset-width)', 'max-width': 'var(--matrix-asset-width)' })
+    expect(rule('.matrix th:first-child', mobile)['min-width']).toBe('var(--matrix-wallet-width)')
     expect(rule('.cell-top', mobile)['flex-wrap']).toBe('wrap')
     expect(rule('.cell-top .badge', mobile)).toMatchObject({
       'white-space': 'nowrap', 'overflow-wrap': 'normal',
@@ -178,6 +178,50 @@ describe('responsive and interaction stylesheet contracts', () => {
     }
     expect(hint).not.toHaveProperty('position')
     expect(hint).not.toHaveProperty('animation')
+  })
+
+  it('pins only semantic wallet headers on mobile with an opaque readable surface', () => {
+    for (const selector of ['.matrix thead th:first-child', ".matrix tbody th[scope='row']"]) {
+      const styles = rule(selector, mobile)
+      expect(styles).toMatchObject({
+        position: 'sticky', 'inset-inline-start': '0', 'z-index': '1',
+        background: 'var(--surface-2)', color: 'var(--muted)',
+        'box-shadow': '1px 0 0 var(--border)',
+      })
+      for (const tokens of [light, dark]) {
+        // resolve + luminance reject transparent backgrounds as well as low contrast.
+        expectContrast(styles.color, styles.background, tokens, selector)
+      }
+      for (const property of ['display', 'visibility', 'opacity', 'overflow', 'text-overflow']) {
+        expect(styles).not.toHaveProperty(property)
+      }
+      expect(desktop).not.toContain(selector)
+    }
+    expect(rule('.matrix td', mobile)).not.toHaveProperty('position')
+    expect(rule('.matrix th:first-child', mobile)).toMatchObject({ width: 'var(--matrix-wallet-width)', 'min-width': 'var(--matrix-wallet-width)' })
+  })
+
+  it('reserves bounded native focus scroll clearance without reducing verdict touch targets', () => {
+    expect(rule('.matrix-scroll-region', mobile)).toMatchObject({
+      'scroll-padding-inline-start': 'min(calc(var(--matrix-wallet-width) + 8px), 50%)',
+      'scroll-padding-inline-end': '8px',
+      '--matrix-wallet-width': '120px',
+      '--matrix-asset-width': 'min(220px, calc(100vw - 66px - var(--matrix-wallet-width)))',
+    })
+    expect(rule('.matrix .cell:focus-visible', mobile)['outline-offset']).toBe('-3px')
+    expect(rule('button:focus-visible', desktop).outline).toBe('3px solid var(--accent)')
+    expect(rule('button', desktop)['min-height']).toBe('44px')
+    expect(rule('.cell', mobile)).not.toHaveProperty('width')
+    expect(rule('.cell', mobile)).not.toHaveProperty('min-height')
+    expect(rule('.cell-top .badge', mobile)['white-space']).toBe('nowrap')
+    expect(desktop).not.toContain('scroll-padding-inline-start')
+    expect(desktop).not.toContain('.matrix .cell:focus-visible')
+  })
+
+  it('reserves enough verdict space beside a narrower wallet column at 320px', () => {
+    const smallest = mediaRules('max-width: 360px')
+    expect(rule('.matrix-scroll-region', smallest)['--matrix-wallet-width']).toBe('104px')
+    expect(css.indexOf('@media (max-width: 360px)')).toBeGreaterThan(css.indexOf('@media (max-width: 640px)'))
   })
 
   it('compacts safety content without hiding, truncating or fixing its height', () => {
