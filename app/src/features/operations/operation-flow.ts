@@ -21,7 +21,7 @@ export function transferFormLocked(planning: boolean, execution: ExecutionState)
 
 export function operationFlow({ plan, planning, preparationError, execution, contextMatches, submissionPlan }: OperationFlowInput) {
   const stages: [StageStatus, StageStatus, StageStatus, StageStatus] = ['pending', 'pending', 'pending', 'pending']
-  const result = (summary: 'ux.nextPrepare' | 'ux.nextPreparing' | 'ux.nextReview' | 'ux.nextWallet' | 'ux.nextConfirm' | 'ux.nextUnknown' | 'ux.nextConfirmed' | 'ux.nextFailed' | 'ux.nextContext' | 'ux.nextBlocked' | 'ux.nextError' | 'ux.nextLocked') => ({ stages, summary })
+  const result = (summary: 'ux.nextPrepare' | 'ux.nextPreparing' | 'ux.nextReview' | 'ux.nextWallet' | 'ux.nextConfirm' | 'ux.nextUnknown' | 'ux.nextSubmissionUnknown' | 'ux.nextConfirmed' | 'ux.nextFailed' | 'ux.nextContext' | 'ux.nextBlocked' | 'ux.nextError' | 'ux.nextLocked') => ({ stages, summary })
   const signature = execution.signature || execution.evidence?.signature
   if (!contextMatches) {
     stages[3] = 'unknown'
@@ -45,6 +45,11 @@ export function operationFlow({ plan, planning, preparationError, execution, con
     }
     stages[3] = 'unknown'
     return result('ux.nextUnknown')
+  }
+  if (execution.sendBlocked && execution.error?.code === 'ConfirmationUnknown') {
+    stages[0] = stages[1] = plan && plan === submissionPlan ? 'complete' : 'unknown'
+    stages[2] = stages[3] = 'unknown'
+    return result('ux.nextSubmissionUnknown')
   }
   if (execution.sendBlocked) return result('ux.nextLocked')
   if (execution.phase === 'signing') {

@@ -2,11 +2,13 @@ import type { Signature, TransactionSigner } from '@solana/kit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeskEvidence, DeskPlan } from '../../api/backend'
 import type { ApiContext } from '../../api/context'
-import { signAndSend } from '../../api/transactions'
+import { signAndSend, SubmissionUnknownError } from '../../api/transactions'
 import { PlanExecution, runPlan } from './execution'
 import { labelFor } from './labels'
 
-vi.mock('../../api/transactions', () => ({ signAndSend: vi.fn() }))
+vi.mock('../../api/transactions', async (original) => ({
+  ...await original<typeof import('../../api/transactions')>(), signAndSend: vi.fn(),
+}))
 
 const signature = 'original-signature' as Signature
 const ctx = {
@@ -91,7 +93,7 @@ describe('runPlan and retained recheck', () => {
       expect(input.plan).toBe(plan)
     }
     expect(replacement.verifyOutcome).not.toHaveBeenCalled()
-    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42)
+    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function))
     expect(await execution.recheck(ctx)).toBeUndefined()
     expect(backend.verifyOutcome).toHaveBeenCalledTimes(2)
   })
@@ -123,18 +125,54 @@ describe('runPlan and retained recheck', () => {
     expect(JSON.stringify(result)).not.toContain('private callback details')
     expect(onSent).toHaveBeenCalledExactlyOnceWith(signature)
     expect(backend.verifyOutcome).toHaveBeenCalledExactlyOnceWith({ cluster: ctx.cluster, plan, signature, balancesBefore: undefined })
-    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42)
+    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function))
   })
 
-  it('does not verify a rejected send and allows a deliberate retry after reset', async () => {
+  it('does not verify a prebuild failure and allows a deliberate retry after reset', async () => {
     const { execution, backend } = setup()
-    vi.mocked(signAndSend).mockRejectedValueOnce(new Error('Wallet rejected'))
+    vi.mocked(signAndSend).mockRejectedValueOnce(new Error('Build failed before signing'))
     expect(await execution.execute(ctx, backend, signer, plan)).toBeUndefined()
     expect(execution.state).toMatchObject({ phase: 'error', error: { code: 'SimulationFailed' } })
     expect(backend.verifyOutcome).not.toHaveBeenCalled()
     expect(execution.reset()).toBe(true)
     await execution.execute(ctx, backend, signer, plan)
     expect(signAndSend).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains the early exact signature after an RPC rejection and rechecks without sending again', async () => {
+    const record = vi.fn()
+    const execution = new PlanExecution(vi.fn(), record)
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue({ status: 'confirmed', signature, logs: [] }) }
+    vi.mocked(signAndSend).mockImplementationOnce(async (_ctx, _request, _signer, _units, onSent) => {
+      onSent?.(signature)
+      expect(record).toHaveBeenCalledExactlyOnceWith(ctx, signature)
+      throw new SubmissionUnknownError(new Error('Response lost after transmission'), signature)
+    })
+    expect(await execution.execute(ctx, backend, signer, plan)).toMatchObject({ status: 'unknown', signature })
+    expect(backend.verifyOutcome).not.toHaveBeenCalled()
+    expect(record).toHaveBeenCalledTimes(1)
+    expect(execution.reset()).toBe(false)
+    await execution.execute(ctx, backend, signer, plan)
+    expect(await execution.recheck(ctx)).toMatchObject({ status: 'confirmed', signature })
+    expect(backend.verifyOutcome).toHaveBeenCalledExactlyOnceWith({ cluster: ctx.cluster, plan, signature, balancesBefore: undefined })
+    expect(signAndSend).toHaveBeenCalledTimes(1)
+    expect(execution.reset()).toBe(true)
+  })
+
+  it('falls back to recording the signature carried by an ambiguous error', async () => {
+    const { backend } = setup()
+    const onSent = vi.fn(() => { throw new Error('Callback failed') })
+    vi.mocked(signAndSend).mockRejectedValueOnce(new SubmissionUnknownError(new Error('RPC rejected'), signature))
+    expect(await runPlan(ctx, backend, signer, plan, { onSent })).toMatchObject({ signature, evidence: { status: 'unknown', signature } })
+    expect(onSent).toHaveBeenCalledExactlyOnceWith(signature)
+    expect(backend.verifyOutcome).not.toHaveBeenCalled()
+  })
+
+  it('returns an explicit send block when a sending wallet supplies no signature', async () => {
+    const { backend } = setup()
+    vi.mocked(signAndSend).mockRejectedValueOnce(new SubmissionUnknownError(new Error('Wallet rejected')))
+    expect(await runPlan(ctx, backend, signer, plan)).toMatchObject({ error: { code: 'ConfirmationUnknown' }, sendBlocked: true })
+    expect(backend.verifyOutcome).not.toHaveBeenCalled()
   })
 })
 
@@ -273,7 +311,7 @@ describe('execution guards and context transitions', () => {
     expect(publish).toHaveBeenCalledTimes(calls)
   })
 
-  it('recovers with reset after a stale wallet rejection without publishing the old error', async () => {
+  it('recovers with reset after a stale prebuild failure without publishing the old error', async () => {
     const { execution, backend, publish } = setup()
     let reject!: (error: Error) => void
     vi.mocked(signAndSend).mockReturnValueOnce(new Promise((_resolve, r) => { reject = r }))
@@ -281,7 +319,7 @@ describe('execution guards and context transitions', () => {
     const changed = { ...ctx, rpcUrl: 'http://new-rpc' }
     execution.setContext(changed)
     const calls = publish.mock.calls.length
-    reject(new Error('Wallet rejected'))
+    reject(new Error('Build failed before signing'))
     expect(await first).toBeUndefined()
     expect(publish).toHaveBeenCalledTimes(calls)
     expect(backend.verifyOutcome).not.toHaveBeenCalled()
@@ -289,5 +327,67 @@ describe('execution guards and context transitions', () => {
     expect(execution.reset()).toBe(true)
     await execution.execute(changed, backend, signer, plan)
     expect(signAndSend).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['current', 'context change', 'deactivate', 'context change and deactivate'] as const)(
+    'retains a signatureless ambiguous block after %s, including stale completion', async (transition) => {
+      const { execution, backend, publish } = setup()
+      let reject!: (error: Error) => void
+      vi.mocked(signAndSend).mockReturnValueOnce(new Promise((_resolve, r) => { reject = r }))
+      const first = execution.execute(ctx, backend, signer, plan)
+      const changed = { ...ctx, rpcUrl: 'http://new-rpc' }
+      if (transition.includes('context change')) execution.setContext(changed)
+      if (transition.includes('deactivate')) execution.deactivate()
+      const calls = publish.mock.calls.length
+      reject(new SubmissionUnknownError(new Error('Wallet rejected')))
+      expect(await first).toBeUndefined()
+      if (transition !== 'current') expect(publish).toHaveBeenCalledTimes(calls)
+      expect(execution.state).toMatchObject({ error: { code: 'ConfirmationUnknown' }, sendBlocked: true })
+      expect(execution.state.signature).toBeUndefined()
+      execution.activate()
+      for (const context of [changed, ctx, changed]) {
+        execution.setContext(context)
+        expect(execution.state.sendBlocked).toBe(true)
+        expect(execution.reset()).toBe(false)
+        expect(await execution.execute(context, backend, signer, plan)).toBeUndefined()
+        expect(await execution.recheck(context)).toBeUndefined()
+      }
+      expect(backend.verifyOutcome).not.toHaveBeenCalled()
+      expect(signAndSend).toHaveBeenCalledTimes(1)
+      expect(execution.matchesContext(changed)).toBe(false)
+    },
+  )
+
+  it('retains a known ambiguous signature after stale completion for later reconciliation', async () => {
+    const { execution, backend } = setup()
+    let reject!: (error: Error) => void
+    vi.mocked(signAndSend).mockReturnValueOnce(new Promise((_resolve, r) => { reject = r }))
+    const first = execution.execute(ctx, backend, signer, plan)
+    execution.setContext({ ...ctx, cluster: 'devnet' })
+    execution.deactivate()
+    reject(new SubmissionUnknownError(new Error('RPC rejected'), signature))
+    expect(await first).toBeUndefined()
+    expect(execution.reset()).toBe(false)
+    execution.activate()
+    execution.setContext(ctx)
+    expect(execution.state).toMatchObject({ signature, evidence: { status: 'unknown' } })
+    await execution.recheck(ctx)
+    expect(backend.verifyOutcome).toHaveBeenCalledTimes(1)
+    expect(signAndSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('rechecks a late known signature after deactivate without requiring a context switch', async () => {
+    const { execution, backend } = setup()
+    let reject!: (error: Error) => void
+    vi.mocked(signAndSend).mockReturnValueOnce(new Promise((_resolve, r) => { reject = r }))
+    const first = execution.execute(ctx, backend, signer, plan)
+    execution.deactivate()
+    reject(new SubmissionUnknownError(new Error('Response lost'), signature))
+    expect(await first).toBeUndefined()
+    execution.activate()
+    expect(execution.reset()).toBe(false)
+    expect(await execution.recheck(ctx)).toEqual(unknown)
+    expect(backend.verifyOutcome).toHaveBeenCalledTimes(1)
+    expect(signAndSend).toHaveBeenCalledTimes(1)
   })
 })

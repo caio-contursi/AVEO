@@ -4,7 +4,7 @@ import type { ApiContext } from '../../api/context'
 import type { DiagnosticReason } from '../../api/diagnostics'
 import { failureReason } from '../../api/errors'
 import { withDiagnosticParams } from '../../api/explain'
-import { signAndSend } from '../../api/transactions'
+import { signAndSend, SubmissionUnknownError } from '../../api/transactions'
 
 export type ExecutionPhase = 'idle' | 'signing' | 'verifying' | 'done' | 'error'
 export interface ExecutionState {
@@ -14,7 +14,7 @@ export interface ExecutionState {
   error?: DiagnosticReason
   sendBlocked?: boolean
 }
-export type RunResult = { signature: string; evidence: DeskEvidence } | { error: DiagnosticReason }
+export type RunResult = { signature: string; evidence: DeskEvidence } | { error: DiagnosticReason; sendBlocked?: boolean }
 type Backend = Pick<AveoSasHookBackend, 'verifyOutcome'>
 interface Submission {
   ctx: ApiContext
@@ -67,14 +67,27 @@ export async function runPlan(
   options: { balancesBefore?: bigint[]; onSent?: (signature: string) => void } = {},
 ): Promise<RunResult> {
   let signature: string
+  let notified = false
+  const onSent = (signature: string) => {
+    if (notified) return
+    notified = true
+    try { options.onSent?.(signature) } catch { /* Recording must not interrupt submission or verification. */ }
+  }
   try {
-    signature = await signAndSend(ctx, plan.request, signer, plan.simulation.unitsConsumed)
+    signature = await signAndSend(ctx, plan.request, signer, plan.simulation.unitsConsumed, onSent)
   } catch (error) {
+    if (error instanceof SubmissionUnknownError) {
+      if (error.signature) {
+        onSent(error.signature)
+        return { signature: error.signature, evidence: unknownEvidence(error.signature, error) }
+      }
+      return { error: { code: 'ConfirmationUnknown', message: error.message }, sendBlocked: true }
+    }
     const logs = logsOf(error)
     const reason = logs.length > 0 ? failureReason(error, logs, ctx.programId) : { code: 'SimulationFailed' as const, message: error instanceof Error ? error.message : String(error) }
     return { error: withDiagnosticParams(reason, plan) }
   }
-  try { options.onSent?.(signature) } catch { /* Callback failures must not interrupt verification of an already sent transaction. */ }
+  onSent(signature)
   return { signature, evidence: await recheckSubmission({ ctx, backend, plan, signature, balancesBefore: options.balancesBefore }) }
 }
 
@@ -87,6 +100,8 @@ export class PlanExecution {
   private key?: string
   private submittedKey?: string
   private active = true
+  // Session-only: a wallet may broadcast without ever returning its signature.
+  private submissionUnknown = false
 
   constructor(
     private readonly publish: (state: ExecutionState) => void,
@@ -104,7 +119,7 @@ export class PlanExecution {
       this.generation++
       this.update(this.submission
         ? (this.busy || !this.state.evidence ? this.unknownState() : { ...this.state, phase: 'done' })
-        : { phase: 'idle', sendBlocked: this.busy })
+        : this.submissionUnknown ? { ...this.state, sendBlocked: true } : { phase: 'idle', sendBlocked: this.busy })
     }
     this.key = key
   }
@@ -130,7 +145,7 @@ export class PlanExecution {
 
   async execute(ctx: ApiContext, backend: Backend, signer: TransactionSigner, plan: DeskPlan, options: { balancesBefore?: bigint[] } = {}) {
     this.setContext(ctx)
-    if (this.busy || this.submission || this.state.phase === 'done') return undefined
+    if (this.busy || this.submission || this.submissionUnknown || this.state.sendBlocked || this.state.phase === 'done') return undefined
     this.busy = true
     const generation = this.generation
     const balancesBefore = options.balancesBefore?.slice()
@@ -146,6 +161,14 @@ export class PlanExecution {
           if (generation === this.generation) this.update({ phase: 'verifying', signature })
         },
       })
+      // Retain safety state before ignoring stale UI results from navigation/unmount.
+      if ('error' in result && result.sendBlocked) {
+        this.submissionUnknown = true
+        const state: ExecutionState = { phase: 'error', error: result.error, sendBlocked: true }
+        if (generation === this.generation) this.update(state)
+        else this.state = state
+        return undefined
+      }
       if (generation !== this.generation) return undefined
       if ('error' in result) {
         this.submittedKey = undefined
@@ -156,13 +179,13 @@ export class PlanExecution {
       return result.evidence
     } finally {
       this.busy = false
-      if (generation !== this.generation && !this.submission) this.submittedKey = undefined
+      if (generation !== this.generation && !this.submission && !this.submissionUnknown) this.submittedKey = undefined
     }
   }
 
   async recheck(ctx: ApiContext) {
     this.setContext(ctx)
-    if (this.busy || !this.submission || !this.matchesContext(ctx) || this.state.evidence?.status !== 'unknown') return undefined
+    if (this.busy || !this.submission || !this.matchesContext(ctx) || (this.state.evidence && this.state.evidence.status !== 'unknown')) return undefined
     this.busy = true
     const generation = this.generation
     const submission = this.submission
@@ -179,7 +202,7 @@ export class PlanExecution {
 
   reset() {
     // Retain unresolved submissions and pending sends, even when a caller changes its form.
-    if (this.busy || (this.submission && (!this.state.evidence || this.state.evidence.status === 'unknown'))) return false
+    if (this.busy || this.submissionUnknown || (this.submission && (!this.state.evidence || this.state.evidence.status === 'unknown'))) return false
     this.generation++
     this.submission = undefined
     this.submittedKey = undefined

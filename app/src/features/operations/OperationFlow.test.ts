@@ -96,6 +96,20 @@ describe('truthful operation flow', () => {
     expect(operationFlow({ ...submitted('confirmed'), submissionPlan: undefined }).stages.slice(0, 2)).toEqual(['unknown', 'unknown'])
   })
 
+  it.each(['en', 'pt'] as const)('shows an ambiguous wallet response as unknown, not refusal (%s)', (language) => {
+    const props = input({ plan, submissionPlan: plan, execution: {
+      phase: 'error', sendBlocked: true,
+      error: { code: 'ConfirmationUnknown', message: 'Submission outcome is unknown' },
+    } })
+    expect(operationFlow(props)).toEqual({ stages: ['complete', 'complete', 'unknown', 'unknown'], summary: 'ux.nextSubmissionUnknown' })
+    expect(transferFormLocked(false, props.execution)).toBe(true)
+    const html = render(props, language)
+    expect(html).toContain(messages[language]['ux.nextSubmissionUnknown'])
+    expect(html).not.toContain(messages[language]['ux.nextError'])
+    expect(html).not.toContain('aria-current="step"')
+    expect(operationFlow({ ...props, plan: undefined }).stages).toEqual(['unknown', 'unknown', 'unknown', 'unknown'])
+  })
+
   it('wallet rejection preserves review only for the exact plan captured at signing', () => {
     const execution: ExecutionState = { phase: 'error', error: { code: 'SimulationFailed', message: 'Wallet rejected' } }
     const props = input({ plan, submissionPlan: plan, execution })

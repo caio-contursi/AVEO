@@ -1,8 +1,18 @@
-import type { Commitment, Signature } from '@solana/kit'
+import { getAddressDecoder, getBase58Decoder, type Commitment, type Signature, type TransactionSigner } from '@solana/kit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AVEO_HOOK_PROGRAM_ID } from './constants'
 import type { ApiContext } from './context'
-import { confirmSignature } from './transactions'
+import { confirmSignature, signAndSend, SubmissionUnknownError, type PlanRequest } from './transactions'
+
+const signing = vi.hoisted(() => ({ sign: vi.fn(), send: vi.fn(), binding: vi.fn() }))
+vi.mock('@solana/kit', async (original) => ({
+  ...await original<typeof import('@solana/kit')>(),
+  signTransactionMessageWithSigners: signing.sign,
+  signAndSendTransactionMessageWithSigners: signing.send,
+}))
+vi.mock('./instructions', async (original) => ({
+  ...await original<typeof import('./instructions')>(), getSetBindingInstruction: signing.binding,
+}))
 
 const signature = 'test-signature' as Signature
 const transactionError = { InstructionError: [0, { Custom: 6000 }] }
@@ -26,6 +36,105 @@ function fakeRpc(commitment: Commitment = 'confirmed') {
   } as unknown as ApiContext
   return { ctx, statusSend, transactionSend, getSignatureStatuses, getTransaction, sendTransaction }
 }
+
+describe('signAndSend submission boundaries', () => {
+  const wallet = getAddressDecoder().decode(new Uint8Array(32).fill(2))
+  const request: PlanRequest = {
+    kind: 'set-binding', mints: [wallet], wallet, credential: wallet, schema: wallet, attestation: wallet,
+  }
+  const signatureBytes = new Uint8Array(64).fill(3)
+  const exactSignature = getBase58Decoder().decode(signatureBytes) as Signature
+  const localSigner = { address: wallet, signTransactions: vi.fn() } as TransactionSigner
+  const sendingSigner = { address: wallet, signAndSendTransactions: vi.fn() } as TransactionSigner
+
+  function setup() {
+    const blockhashSend = vi.fn().mockResolvedValue({
+      value: { blockhash: getAddressDecoder().decode(new Uint8Array(32).fill(4)), lastValidBlockHeight: 99n },
+    })
+    const send = vi.fn().mockResolvedValue(exactSignature)
+    const sendTransaction = vi.fn(() => ({ send }))
+    const ctx = {
+      commitment: 'confirmed', programId: AVEO_HOOK_PROGRAM_ID,
+      rpc: { getLatestBlockhash: vi.fn(() => ({ send: blockhashSend })), sendTransaction },
+    } as unknown as ApiContext
+    return { ctx, blockhashSend, send, sendTransaction }
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    signing.binding.mockResolvedValue({ programAddress: AVEO_HOOK_PROGRAM_ID, accounts: [], data: new Uint8Array() })
+    signing.sign.mockResolvedValue({ messageBytes: new Uint8Array([1]), signatures: { [wallet]: signatureBytes } })
+    signing.send.mockResolvedValue(signatureBytes)
+  })
+
+  it('records the exact signed signature before transmitting, retaining it when the RPC response is lost', async () => {
+    const rpc = setup()
+    const onSent = vi.fn()
+    rpc.send.mockImplementationOnce(async () => {
+      expect(onSent).toHaveBeenCalledExactlyOnceWith(exactSignature)
+      throw new Error('Transmitted, response lost')
+    })
+    await expect(signAndSend(rpc.ctx, request, localSigner, undefined, onSent)).rejects.toMatchObject({
+      name: 'SubmissionUnknownError', signature: exactSignature,
+    })
+    expect(rpc.sendTransaction).toHaveBeenCalledTimes(1)
+    expect(rpc.send).toHaveBeenCalledTimes(1)
+    expect(onSent).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['Wallet rejected', 'Transport failed'])('treats sending-wallet failure as ambiguous regardless of its message: %s', async (message) => {
+    const rpc = setup()
+    const onSent = vi.fn()
+    signing.send.mockRejectedValueOnce(new Error(message))
+    const error = await signAndSend(rpc.ctx, request, sendingSigner, undefined, onSent).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(SubmissionUnknownError)
+    expect(error).toMatchObject({ signature: undefined })
+    expect(onSent).not.toHaveBeenCalled()
+    expect(rpc.sendTransaction).not.toHaveBeenCalled()
+  })
+
+  it.each(['instructions', 'blockhash', 'signing'] as const)('keeps %s failures before broadcast as normal errors', async (stage) => {
+    const rpc = setup()
+    const failure = new Error('No broadcast occurred')
+    if (stage === 'instructions') signing.binding.mockRejectedValueOnce(failure)
+    if (stage === 'blockhash') rpc.blockhashSend.mockRejectedValueOnce(failure)
+    if (stage === 'signing') signing.sign.mockRejectedValueOnce(failure)
+    const onSent = vi.fn()
+    const error = await signAndSend(rpc.ctx, request, localSigner, undefined, onSent).catch((error: unknown) => error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).not.toBeInstanceOf(SubmissionUnknownError)
+    expect(onSent).not.toHaveBeenCalled()
+    expect(rpc.sendTransaction).not.toHaveBeenCalled()
+    expect(signing.send).not.toHaveBeenCalled()
+  })
+
+  it('keeps a sending-wallet prebuild failure outside the ambiguous boundary', async () => {
+    const rpc = setup()
+    const failure = new Error('Instruction build failed')
+    signing.binding.mockRejectedValueOnce(failure)
+    await expect(signAndSend(rpc.ctx, request, sendingSigner)).rejects.toBe(failure)
+    expect(signing.send).not.toHaveBeenCalled()
+  })
+
+  it.each(['local', 'sending'] as const)('ignores a throwing receipt callback without preventing %s submission or fabricating an error', async (kind) => {
+    const rpc = setup()
+    const onSent = vi.fn(() => { throw new Error('Receipt unavailable') })
+    expect(await signAndSend(rpc.ctx, request, kind === 'local' ? localSigner : sendingSigner, undefined, onSent)).toBe(exactSignature)
+    expect(onSent).toHaveBeenCalledExactlyOnceWith(exactSignature)
+    expect(rpc.send).toHaveBeenCalledTimes(kind === 'local' ? 1 : 0)
+    expect(signing.send).toHaveBeenCalledTimes(kind === 'sending' ? 1 : 0)
+  })
+
+  it('does not let a throwing callback replace an ambiguous RPC failure', async () => {
+    const rpc = setup()
+    rpc.send.mockRejectedValueOnce(new Error('Lost RPC response'))
+    const onSent = vi.fn(() => { throw new Error('Private receipt error') })
+    await expect(signAndSend(rpc.ctx, request, localSigner, undefined, onSent)).rejects.toMatchObject({
+      name: 'SubmissionUnknownError', signature: exactSignature, message: 'Transaction submission is unknown; do not resend.',
+    })
+    expect(rpc.send).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('confirmSignature', () => {
   beforeEach(() => vi.useFakeTimers())

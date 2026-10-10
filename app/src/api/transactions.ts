@@ -93,6 +93,14 @@ export class PlanBlockedError extends Error {
   }
 }
 
+/** A sending wallet or RPC may have broadcast even when its response is lost. */
+export class SubmissionUnknownError extends Error {
+  constructor(cause: unknown, readonly signature?: Signature) {
+    super('Transaction submission is unknown; do not resend.', { cause })
+    this.name = 'SubmissionUnknownError'
+  }
+}
+
 export async function tokenAccountsFor(mint: Address, owners: Address[]): Promise<Address[]> {
   return Promise.all(
     owners.map(async (owner) => (await findAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS }))[0]),
@@ -221,12 +229,14 @@ export async function planRequest(ctx: ApiContext, request: PlanRequest) {
 /**
  * Monta de novo com a carteira real e um blockhash novo, assina e envia.
  * Carteiras Wallet Standard assinam e enviam; carteiras sintéticas (localnet) só assinam e o Desk envia.
+ * onSent journals the intended submission as soon as its signature is known; it is not proof of broadcast.
  */
 export async function signAndSend(
   ctx: ApiContext,
   request: PlanRequest,
   signer: TransactionSigner,
   unitsConsumed?: number,
+  onSent?: (signature: Signature) => void,
 ): Promise<Signature> {
   if (signer.address !== requiredSignerOf(request)) throw new Error('connected wallet is not the required signer')
   const instructions = await buildInstructions(ctx, request, signer)
@@ -238,14 +248,31 @@ export async function signAndSend(
     (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
     (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units }), ...instructions], m),
   )
+  const notify = (signature: Signature) => {
+    try { onSent?.(signature) } catch { /* Receipt callbacks must not interrupt submission. */ }
+  }
   if (isTransactionSendingSigner(signer)) {
-    const bytes = await signAndSendTransactionMessageWithSigners(message)
-    return getBase58Decoder().decode(bytes) as Signature
+    try {
+      const bytes = await signAndSendTransactionMessageWithSigners(message)
+      const signature = getBase58Decoder().decode(bytes) as Signature
+      notify(signature)
+      return signature
+    } catch (error) {
+      // Wallet error messages cannot establish that no broadcast occurred.
+      throw new SubmissionUnknownError(error)
+    }
   }
   const signed = await signTransactionMessageWithSigners(message)
-  const wire = getBase64EncodedWireTransaction(signed)
-  await rpcCall(() => ctx.rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: ctx.commitment }).send())
-  return getSignatureFromTransaction(signed)
+  let signature: Signature | undefined
+  try {
+    signature = getSignatureFromTransaction(signed)
+    notify(signature)
+    const wire = getBase64EncodedWireTransaction(signed)
+    await rpcCall(() => ctx.rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: ctx.commitment }).send())
+    return signature
+  } catch (error) {
+    throw new SubmissionUnknownError(error, signature)
+  }
 }
 
 export type ConfirmationStatus = 'confirmed' | 'failed' | 'unknown'
