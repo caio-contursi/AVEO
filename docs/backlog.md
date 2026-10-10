@@ -157,6 +157,15 @@ transactions, outreach or real pilot occurred in this increment.
   rejection with unchanged balances and protected bytes; retain NOT_FULL until
   every required subcase has evidence. Caio reviews fixture/script changes and
   Bruno reviews the enforcement assertions.
+  Implemented in `3e8b7ce`; fresh v4 local cycle passed both source rejections
+  with unchanged balances/state. See [matrix progress](security-matrix-progress.md).
+  This does not promote full T04 or the complete security matrix to PASS.
+- **SEC-10:** reconcile a signatureless pending intent with a wallet-history
+  signature only after transaction-to-intent validation; an unrelated confirmed
+  signature must never unlock another submission.
+- **SEC-11:** consolidate the source/destination raw-ledger rejection validators
+  after their independent acceptance is stable, reducing duplicate checks without
+  merging resolver, Token-2022 and Aveo rejection layers.
 
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed

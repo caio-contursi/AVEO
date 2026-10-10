@@ -15,7 +15,7 @@ introduced by this increment.
 
 | Case | Evidence already available / current increment | Full-case gap |
 | --- | --- | --- |
-| T04 — missing binding/proof, false KYC | Live false-KYC and closed-proof rejection; the next increment adds absent destination bindings for both assets, ledger rejection and unchanged balances | Absent source-binding coverage and full-case aggregation/sign-off remain unestablished; do not automatically promote the case |
+| T04 — missing binding/proof, false KYC | Live false-KYC, closed-proof, absent destination-binding and funded absent source-binding rejection for both assets; ledger evidence and unchanged balances | Full-case subcase aggregation/sign-off remains unestablished; do not automatically promote the case |
 | T05 — wrong subject/mint/domain | Live wrong-subject binding rejection already exists | Explicit wrong-domain and wrong-mint adversarial scenarios with ledger evidence |
 | T10 — invalid account/layout/schema/signer | Current helper creates genuine SAS attestations with noncanonical Aveo boolean payloads and exercises signer revocation | False-owner/account substitution and incompatible-schema scenarios; SAS refuses truncated payload issuance before Aveo, so it cannot be counted as a malformed-proof hook test |
 | T14 — RPC/confirmation interruption | Seven read-only HTTP transport-fault stages use actual local accounts and a real confirmed signature; included in the maintained cycle with zero-send evidence | Controlled faults are not uncontrolled provider-outage or extension-wallet evidence |
@@ -47,11 +47,11 @@ Reviewer objections that remain explicit:
 - Enlarged local ledger retention is bounded. Missing historical transactions
   must remain a verification failure, never permission to resend.
 
-## Maintained local cycle
+## Historical maintained local cycle (manifest v2)
 
-The current stage manifest is version 2: the original 42 stages are followed by
+At that increment the stage manifest was version 2: the original 42 stages were followed by
 seven schema/validity stages and four SAS adversarial stages. The report schema
-remains version 1. `pnpm local:cycle` now runs five guarded child stages:
+remained version 1. `pnpm local:cycle` ran five guarded child stages:
 
 ```text
 fresh fixtures -> one-submission recovery -> 53 live stages
@@ -256,3 +256,59 @@ After the cycle, `pnpm verify` passed 2,163 application/script tests and 41
 backend tests, type checks, lint and frontend build. Existing SQLite experimental
 and Zod/Rollup annotation warnings remain. No Rust source changed or new SBF
 binary was compiled in this authorization-reconfirmation increment.
+
+## Seven-outcome execution increment — 2026-10-10
+
+The reconciled [candidate plan](audit-candidate-plan.md) now maps technical,
+integration, user, differentiation, commercial and documentation outcomes to
+owners and evidence gates. Existing acceptance and presentation work are retained;
+neither an agent's opinion nor an empty pilot kit can establish human adoption.
+
+Code commits: `3e8b7ce` adds funded absent source-binding acceptance; `947a81b`
+preserves ambiguous incident submissions. No program identity, Rust interface,
+attestation protocol, dependency or deployment environment changed.
+
+The fixture generator creates a private synthetic source with one Alfa and one
+Beta before revoking mint authority. An actual confirmed readback validates
+supply 1001 and balances 1000/0/0/0/1 before initial transfers. The four normal
+Desk wallets keep their original allocations; the adversarial signer is not
+included in the public deployment wallet list. Old fixtures remain untouched
+but need regeneration to exercise the new mandatory branch.
+
+Manifest v4 appends three source-binding stages to the prior 56. Fresh cycle
+`/tmp/aveo-local-cycle-QFsPq2/local-cycle-report.json` passed all five child
+stages: 59 live stages, one-signature/one-submission recovery, independent recovery
+of that same signature with zero signing/submission calls, and seven read-only
+controlled HTTP faults. `demo:evidence` exported the matching six-scene packet.
+Genesis remained `9TsPJrMdoJAFz45vk1wjoDu7pKPmBB1BzDJzCzfodBNP`.
+
+For absent sources, Alfa failed at slot 4922 and Beta at 4925 with actual raw
+`InstructionError: [1, {Custom: 2724315855}]`. Independent transaction reads
+confirmed that the hook was not invoked: rejection occurs in Token-2022 TLV
+validation, not a fabricated Aveo `BindingMissing`. Balances remained 1/908
+and 1/979; post-rejection protected-account reads reached slot 4927. Source
+binding PDAs remained absent, and valid destination policies/proofs were checked
+separately before submission. The helper rejects unrelated resolver errors,
+unconfirmed/mismatched transaction observations and protected-state changes.
+
+The incident path retains `sendBlocked`/`ConfirmationUnknown`, stops later groups
+and stores signatureless unknown evidence instead of refusal/success. Fresh
+eligibility, repeated scans, late outcomes and unrelated known-signature recovery
+cannot clear that unknown evidence. PT/EN warnings say not to resend and do not
+suggest querying a nonexistent signature. These are unit-controlled lifecycle
+checks, not extension-wallet execution. Existing incident storage is best effort:
+durable pre-submit reservation, global tab/reload coordination and safe signature
+attachment remain necessary. No complete browser recovery claim is made.
+
+`pnpm verify` passed 2230 application/script tests in 81 files, 41 backend tests,
+type checks, lint and frontend build; 67 tests were added relative to the reviewed
+baseline. Strict TypeScript checking separately passed the six changed scripts
+and script tests. Existing SQLite experimental and Zod/Rollup annotation warnings
+remain. The unchanged program binary was reused; no fresh Rust/SBF build was
+performed in this increment.
+
+Reviewer objections remain visible: full T04 aggregation and T05/T10/T17,
+durable browser intent, real extension-wallet/public devnet acceptance, independent
+integration/pilot evidence and fresh binary provenance are not closed. The cycle
+continues to report `securityMatrix: NOT_FULL`. Optional differentiators remain
+behind mandatory acceptance; proposed follow-ups are SEC-10 and SEC-11.

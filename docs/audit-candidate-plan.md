@@ -44,6 +44,110 @@ bindings, stale state, mismatched network/binary and missing transaction history
 
 ## Starting evidence, not an audit verdict
 
+### Reconciled implementation baseline — 2026-10-10
+
+This inventory supersedes the older counts below without deleting historical
+evidence. Reviewed baseline commit: `7263543`; the worktree was clean before
+this increment. Do not repeat completed work or infer that agent activity has
+closed a gate without reviewing its code and evidence.
+
+- Shared acceptance manifest version 3 contains 56 live stages. The fresh
+  cycle at `/tmp/aveo-local-cycle-2lqUgJ` passed those stages, one-submission
+  recovery, independent zero-send recovery and seven controlled HTTP faults.
+  Complete security acceptance remains `NOT_FULL`.
+- `pnpm verify` passed 2,163 application/script tests, 41 backend tests, types,
+  lint and frontend build. The latest presentation increment additionally passed
+  four editorial/PDF integrity tests. Existing SQLite/Zod warnings remain.
+- Ambiguous transaction responses retain known signatures and block retry in
+  the existing executor. Signatureless blocking still does not survive reload;
+  asynchronous receipt capture does not establish durable pre-submit intent.
+- An independent integration example, an unexecuted operator-pilot kit and the
+  versioned Portuguese narrative PDF exist. They are not a published concrete
+  SDK integration, an external pilot or a final English submission.
+- Clean-clone verification exists with cached dependencies; a fresh operating
+  system/toolchain and independent SBF reproduction are not established.
+- No real extension-wallet/public-hosting acceptance, independently measured
+  commercial benefit or completed external audit is established.
+
+### Seven outcomes and their implementation sequence
+
+These outcomes define an exceptional scoped delivery, not a guaranteed score.
+The six mandatory technical conditions above remain the release gate; human
+research and commercial evidence are tracked separately rather than simulated.
+
+| Outcome | Already available | Remaining work / owner | Approval evidence |
+| --- | --- | --- | --- |
+| Working, proven core | Real local transfers, independent transfer client, proof reuse and renewal, 56-stage manifest | Security specialist completes source-binding T04, then T05/T10/T17; Bruno reviews enforcement; orchestrator reruns on fresh fixtures | Every required subcase has correctly attributed rejection, preserved protected state and pinned source/binary/environment |
+| Honest failure handling | Unknown outcomes, original-signature reconciliation and controlled transport tests | Backend specialist designs durable pre-submit intent and implements storage/reload/tab safety; Caio reviews; browser QA challenges it | No ambiguous send becomes success/refusal or permits duplicate submission after restart; unavailable storage fails safely |
+| Reproducible integration and installation | Workspace example, clean cached clone, current frontend verification | Integration/release specialists finish concrete independent backend consumer, clean build provenance and deploy/host prerequisites | Third party repeats supported inspect/prepare/verify without importing UI internals; exact release and binary identified |
+| Experience validated externally | Read-only Chromium walkthrough and emulated narrow viewports | QA prepares actual extension-wallet journey; Bruno recruits a consenting new operator, using PILOT-01 | Actual participant completes main journey and recovery; assistance, confusion and failures recorded; no bot labeled a human |
+| Demonstrated differentiation | Proof reuse, independent policies, grouped impact, enforcement outside Desk | Integration/product specialists compare a concrete alternative workflow without assuming superiority | Reproducible comparison explains what Aveo adds and what existing Solana primitives already supply; no MPL compatibility claim without integration |
+| Proportional commercial evidence | Initial user/buyer hypothesis and empty pilot measurement template | Product specialist prepares research; Bruno/operator supplies consent and participation | Documented pain and measured task result; payment intent only if actually stated, permission before attribution |
+| Coherent promises, docs and code | Dated evidence, threat model, authority limits and Portuguese PDF v0.1 | Orchestrator/release specialist refresh claims after code changes; Bruno approves legal/license choices and presentation | Every shipped claim has evidence or a hypothesis label; English material, video and links match the actual release |
+
+**Implemented increment:** SEC-09 funded source without bindings, for both assets.
+One implementation specialist owns fixture creation, missing-binding helper,
+runner wiring, unit tests and manifest versioning. A separate read-only reviewer
+designs the next recovery increment. Its review found that the incident path drops
+signatureless unknown-submission blocking and can label ambiguity as a send failure;
+a second implementation specialist owns only incident propagation/model tests and
+necessary translations. This partial safety fix must not be described as durable
+reload protection. The orchestrator owns this plan, critical review and sequential
+ledger validation. No shared ledger mutations in parallel.
+
+**Observed acceptance:** code commits `3e8b7ce` (SEC-09) and `947a81b`
+(incident ambiguity) passed `pnpm verify`: 2,230 application/script tests,
+41 backend tests, types, lint and frontend build. Strict TypeScript validation
+also covers all six changed CLI/script files. Fresh cycle
+`/tmp/aveo-local-cycle-QFsPq2` passed five child stages, manifest v4's 59 live
+checks, original-signature recovery and seven controlled HTTP faults. SEC-09
+transactions failed at slots 4,922 and 4,925 in Token-2022 TLV validation before
+the Aveo hook was invoked; protected accounts and balances remained unchanged.
+The six-scene read-only packet exported successfully. No new browser/extension,
+devnet, external participant or SBF-build acceptance follows from these results.
+Full security status remains `NOT_FULL`.
+
+**Deliberately excluded from this increment:** program/account-interface changes,
+new dependencies, token economics, AI, real KYC, mainnet, external spending,
+outreach without human direction and claims of protocol certification.
+
+**Next execution order:** source-binding acceptance → durable browser recovery
+→ remaining adversarial subcases and provenance → public devnet/extension-wallet
+journey → external first-use and pilot evidence → final English delivery packet.
+Independent tasks may run in parallel, but an unresolved safety finding blocks
+release regardless of presentation quality. Devnet authorization is recorded;
+secure program-key access and the hosting destination remain external inputs.
+
+### Next recovery increment: durable pre-submit intent
+
+**Status:** design reviewed; not implemented by the incident propagation fix.
+**Owner:** backend/browser specialist; Caio reviews, orchestrator falsifies safety
+claims. Reuse the existing journal, Web Locks and subscriptions; add no dependency.
+
+1. Reserve one bounded, versioned unresolved intent per browser origin, under the
+   existing exclusive lock, before any wallet invocation in the shared execution
+   path. Persist only attempt identity, signer, operation kind and safe context
+   fingerprints, plus the original signature if obtained; no keys, transaction
+   payload, credential-bearing RPC URL or cached confirmation.
+2. Validate storage and reread the durable reservation before sending. Missing
+   storage/lock support, invalid records, quota errors or another intent produce
+   zero wallet and send calls. Context changes, reset, tab changes and receipt
+   removal must not release the reservation.
+3. Retain it across response loss, reload and late callbacks. Failure to persist
+   a signature retains the earlier blocker; never turn a persistence failure into
+   permission to resend. Browser storage clearing or a different device remain
+   explicit boundaries, not guarantees this design can supply.
+4. Reconcile only the matching attempt with sufficient original-context evidence.
+   No timeout, elapsed time, eligible balances, missing history or wallet error
+   text clears it. Signatureless recovery stays blocked until a separately
+   reviewed transaction-to-intent association exists (SEC-10).
+5. Hydrate the guard in every sending surface and test a new controller instance,
+   two tabs, reload during wallet response, storage/lock failures, late signatures
+   and replaced intent records. Separate unit-controlled faults from actual
+   browser/extension acceptance. No claim of complete recovery until both pass.
+
+### Historical starting evidence (superseded counts)
+
 - Maintained synthetic cycle: fixture creation, one-submission recovery,
   42 live acceptance stages and independent read-only transaction recovery.
 - Latest recorded workspace verification: 1,863 application/script tests and
@@ -164,7 +268,7 @@ These are planning ranges in engineering hours, not delivery guarantees:
 Parallel execution reduces elapsed time only for independent work. With the
 competition imminent, prioritize gates 1–3 and an honest gate-4 packet. Do not
 promise a completed independent audit before an auditor commits to a scope/date.
-If public deployment remains unauthorized, ship verifiable local evidence and
+If public deployment prerequisites remain unavailable, ship verifiable local evidence and
 state that limitation rather than pretending it is a public on-chain product.
 
 ## Completion rule
