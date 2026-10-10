@@ -65,6 +65,39 @@ sign or send again during recovery. Its JSON evidence contains no private keys
 or serialized transaction. The injected read fault does not fake ledger execution.
 The report preserves pending/unknown evidence if a later stage fails.
 
+### Recovery in an independent process
+
+With the same loopback endpoints and explicitly pinned local genesis, run:
+
+```sh
+pnpm local:recovery:resume /absolute/temporary/artifacts/local-recovery-<uuid>.json
+```
+
+The manifest must be `deployment.json` beside that receipt. The command does not
+import the fixture/key loader, require `wallets.json`, sign or submit. It reads
+only bounded regular public files with approved filenames, rejects symlinks and
+unknown receipt fields, and writes a separate public result without overwriting
+the original. The first RPC request pins genesis; subsequent requests read the
+full transaction and its confirmed/finalized signature status at the same slot.
+
+Acceptance checks the raw Token-2022 TransferChecked instruction, associated token
+accounts, manifest mint, source authority, single required signature, amount one,
+decimals, the corresponding Aveo hook invocation and successful ledger metadata.
+Historical pre/post token amounts must match both the saved receipt and exact
+one-unit deltas. Current balances are not evidence of an old transaction. Raw
+instruction decoding deliberately avoids `jsonParsed`: on the observed validator,
+transfer-hook extra accounts were described as multisig signers despite a normal
+single-signature transaction. Version-zero loaded addresses are resolved in
+writable-then-readonly order.
+
+This is intentionally a verifier for this synthetic one-transfer experiment, not
+a general transaction verifier or a new wallet adapter. It trusts the approved
+local RPC's ledger responses; it is not an independent cryptographic ledger proof.
+Missing/pruned history, unavailable reads, failed transactions and inconsistent
+evidence produce a nonzero exit and no PASS result. That exit does not establish
+that the original transaction failed. Resume records zero signing/submission
+calls for its own process; it cannot prove the original sender's attempt count.
+
 ## Evidence observed on 2026-10-10
 
 - `pnpm verify` passed: 1,761 app/script tests, 41 backend tests, type checks,
@@ -101,6 +134,27 @@ Its report is `acceptance-rerun/acceptance-report.json`. The complete security
 matrix still marks T04, T05, T10, T14 and T17 as `NOT_RUN`: partial coverage in
 these stages or in the separate recovery experiment is not full matrix acceptance.
 
+A subsequent isolated increment submitted one new synthetic recovery transfer:
+signature `5heKi4ntrnSFZWvGA3LwuKhCoed7zzyGnm5DhS6RfRfiWdTwX8UEy96dFL28UHYkctY1uVESD6vBrSsXd3TGqcby`,
+slot `2359`, X `51 -> 50`, treasury `907 -> 908`. After that sender process exited,
+`local:recovery:resume` independently verified the historical transaction with
+zero signing/submission calls. Evidence:
+`acceptance-rerun/local-recovery-resumed-df182f9e-6e14-4710-b07d-a886e4c02616.json`.
+The increment adds 39 mocked verifier/boundary tests; those tests are not relabeled
+as 39 live ledger scenarios.
+`pnpm verify` passed after this increment: 1,800 app/script tests, 41 backend
+tests, workspace/test types, lint and the application build. The pre-existing
+SQLite experimental and Zod/Rollup annotation warnings remain. No Rust source or
+program interface changed, and Rust tests were not rerun for this script-only
+increment. A specialist's read-only review found no blocking issue in the stated
+single-transfer scope; that review is not a security audit.
+
+An attempt to recover the previous slot-959 receipt after restarting the validator
+returned no transaction history and correctly did not pass. Persisting a receipt
+does not guarantee that a disposable validator retains historical RPC metadata.
+Configure and verify history retention separately before claiming recovery across
+a validator restart. The independent-process success above does not claim that.
+
 Local evidence locations (temporary, not public URLs):
 
 - `/tmp/aveo-local-acceptance-oNUscu/artifacts/`
@@ -121,8 +175,10 @@ Confirmed local execution closes the previous synthetic signing/recovery evidenc
 gap, not the public-demo gap. The browser uses the synthetic SDK adapter, not a
 Phantom extension; 393 px is emulation, not a physical phone. Reload while reads
 are held is not a hard browser-process crash, multi-tab signing or lost-storage
-test. Metadata/history do not cryptographically bind a signature to a reviewed
-operation. The security matrix remains broader than one successful acceptance run.
+test. UI metadata/history alone do not cryptographically bind a signature to a
+reviewed operation; the new CLI verifies the narrower saved synthetic transfer
+against the approved RPC's actual transaction. The security matrix remains
+broader than one successful acceptance run.
 
 Screens were reviewed: prepared signing and recovered confirmation remain visible
 without horizontal overflow. The mobile receipts view still contains substantial

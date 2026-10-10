@@ -69,3 +69,13 @@ and signature-to-operation binding are not established by metadata checks;
 the package is workspace TypeScript source, not a published SDK; and template
 tests cannot validate a human pilot. No Rust changes, wallet signatures, network
 transactions, outreach or real pilot occurred in this increment.
+
+## Local recovery follow-up proposals
+
+- **LOCAL-03:** configure and test historical RPC retention in a reproducible
+  isolated validator runner, distinguishing unavailable history from a failed
+  transaction and proving recovery after a validator restart.
+- **LOCAL-04:** bring the synthetic CLI's transaction-to-receipt verification into
+  the Desk's supported operation types, so UI recovery does not rely solely on
+  stored metadata or a successful signature status. Expand only with tests for
+  each supported instruction shape.
