@@ -12,15 +12,30 @@ function declarations(body: string): Record<string, string> {
 }
 
 // Read the authored cascade; this is not a browser layout or computed-style test.
-function rule(selector: string): Record<string, string> {
+function rule(selector: string, source = css): Record<string, string> {
   const result: Record<string, string> = {}
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     if (match[1].split(',').some((entry) => entry.trim() === selector)) {
       Object.assign(result, declarations(match[2]))
     }
   }
   expect(Object.keys(result).length, `Missing CSS selector: ${selector}`).toBeGreaterThan(0)
   return result
+}
+
+function mediaRules(condition: string): string {
+  const start = css.indexOf(`@media (${condition})`)
+  expect(start, `Missing media condition: ${condition}`).toBeGreaterThanOrEqual(0)
+  const opening = css.indexOf('{', start)
+  let depth = 1
+  let end = opening + 1
+  while (end < css.length && depth > 0) {
+    if (css[end] === '{') depth++
+    if (css[end] === '}') depth--
+    end++
+  }
+  expect(depth, `Unbalanced media condition: ${condition}`).toBe(0)
+  return css.slice(opening + 1, end - 1)
 }
 
 const roots = [...css.matchAll(/:root\s*\{([^}]*)\}/g)]
@@ -110,6 +125,62 @@ describe.each([['light', light], ['dark', dark]] as const)('%s theme accessibili
 })
 
 describe('responsive and interaction stylesheet contracts', () => {
+  const mobile = mediaRules('max-width: 640px')
+  const narrow = mediaRules('max-width: 520px')
+  const desktop = css.slice(0, css.indexOf('@media (max-width: 640px)'))
+
+  it('reduces mobile shell and flow spacing while preserving desktop sizing', () => {
+    expect(rule('.topbar', mobile).padding).toBe('12px 0')
+    expect(rule('.page-intro', mobile).padding).toBe('16px 0')
+    expect(rule('.tabs', mobile)['margin-top']).toBe('12px')
+    expect(rule('.workflow-steps', mobile)['grid-template-columns']).toBe('minmax(0, 1fr)')
+    expect(rule('.workflow-step', mobile)).toMatchObject({
+      'grid-template-columns': '24px minmax(0, 1fr) minmax(0, max-content)',
+      padding: '6px 8px',
+    })
+    expect(rule('.workflow-status', mobile)['grid-column']).toBe('3')
+    expect(rule('.topbar', desktop).padding).toBe('24px 0')
+    expect(rule('.page-intro', desktop).padding).toBe('clamp(24px, 4vw, 40px) 0 var(--space-6)')
+    expect(rule('.workflow-steps', desktop)['grid-template-columns']).toContain('repeat(auto-fit,')
+    expect(rule('.workflow-status', desktop)['grid-column']).toBe('2')
+  })
+
+  it('wraps whole navigation destinations and retains touch target height', () => {
+    expect(rule('.tabs', narrow)['overflow-x']).toBe('visible')
+    expect(rule('.tabs a', narrow)).toMatchObject({
+      flex: '1 0 auto', 'white-space': 'nowrap', 'overflow-wrap': 'normal',
+    })
+    expect(Number.parseFloat(rule('.tabs a', desktop)['min-height'])).toBeGreaterThanOrEqual(44)
+    expect(rule('.tabs a', narrow)).not.toHaveProperty('min-height')
+  })
+
+  it('scrolls the mobile matrix locally with readable columns and intact verdict words', () => {
+    expect(rule('.table-wrap', desktop)).toMatchObject({
+      'overflow-x': 'auto', 'max-width': '100%', 'min-width': '0',
+    })
+    expect(rule('.matrix', mobile)['table-layout']).toBe('auto')
+    expect(Number.parseFloat(rule('.matrix', mobile)['min-width'])).toBeGreaterThan(320)
+    expect(Number.parseFloat(rule('.matrix td', mobile)['min-width'])).toBeGreaterThanOrEqual(200)
+    expect(Number.parseFloat(rule('.matrix th:first-child', mobile)['min-width'])).toBeGreaterThanOrEqual(120)
+    expect(rule('.cell-top', mobile)['flex-wrap']).toBe('wrap')
+    expect(rule('.cell-top .badge', mobile)).toMatchObject({
+      'white-space': 'nowrap', 'overflow-wrap': 'normal',
+    })
+  })
+
+  it('compacts safety content without hiding, truncating or fixing its height', () => {
+    for (const selector of ['.banner', '.page-description', '.workflow', '.workflow-head p',
+      '.workflow-steps', '.workflow-step', '.workflow-status', '.workflow-summary']) {
+      const styles = rule(selector, mobile)
+      for (const property of ['height', 'max-height', 'overflow', 'overflow-y', 'text-overflow',
+        'clip', 'clip-path', 'line-clamp', '-webkit-line-clamp', 'display', 'visibility']) {
+        expect(styles, `${selector} must retain all safety text`).not.toHaveProperty(property)
+      }
+    }
+    expect(rule('.workflow-status', mobile)['overflow-wrap']).toBe('normal')
+    expect(rule('button', desktop)['min-height']).toBe('44px')
+  })
+
   it('keeps automatic dark-theme overrides and distinct success/action tones', () => {
     expect(roots).toHaveLength(2)
     expect(css).toMatch(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root/)

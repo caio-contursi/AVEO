@@ -1154,6 +1154,84 @@ summary {
 }
 
 @media (max-width: 640px) {
+  .topbar {
+    padding: 12px 0;
+    gap: 8px;
+  }
+
+  .topbar-right {
+    gap: 8px;
+  }
+
+  .banner {
+    padding: 8px 12px;
+    gap: 4px;
+    line-height: 1.4;
+  }
+
+  .tabs {
+    margin-top: 12px;
+  }
+
+  .page-intro {
+    padding: 16px 0;
+  }
+
+  .section-kicker {
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .page-description {
+    margin-top: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .stack {
+    gap: 16px;
+  }
+
+  .workflow {
+    padding: 12px;
+  }
+
+  .workflow-head p {
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* One row per stage keeps both its label and observed status visible. */
+  .workflow-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin: 10px 0;
+  }
+
+  .workflow-step {
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, max-content);
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    line-height: 1.35;
+  }
+
+  .workflow-status {
+    grid-column: 3;
+    max-width: 12ch;
+    overflow-wrap: normal;
+  }
+
+  .workflow-summary {
+    padding-top: 8px;
+    margin: 10px 0 0;
+    line-height: 1.4;
+  }
+
   dl.kv {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
@@ -1185,19 +1263,21 @@ summary {
     padding: 6px 8px;
   }
 
-  /* Keep the wallet and asset matrix contained on narrow screens. */
+  /* Scroll inside the existing wrapper rather than compressing evidence. */
   .matrix {
-    table-layout: fixed;
+    table-layout: auto;
+    min-width: 560px;
   }
 
   .matrix th:first-child,
   .matrix td:first-child {
-    width: 24%;
+    width: 120px;
+    min-width: 120px;
     overflow-wrap: anywhere;
   }
 
   .matrix td {
-    min-width: 0;
+    min-width: 220px;
   }
 
   .matrix td,
@@ -1212,6 +1292,11 @@ summary {
   .cell-top {
     flex-wrap: wrap;
     gap: 4px;
+  }
+
+  .cell-top .badge {
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   /* Stack each table row with its field labels. */
@@ -1254,7 +1339,7 @@ summary {
   }
 
   .tabs a {
-    flex: 1 1 90px;
+    flex: 1 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1262,6 +1347,7 @@ summary {
     font-size: 13px;
     line-height: 1.2;
     text-align: center;
-    white-space: normal;
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 }
