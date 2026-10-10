@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { AccountRole, isAddress, isSignature, type Address, type Signature } from '@solana/kit'
 import {
-  findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstruction, getTokenDecoder,
+  findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstruction, getTokenDecoder, getMintDecoder,
   getTransferCheckedInstruction, resolveExtraAccountMetasForExecute,
 } from '@solana-program/token-2022'
 import { readAccounts, type RawAccount } from '../src/api/accounts'
@@ -10,12 +10,43 @@ import { AVEO_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../
 import { onchainReasonFromLogs } from '../src/api/errors'
 import { findBindingPda, findExtraAccountMetasPda, findPolicyPda } from '../src/api/pdas'
 import type { AdversarialContext } from './adversarial-context'
+import { inspectEligibility } from '../src/api/eligibility'
 
 // Only T04's absent-binding branch; missing proof and false KYC remain separate cases.
 export const MISSING_BINDING_STAGES = [
   'missing-binding-atas-created', 'missing-binding-transfers-rejected',
   'missing-binding-protected-accounts-unchanged',
 ] as const
+
+export const MISSING_SOURCE_BINDING_STAGES = [
+  'missing-source-binding-preconditions', 'missing-source-binding-transfers-rejected',
+  'missing-source-binding-protected-accounts-unchanged',
+] as const
+
+export interface MissingSourceBindingChecksInput extends MissingBindingChecksInput {
+  sourceSigner: AdversarialContext['treasury']
+  /** Parent checks loopback endpoints and the genesis pinned at runner startup. */
+  guardLocalnet: () => Promise<void>
+}
+
+/** Called after issuance/revocation, before any initial fixture transfers. */
+export function requireMissingSourceFixtureAccounting(asset: AdversarialContext['assets'][number],
+  accounts: (RawAccount | null)[], owners: Address[], atas: Address[]): void {
+  assert(owners.length === 5 && new Set(owners).size === 5 && atas.length === 5
+    && new Set(atas).size === 5 && accounts.length === 6, 'Five distinct synthetic holders required')
+  const mintRaw = accounts[0]
+  assert(mintRaw && mintRaw.address === asset.mint && mintRaw.owner === TOKEN_2022_PROGRAM_ID && !mintRaw.executable,
+    'Valid fixture mint required')
+  const mint = getMintDecoder().decode(mintRaw.data)
+  assert(mint.supply === 1001n && mint.mintAuthority.__option === 'None' && mint.isInitialized
+    && mint.decimals === asset.decimals, 'Fixture supply must be 1001 with revoked mint authority')
+  accounts.slice(1).forEach((raw, i) => {
+    assert(raw && raw.address === atas[i] && raw.owner === TOKEN_2022_PROGRAM_ID && !raw.executable, 'Valid fixture token account required')
+    const token = getTokenDecoder().decode(raw.data)
+    assert(token.mint === asset.mint && token.owner === owners[i] && token.state === 1
+      && token.amount === (i === 0 ? 1000n : i === 4 ? 1n : 0n), 'Fixture balance accounting must remain 1000/0/0/0/1')
+  })
+}
 
 // spl-tlv-account-resolution 0.10.0: IncorrectAccount=2_724_315_840, AccountDataTooSmall=base+15.
 export const MISSING_BINDING_TLV_ERROR = 2_724_315_855
@@ -214,4 +245,171 @@ export async function runMissingBindingChecks(input: MissingBindingChecksInput):
     emit({ protectedAccount, slot: floor, accountUnchanged: true })
   }
   complete(MISSING_BINDING_STAGES[2])
+}
+
+/** SEC-09's absent SOURCE binding branch only; never claims full T04 coverage. */
+export async function runMissingSourceBindingChecks(input: MissingSourceBindingChecksInput): Promise<void> {
+  const { ctx, deployment, assets, sourceSigner, treasury, emit, complete } = input
+  const endpoint = new URL(ctx.rpcUrl)
+  assert(ctx.cluster === 'localnet' && deployment.cluster === 'localnet'
+    && ['confirmed', 'finalized'].includes(ctx.commitment)
+    && ['http:', 'https:'].includes(endpoint.protocol)
+    && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname)
+    && !endpoint.username && !endpoint.password && !endpoint.search && !endpoint.hash && endpoint.pathname === '/',
+  'Missing source binding checks require confirmed synthetic localnet')
+  assert.equal(ctx.programId, AVEO_HOOK_PROGRAM_ID)
+  assert.equal(deployment.programs.aveoHook, AVEO_HOOK_PROGRAM_ID)
+  assert.equal(deployment.programs.sas, SAS_PROGRAM_ID)
+  assert.equal(deployment.programs.token2022, TOKEN_2022_PROGRAM_ID)
+  assert.equal(typeof input.guardLocalnet, 'function', 'Pinned genesis guard required')
+  assert.equal(typeof input.rejectMissingBinding, 'function', 'Raw ledger rejection callback required')
+  assert(assets.length === 2 && new Set(assets.map((asset) => asset.id)).size === 2
+    && assets.every((asset) => ['alfa', 'beta'].includes(asset.id))
+    && new Set(assets.map((asset) => asset.mint)).size === 2, 'Both distinct assets required')
+  assert(isAddress(sourceSigner.address) && ![treasury.address, input.x.address, input.issuer.address,
+    input.verifier.address, ...deployment.verifiers.map((v) => v.authority), ...assets.map((a) => a.mint)]
+    .includes(sourceSigner.address), 'Separate synthetic source signer required')
+  await input.guardLocalnet()
+  let floor = 0
+  const read = async (addresses: Address[]) => {
+    const result = await readAccounts(ctx, addresses, floor)
+    assert(Number.isSafeInteger(result.slot) && result.slot >= floor, 'Invalid or stale account observation slot')
+    assert.equal(result.accounts.length, addresses.length)
+    floor = result.slot
+    return result.accounts
+  }
+  const required = (raw: RawAccount | null | undefined, address: Address, program: Address) => {
+    assert(raw && raw.address === address && raw.owner === program && !raw.executable, 'Missing or invalid protected account')
+    return raw
+  }
+  const fixtures = await Promise.all(assets.map(async (asset) => {
+    const [source, destination, missing, binding, policy, validation] = await Promise.all([
+      findAssociatedTokenPda({ owner: sourceSigner.address, mint: asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ID }).then(([a]) => a),
+      findAssociatedTokenPda({ owner: treasury.address, mint: asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ID }).then(([a]) => a),
+      findBindingPda(ctx.programId, asset.mint, sourceSigner.address), findBindingPda(ctx.programId, asset.mint, treasury.address),
+      findPolicyPda(ctx.programId, asset.mint), findExtraAccountMetasPda(ctx.programId, asset.mint),
+    ])
+    return { asset, source, destination, missing, binding, policy, validation }
+  }))
+  const bindingRaw = await read(fixtures.map((f) => f.binding))
+  const boundFixtures = fixtures.map((f, i) => {
+    const proof = decodeEligibilityBinding(required(bindingRaw[i], f.binding, ctx.programId).data)
+    assert(proof.version === 2 && proof.mint === f.asset.mint && proof.subjectWallet === treasury.address,
+      'Destination binding subject/mint/version mismatch')
+    return { ...f, proof }
+  })
+  // A single coherent byte snapshot protects both token balances and every decision account.
+  const protectedPrograms = new Map<Address, Address>()
+  for (const f of boundFixtures) {
+    for (const address of [f.source, f.destination, f.asset.mint]) protectedPrograms.set(address, TOKEN_2022_PROGRAM_ID)
+    for (const address of [f.binding, f.policy, f.validation]) protectedPrograms.set(address, ctx.programId)
+    for (const address of [f.proof.credential, f.proof.schema, f.proof.attestation]) protectedPrograms.set(address, SAS_PROGRAM_ID)
+  }
+  const addresses = [...protectedPrograms.keys()]
+  assert(!addresses.includes(sourceSigner.address), 'Fee payer cannot be protected')
+  const original = (await read(addresses)).map((raw, i) => required(raw, addresses[i]!, protectedPrograms.get(addresses[i]!)!))
+  for (const [i, f] of boundFixtures.entries()) {
+    assert.deepEqual(original[addresses.indexOf(f.binding)], bindingRaw[i], 'Destination binding changed during setup')
+    const mint = getMintDecoder().decode(original[addresses.indexOf(f.asset.mint)]!.data)
+    assert(mint.supply === 1001n && mint.mintAuthority.__option === 'None'
+      && mint.isInitialized && mint.decimals === f.asset.decimals, 'SEC-09 requires supply 1001 and revoked mint authority')
+  }
+  const balances = async (f: typeof fixtures[number]) => (await read([f.source, f.destination])).map((raw, i) => {
+    const token = getTokenDecoder().decode(required(raw, i ? f.destination : f.source, TOKEN_2022_PROGRAM_ID).data)
+    assert(token.mint === f.asset.mint && token.owner === (i ? treasury.address : sourceSigner.address)
+      && token.state === 1, 'Token mint/owner/state mismatch')
+    return token.amount
+  })
+  const absent = async () => assert((await read(fixtures.map((f) => f.missing))).every((raw) => raw === null),
+    'Exact source binding PDA must be absent')
+  const eligible = async (f: typeof boundFixtures[number]) => {
+    const snapshot = await inspectEligibility(ctx, f.asset.mint, treasury.address)
+    assert(snapshot.verdict === 'eligible' && !snapshot.reasons.some((r) => !r.hint)
+      && snapshot.mint === f.asset.mint && snapshot.wallet === treasury.address
+      && snapshot.sourceAccounts.policy === f.policy && snapshot.sourceAccounts.binding === f.binding
+      && snapshot.sourceAccounts.credential === f.proof.credential && snapshot.sourceAccounts.schema === f.proof.schema
+      && snapshot.sourceAccounts.attestation === f.proof.attestation
+      && Number.isSafeInteger(snapshot.read.slot) && snapshot.read.slot >= floor,
+    'Fresh valid destination binding/proof and active policy required')
+    floor = snapshot.read.slot
+  }
+  const failures: unknown[] = []
+  try {
+    await absent()
+    for (const f of boundFixtures) {
+      assert((await balances(f))[0]! > 0n, 'Positive source balance required')
+      await eligible(f)
+      await assert.rejects(() => resolveExtraAccountMetasForExecute({ rpc: ctx.rpc,
+        transferHookProgramAddress: ctx.programId, source: f.source, mint: f.asset.mint,
+        destination: f.destination, owner: sourceSigner.address, amount: 1n }),
+      (error: unknown) => error instanceof Error && error.message ===
+        `Invalid transfer hook pubkey data: account ${f.missing} was not found.`,
+      'Official resolver must fail specifically on the absent source binding')
+    }
+    await absent()
+    complete(MISSING_SOURCE_BINDING_STAGES[0])
+    for (const f of boundFixtures) {
+      const before = await balances(f)
+      assert(before[0]! > 0n, 'Positive source balance required')
+      await eligible(f)
+      await absent()
+      // Missing source data cannot resolve SAS keys. Destination's real proof fills
+      // the later source metas solely to reach the absent-binding rejection layer.
+      const sas = [f.proof.credential, f.proof.schema, f.proof.attestation]
+      const extra = [f.policy, f.missing, f.binding, ...sas, ...sas, ctx.programId, f.validation]
+        .map((address) => ({ address, role: AccountRole.READONLY }))
+      const raw = getTransferCheckedInstruction({ source: f.source, mint: f.asset.mint,
+        destination: f.destination, authority: sourceSigner, amount: 1n, decimals: f.asset.decimals })
+      await input.guardLocalnet()
+      const result = await input.rejectMissingBinding(sourceSigner, [{ ...raw, accounts: [...raw.accounts, ...extra] }])
+      assert(result && result.status === 'failed' && isSignature(result.signature)
+        && Number.isSafeInteger(result.slot) && result.slot >= floor && Array.isArray(result.logs)
+        && result.logs.length > 0 && result.logs.every((line) => typeof line === 'string' && line.length > 0),
+      'Confirmed failed ledger observation required')
+      // Advance before further validation so even a mismatched callback triggers fresh integrity reads.
+      floor = result.slot
+      const { value } = await ctx.rpc.getSignatureStatuses([result.signature], { searchTransactionHistory: true }).send()
+      const status = value[0]
+      assert(status && ['confirmed', 'finalized'].includes(status.confirmationStatus ?? '')
+        && Number(status.slot) === result.slot && status.err, 'Matching confirmed rejection required')
+      assert.deepEqual(status.err, result.err, 'Raw rejection error mismatch')
+      const transaction = await ctx.rpc.getTransaction(result.signature, { encoding: 'json',
+        maxSupportedTransactionVersion: 0, commitment: ctx.commitment === 'finalized' ? 'finalized' : 'confirmed' }).send()
+      assert(transaction && Number(transaction.slot) === result.slot
+        && transaction.transaction.signatures[0] === result.signature, 'Matching confirmed transaction required')
+      assert.deepEqual(transaction.meta?.err, result.err, 'Confirmed transaction error mismatch')
+      assert.deepEqual(transaction.meta?.logMessages, result.logs, 'Confirmed transaction logs mismatch')
+      assert(result.err && typeof result.err === 'object' && 'InstructionError' in result.err, 'Raw instruction error required')
+      const error = result.err.InstructionError
+      assert(Array.isArray(error) && error.length === 2 && [1, 1n].includes(error[0])
+        && error[1] && typeof error[1] === 'object' && 'Custom' in error[1], 'Expected transfer custom instruction error')
+      const hookFailed = result.logs.some((line) => line.startsWith(`Program ${ctx.programId} failed:`))
+      if (hookFailed) {
+        assert(Number(error[1].Custom) === 6003 && onchainReasonFromLogs(result.logs, ctx.programId)?.code === 'BindingMissing'
+          && result.logs.includes(`Program ${ctx.programId} failed: custom program error: 0x1773`), 'Hook must reject with BindingMissing')
+      } else {
+        assert(Number(error[1].Custom) === MISSING_BINDING_TLV_ERROR
+          && !result.logs.some((line) => line.startsWith(`Program ${ctx.programId} invoke`))
+          && result.logs.includes(`Program ${TOKEN_2022_PROGRAM_ID} failed: custom program error: 0x${MISSING_BINDING_TLV_ERROR.toString(16)}`),
+        'Expected Token-2022 TLV AccountDataTooSmall before hook CPI')
+      }
+      const after = await balances(f)
+      assert.deepEqual(after, before, 'Rejected transfer changed balances')
+      await absent()
+      emit({ signature: result.signature, status: 'failed', slot: result.slot,
+        ...(hookFailed ? { hookCode: 'BindingMissing' as const } : {}) })
+      emit({ asset: f.asset.id as 'alfa' | 'beta', source: sourceSigner.address, destination: treasury.address,
+        accepted: false, before: before.map(String), after: after.map(String), slot: floor })
+    }
+    complete(MISSING_SOURCE_BINDING_STAGES[1])
+  } catch (error) { failures.push(error) } finally {
+    try {
+      const after = await read(addresses)
+      original.forEach((raw, i) => assert.deepEqual(after[i], raw, 'Missing source binding check changed a protected account'))
+      await absent()
+    } catch (error) { failures.push(error) }
+  }
+  if (failures.length) throw new AggregateError(failures, 'Missing source binding checks or protected readback failed')
+  for (const protectedAccount of addresses) emit({ protectedAccount, slot: floor, accountUnchanged: true })
+  complete(MISSING_SOURCE_BINDING_STAGES[2])
 }

@@ -2,10 +2,10 @@
 // Version changes describe stage-contract changes, independently of the report schema version.
 import { SCHEMA_VALIDITY_STAGES } from './schema-validity-checks'
 import { SAS_ADVERSARIAL_STAGES } from './sas-adversarial-checks'
-import { MISSING_BINDING_STAGES } from './missing-binding-checks'
+import { MISSING_BINDING_STAGES, MISSING_SOURCE_BINDING_STAGES } from './missing-binding-checks'
 
 export const DEMO_ACCEPTANCE_MANIFEST = Object.freeze({
-  version: 3,
+  version: 4,
   stageIds: Object.freeze([
     'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
     'external-with-extra-accounts', 'external-without-extra-accounts',
@@ -26,6 +26,7 @@ export const DEMO_ACCEPTANCE_MANIFEST = Object.freeze({
     ...SCHEMA_VALIDITY_STAGES,
     ...SAS_ADVERSARIAL_STAGES,
     ...MISSING_BINDING_STAGES,
+    ...MISSING_SOURCE_BINDING_STAGES,
   ] as const),
 } as const)
 

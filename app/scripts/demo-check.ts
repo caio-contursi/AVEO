@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { runSchemaValidityChecks } from './schema-validity-checks'
 import { runSasAdversarialChecks } from './sas-adversarial-checks'
-import { runMissingBindingChecks, type MissingBindingRejection } from './missing-binding-checks'
+import { runMissingBindingChecks, runMissingSourceBindingChecks, type MissingBindingChecksInput, type MissingBindingRejection } from './missing-binding-checks'
 import type { AdversarialContext } from './adversarial-context'
 import { runAuthorizationChecks } from './authorization-checks'
 import { runBoundaryChecks } from './boundary-checks'
@@ -237,6 +237,11 @@ async function main(): Promise<void> {
     }
     const xSigner = signer('X', x.address)
     const treasurySigner = signer('treasury', treasury.address)
+    // SEC-09 stays private: no normal Desk card or public fixture metadata needed.
+    const missingSourceSigner = keys.get('missing-binding-source')?.signer
+    expect(missingSourceSigner, 'Missing SEC-09 private synthetic source; regenerate localnet fixtures')
+    expect(!deployment.wallets.some((entry) => entry.address === missingSourceSigner.address),
+      'SEC-09 source must be separate from normal fixture wallets')
     const { value: programs } = await ctx.rpc.getMultipleAccounts([AVEO_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID], { encoding: 'base64', commitment: 'confirmed' }).send()
     expect(programs.every((program) => program?.executable), 'Required programs are not executable on local validator')
     const checkedSend = async (payer: KeyPairSigner, instructions: Instruction[]) => {
@@ -785,9 +790,11 @@ async function main(): Promise<void> {
     }
     await runSchemaValidityChecks(adversarial)
     await runSasAdversarialChecks(adversarial)
-    await runMissingBindingChecks({ ...adversarial,
+    const missingBindingInput: MissingBindingChecksInput = { ...adversarial,
       rejectMissingBinding: async (payer, instructions): Promise<MissingBindingRejection> => {
         await verifyLocalValidator()
+        const genesis = await ctx.rpc.getGenesisHash().send()
+        expect(genesis === actualGenesis, 'Validator genesis changed since acceptance startup')
         const { value: blockhash } = await ctx.rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
         const message = pipe(
           createTransactionMessage({ version: 0 }),
@@ -812,6 +819,15 @@ async function main(): Promise<void> {
           && ['confirmed', 'finalized'].includes(statuses[0].confirmationStatus ?? '') && statuses[0].err,
         'Missing binding rejection must have a confirmed raw ledger error')
         return { signature, status: 'failed', slot: confirmation.slot, logs: confirmation.logs, err: statuses[0].err }
+      },
+    }
+    await runMissingBindingChecks(missingBindingInput)
+    await runMissingSourceBindingChecks({ ...missingBindingInput, sourceSigner: missingSourceSigner,
+      guardLocalnet: async () => {
+        requireLoopback(RPC_URL, ['http:', 'https:'])
+        requireLoopback(WS_URL, ['ws:', 'wss:'])
+        await verifyLocalValidator()
+        expect(await ctx.rpc.getGenesisHash().send() === actualGenesis, 'Validator genesis changed since acceptance startup')
       },
     })
     console.log(`PASS demo-check (${stages.length}/${stages.length})`)

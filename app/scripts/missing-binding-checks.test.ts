@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createNoopSigner, getAddressDecoder, getBase58Decoder, signature, type Address, type KeyPairSigner } from '@solana/kit'
-import { findAssociatedTokenPda, getTokenEncoder, resolveExtraAccountMetasForExecute } from '@solana-program/token-2022'
+import { findAssociatedTokenPda, getTokenEncoder, getMintEncoder, resolveExtraAccountMetasForExecute } from '@solana-program/token-2022'
 import { readAccounts, type RawAccount } from '../src/api/accounts'
 import { decodeEligibilityBinding } from '../src/api/codecs'
+import { inspectEligibility } from '../src/api/eligibility'
 import { AVEO_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
 import { findBindingPda, findExtraAccountMetasPda, findPolicyPda } from '../src/api/pdas'
 import { MISSING_BINDING_STAGES, MISSING_BINDING_TLV_ERROR, runMissingBindingChecks,
-  type MissingBindingChecksInput } from './missing-binding-checks'
+  MISSING_SOURCE_BINDING_STAGES, runMissingSourceBindingChecks, requireMissingSourceFixtureAccounting,
+  type MissingSourceBindingChecksInput, type MissingBindingChecksInput } from './missing-binding-checks'
 
 // Injected unit orchestration only: no RPC account injection is real-ledger evidence.
 vi.mock('../src/api/accounts', () => ({ readAccounts: vi.fn() }))
+vi.mock('../src/api/eligibility', () => ({ inspectEligibility: vi.fn() }))
 vi.mock('../src/api/codecs', async (original) => ({
   ...await original<typeof import('../src/api/codecs')>(), decodeEligibilityBinding: vi.fn(),
 }))
@@ -86,7 +89,46 @@ async function fixture() {
         logs: [`Program ${TOKEN_2022_PROGRAM_ID} failed: custom program error: 0x${MISSING_BINDING_TLV_ERROR.toString(16)}`] }
     }),
   } as unknown as MissingBindingChecksInput
-  return { input, accounts, missing, destinations, sources, setLedgerError: (error: unknown) => { ledgerError = error } }
+  return { input, accounts, missing, destinations, sources, raw, token, bindings,
+    getSlot: () => slot, setLedgerError: (error: unknown) => { ledgerError = error } }
+}
+
+const mintData = (supply = 1001n, authority: Address | null = null) => new Uint8Array(getMintEncoder().encode({
+  mintAuthority: authority, supply, decimals: 0, isInitialized: true, freezeAuthority: null, extensions: null,
+}))
+
+async function sourceFixture() {
+  const f = await fixture()
+  const sourceSigner = signer(3)
+  const missing: Address[] = [], sources: Address[] = []
+  for (const asset of f.input.assets) {
+    const [source] = await findAssociatedTokenPda({ owner: sourceSigner.address, mint: asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ID })
+    sources.push(source)
+    missing.push(await findBindingPda(AVEO_HOOK_PROGRAM_ID, asset.mint, sourceSigner.address))
+    f.accounts.set(source, f.raw(source, TOKEN_2022_PROGRAM_ID, f.token(asset.mint, sourceSigner.address, 1n)))
+    f.accounts.set(asset.mint, f.raw(asset.mint, TOKEN_2022_PROGRAM_ID, mintData()))
+  }
+  vi.mocked(resolveExtraAccountMetasForExecute).mockImplementation(async (args) => {
+    const i = f.input.assets.findIndex((a) => a.mint === args.mint)
+    throw new Error(`Invalid transfer hook pubkey data: account ${missing[i]} was not found.`)
+  })
+  vi.mocked(inspectEligibility).mockImplementation(async (_ctx, mint, wallet) => {
+    const i = f.input.assets.findIndex((a) => a.mint === mint), proof = f.bindings.get(10 + i * 2)!
+    return { verdict: 'eligible', mint, wallet, reasons: [], read: { slot: f.getSlot() },
+      sourceAccounts: { policy: await findPolicyPda(AVEO_HOOK_PROGRAM_ID, mint),
+        binding: await findBindingPda(AVEO_HOOK_PROGRAM_ID, mint, wallet), ...proof } } as never
+  })
+  let transaction: unknown
+  const reject = f.input.rejectMissingBinding
+  const input: MissingSourceBindingChecksInput = { ...f.input, sourceSigner, guardLocalnet: vi.fn(async () => {}),
+    rejectMissingBinding: vi.fn(async (payer, instructions) => {
+      const result = await reject(payer, instructions)
+      transaction = { slot: BigInt(result.slot), transaction: { signatures: [result.signature] },
+        meta: { err: result.err, logMessages: result.logs } }
+      return result
+    }) }
+  input.ctx.rpc = { ...input.ctx.rpc, getTransaction: vi.fn(() => ({ send: async () => transaction })) } as never
+  return { ...f, input, missing, sources, setTransaction: (value: unknown) => { transaction = value } }
 }
 
 describe('missing binding orchestration (mocked unit evidence only)', () => {
@@ -176,5 +218,150 @@ describe('missing binding orchestration (mocked unit evidence only)', () => {
       await expect(runMissingBindingChecks(f.input)).rejects.toThrow('Missing binding checks or protected readback failed')
       expect(f.input.complete).not.toHaveBeenCalledWith(MISSING_BINDING_STAGES[2])
       if (kind === 'resolver') expect(reject).not.toHaveBeenCalled()
+    })
+})
+
+describe('SEC-09 missing source binding (mocked unit evidence only)', () => {
+  it('requires both funded source cases, exact missing source metas, ledger matches and fresh protected readback', async () => {
+    const f = await sourceFixture()
+    await runMissingSourceBindingChecks(f.input)
+    expect(vi.mocked(f.input.complete).mock.calls.flat()).toEqual([...MISSING_SOURCE_BINDING_STAGES])
+    expect(f.input.guardLocalnet).toHaveBeenCalledTimes(3)
+    expect(f.input.send).not.toHaveBeenCalled()
+    expect(f.input.nonce).not.toHaveBeenCalled()
+    expect(f.input.ctx.rpc.getTransaction).toHaveBeenCalledTimes(2)
+    for (const [i, [payer, instructions]] of vi.mocked(f.input.rejectMissingBinding).mock.calls.entries()) {
+      expect(payer).toBe(f.input.sourceSigner)
+      expect(instructions).toHaveLength(1)
+      expect(instructions[0]!.accounts).toHaveLength(15)
+      expect(instructions[0]!.accounts![0]!.address).toBe(f.sources[i])
+      expect(instructions[0]!.accounts![5]!.address).toBe(f.missing[i])
+      expect(instructions[0]!.accounts![6]!.address).toBe(await findBindingPda(AVEO_HOOK_PROGRAM_ID, f.input.assets[i]!.mint, f.input.treasury.address))
+    }
+    const evidence = vi.mocked(f.input.emit).mock.calls.map(([entry]) => entry)
+    expect(evidence.filter((entry) => entry.accepted === false)).toHaveLength(2)
+    expect(evidence.every((entry) => entry.hookCode === undefined)).toBe(true)
+    expect(evidence.filter((entry) => entry.accountUnchanged).every((entry) => entry.slot! >= f.getSlot())).toBe(true)
+    expect(vi.mocked(readAccounts).mock.calls.slice(-2).every((call) => call[2]! >= f.getSlot())).toBe(true)
+  })
+
+  it.each(['remote', 'processed', 'public-cluster', 'same-owner', 'missing-guard', 'genesis', 'duplicate-mint'])(
+    'stops unsafe %s before any source reads or signing', async (kind) => {
+      const f = await sourceFixture()
+      if (kind === 'remote') f.input.ctx.rpcUrl = 'https://api.devnet.solana.com'
+      if (kind === 'processed') f.input.ctx.commitment = 'processed'
+      if (kind === 'public-cluster') f.input.deployment.cluster = 'devnet'
+      if (kind === 'same-owner') f.input.sourceSigner = f.input.treasury
+      if (kind === 'missing-guard') f.input.guardLocalnet = undefined as never
+      if (kind === 'genesis') vi.mocked(f.input.guardLocalnet).mockRejectedValue(new Error('Wrong genesis'))
+      if (kind === 'duplicate-mint') f.input.assets[1]!.mint = f.input.assets[0]!.mint
+      await expect(runMissingSourceBindingChecks(f.input)).rejects.toThrow()
+      expect(readAccounts).not.toHaveBeenCalled()
+      expect(f.input.rejectMissingBinding).not.toHaveBeenCalled()
+    })
+
+  it.each(['empty', 'wrong-owner', 'wrong-mint', 'existing-binding', 'invalid-destination', 'stale-destination',
+    'wrong-proof', 'wrong-resolver', 'wrong-supply', 'mint-authority'])(
+    'rejects %s fixture/precondition before signing', async (kind) => {
+      const f = await sourceFixture(), asset = f.input.assets[0]!, source = f.accounts.get(f.sources[0]!)!
+      if (['empty', 'wrong-owner', 'wrong-mint'].includes(kind)) source.data = f.token(
+        kind === 'wrong-mint' ? addr(90) : asset.mint,
+        kind === 'wrong-owner' ? f.input.treasury.address : f.input.sourceSigner.address, kind === 'empty' ? 0n : 1n)
+      if (kind === 'existing-binding') f.accounts.set(f.missing[0]!, { ...source, address: f.missing[0]! })
+      if (kind === 'invalid-destination') vi.mocked(inspectEligibility).mockResolvedValue({ verdict: 'ineligible', reasons: [] } as never)
+      const inspect = vi.mocked(inspectEligibility).getMockImplementation()!
+      if (kind === 'stale-destination' || kind === 'wrong-proof') vi.mocked(inspectEligibility).mockImplementation(async (...args) => {
+        const snapshot = await inspect(...args)
+        if (kind === 'stale-destination') snapshot.read.slot = 0
+        if (kind === 'wrong-proof') snapshot.sourceAccounts.attestation = addr(90)
+        return snapshot
+      })
+      if (kind === 'wrong-resolver') vi.mocked(resolveExtraAccountMetasForExecute).mockRejectedValue(new Error('RPC timeout'))
+      if (kind === 'wrong-supply' || kind === 'mint-authority') f.accounts.get(asset.mint)!.data = mintData(kind === 'wrong-supply' ? 1000n : 1001n, kind === 'mint-authority' ? f.input.issuer.address : null)
+      await expect(runMissingSourceBindingChecks(f.input)).rejects.toThrow()
+      expect(f.input.rejectMissingBinding).not.toHaveBeenCalled()
+      expect(f.input.complete).not.toHaveBeenCalledWith(MISSING_SOURCE_BINDING_STAGES[0])
+    })
+
+  it.each(['wrong-index', 'wrong-code', 'wrong-logs', 'slot', 'raw-error', 'success', 'processed',
+    'transaction-signature', 'transaction-slot', 'transaction-error', 'transaction-logs', 'transaction-missing', 'hook-invoked'])(
+    'refuses %s evidence and never completes rejection/integrity stages', async (kind) => {
+      const f = await sourceFixture(), reject = f.input.rejectMissingBinding
+      f.input.rejectMissingBinding = async (payer, instructions) => {
+        const result = await reject(payer, instructions)
+        if (kind === 'wrong-index' || kind === 'wrong-code') {
+          result.err = { InstructionError: [kind === 'wrong-index' ? 0 : 1, { Custom: kind === 'wrong-code' ? 1 : MISSING_BINDING_TLV_ERROR }] }
+          f.setLedgerError(result.err)
+        }
+        if (kind === 'wrong-logs') result.logs = ['RPC unavailable']
+        if (kind === 'hook-invoked') result.logs.push(`Program ${AVEO_HOOK_PROGRAM_ID} invoke [2]`)
+        if (kind === 'slot') result.slot += 1
+        if (kind === 'raw-error') result.err = {}
+        if (kind === 'success') f.setLedgerError(null)
+        if (kind === 'processed') vi.mocked(f.input.ctx.rpc.getSignatureStatuses).mockReturnValue({ send: async () => ({ value: [{ slot: BigInt(result.slot), err: result.err, confirmationStatus: 'processed' }] }) } as never)
+        f.setTransaction(kind === 'transaction-missing' ? null : {
+          slot: BigInt(result.slot + (kind === 'transaction-slot' ? 1 : 0)),
+          transaction: { signatures: [kind === 'transaction-signature' ? 'other' : result.signature] },
+          meta: { err: kind === 'transaction-error' ? {} : result.err,
+            logMessages: kind === 'transaction-logs' ? ['other'] : result.logs },
+        })
+        return result
+      }
+      await expect(runMissingSourceBindingChecks(f.input)).rejects.toThrow('Missing source binding checks or protected readback failed')
+      expect(f.input.complete).not.toHaveBeenCalledWith(MISSING_SOURCE_BINDING_STAGES[1])
+      expect(f.input.complete).not.toHaveBeenCalledWith(MISSING_SOURCE_BINDING_STAGES[2])
+    })
+
+  it.each(['source-balance', 'destination-balance', 'binding-created', 'policy-bytes', 'stale-read', 'post-send-failure', 'second-guard'])(
+    'detects %s and observes protected integrity without claiming completion', async (kind) => {
+      const f = await sourceFixture(), reject = f.input.rejectMissingBinding
+      if (kind === 'second-guard') vi.mocked(f.input.guardLocalnet).mockResolvedValueOnce().mockRejectedValue(new Error('Changed genesis'))
+      f.input.rejectMissingBinding = async (payer, instructions) => {
+        const result = await reject(payer, instructions)
+        if (kind === 'source-balance') f.accounts.get(f.sources[0]!)!.data[64] = 0
+        if (kind === 'destination-balance') f.accounts.get((await findAssociatedTokenPda({ owner: f.input.treasury.address, mint: f.input.assets[0]!.mint, tokenProgram: TOKEN_2022_PROGRAM_ID }))[0])!.data[64] = 11
+        if (kind === 'binding-created') f.accounts.set(f.missing[0]!, { ...f.accounts.get(f.sources[0]!)!, address: f.missing[0]! })
+        if (kind === 'policy-bytes') f.accounts.get(await findPolicyPda(AVEO_HOOK_PROGRAM_ID, f.input.assets[0]!.mint))!.data[0] = 99
+        if (kind === 'stale-read') vi.mocked(readAccounts).mockResolvedValue({ slot: 0, accounts: [] })
+        if (kind === 'post-send-failure') throw new Error('Post submission failure')
+        return result
+      }
+      await expect(runMissingSourceBindingChecks(f.input)).rejects.toThrow('Missing source binding checks or protected readback failed')
+      expect(f.input.complete).not.toHaveBeenCalledWith(MISSING_SOURCE_BINDING_STAGES[2])
+      if (kind === 'second-guard') expect(reject).not.toHaveBeenCalled()
+    })
+
+  it('accepts an actual hook BindingMissing only with matching raw error and hook failure logs', async () => {
+    const f = await sourceFixture(), reject = f.input.rejectMissingBinding
+    f.input.rejectMissingBinding = async (payer, instructions) => {
+      const result = await reject(payer, instructions)
+      result.err = { InstructionError: [1, { Custom: 6003 }] }
+      result.logs = [`Program ${AVEO_HOOK_PROGRAM_ID} invoke [2]`,
+        'Program log: AnchorError occurred. Error Code: BindingMissing. Error Number: 6003. Error Message: missing binding.',
+        `Program ${AVEO_HOOK_PROGRAM_ID} failed: custom program error: 0x1773`]
+      f.setLedgerError(result.err)
+      f.setTransaction({ slot: BigInt(result.slot), transaction: { signatures: [result.signature] }, meta: { err: result.err, logMessages: result.logs } })
+      return result
+    }
+    await runMissingSourceBindingChecks(f.input)
+    expect(vi.mocked(f.input.emit).mock.calls.filter(([entry]) => entry.hookCode === 'BindingMissing')).toHaveLength(2)
+  })
+})
+
+describe('SEC-09 fixture issuance accounting', () => {
+  it.each(['valid', 'supply', 'authority', 'source-amount', 'treasury-amount', 'existing-holder', 'owner', 'mint', 'program', 'missing'])(
+    'decodes and validates actual mint and all balances: %s', async (kind) => {
+      const f = await fixture(), asset = f.input.assets[0]!
+      const owners = [1, 2, 3, 4, 5].map(addr), atas = [80, 81, 82, 83, 84].map(addr)
+      const accounts: (RawAccount | null)[] = [f.raw(asset.mint, TOKEN_2022_PROGRAM_ID,
+        mintData(kind === 'supply' ? 1000n : 1001n, kind === 'authority' ? addr(99) : null)),
+      ...owners.map((owner, i) => f.raw(atas[i]!, TOKEN_2022_PROGRAM_ID,
+        f.token(kind === 'mint' ? addr(99) : asset.mint, kind === 'owner' ? addr(99) : owner,
+          i === 0 ? (kind === 'treasury-amount' ? 999n : 1000n) : i === 4 ? (kind === 'source-amount' ? 0n : 1n) : (kind === 'existing-holder' ? 1n : 0n))))]
+      if (kind === 'program') accounts[0]!.owner = SAS_PROGRAM_ID
+      if (kind === 'missing') accounts[5] = null
+      const check = () => requireMissingSourceFixtureAccounting(asset, accounts, owners, atas)
+      if (kind === 'valid') expect(check).not.toThrow()
+      else expect(check).toThrow()
     })
 })
