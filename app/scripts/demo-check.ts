@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { runSchemaValidityChecks } from './schema-validity-checks'
 import { runSasAdversarialChecks } from './sas-adversarial-checks'
+import { runMissingBindingChecks, type MissingBindingRejection } from './missing-binding-checks'
 import type { AdversarialContext } from './adversarial-context'
 import { runAuthorizationChecks } from './authorization-checks'
 import { runBoundaryChecks } from './boundary-checks'
@@ -784,6 +785,35 @@ async function main(): Promise<void> {
     }
     await runSchemaValidityChecks(adversarial)
     await runSasAdversarialChecks(adversarial)
+    await runMissingBindingChecks({ ...adversarial,
+      rejectMissingBinding: async (payer, instructions): Promise<MissingBindingRejection> => {
+        await verifyLocalValidator()
+        const { value: blockhash } = await ctx.rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
+        const message = pipe(
+          createTransactionMessage({ version: 0 }),
+          (m) => setTransactionMessageFeePayerSigner(payer, m),
+          (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+          (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units: 1_000_000 }), ...instructions], m),
+        )
+        const signed = await signTransactionMessageWithSigners(message)
+        const signature = getSignatureFromTransaction(signed)
+        // Deliberately persist the negative transaction on the isolated ledger.
+        // This bypass is never used by the application or public deployment tooling.
+        await ctx.rpc.sendTransaction(getBase64EncodedWireTransaction(signed), { encoding: 'base64', skipPreflight: true }).send()
+        let confirmation = await confirmSignature(ctx, signature)
+        for (let attempt = 0; confirmation.status === 'failed' && confirmation.logs.length === 0 && attempt < 10; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200))
+          confirmation = await confirmSignature(ctx, signature)
+        }
+        expect(confirmation.status === 'failed' && confirmation.slot !== undefined && confirmation.logs.length > 0,
+          'Missing binding transfer must fail with confirmed ledger logs')
+        const { value: statuses } = await ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()
+        expect(statuses[0] && Number(statuses[0].slot) === confirmation.slot
+          && ['confirmed', 'finalized'].includes(statuses[0].confirmationStatus ?? '') && statuses[0].err,
+        'Missing binding rejection must have a confirmed raw ledger error')
+        return { signature, status: 'failed', slot: confirmation.slot, logs: confirmation.logs, err: statuses[0].err }
+      },
+    })
     console.log(`PASS demo-check (${stages.length}/${stages.length})`)
   } catch (error) {
     // Never serialize wallet records, error objects, endpoint URLs or raw RPC logs.

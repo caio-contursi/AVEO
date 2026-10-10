@@ -6,6 +6,7 @@ import { FALSE_KYC_STAGES } from './kyc-checks'
 import { PERSISTENCE_STAGES } from './persistence-check'
 import { SCHEMA_VALIDITY_STAGES } from './schema-validity-checks'
 import { SAS_ADVERSARIAL_STAGES } from './sas-adversarial-checks'
+import { MISSING_BINDING_STAGES } from './missing-binding-checks'
 
 // Pin the existing emission order independently of the producer and consumer aliases.
 const versionOneOrder = `
@@ -55,8 +56,8 @@ delegate-approval-revoked
 
 describe('demo acceptance manifest', () => {
   it('preserves the original order and versions the appended adversarial stages', () => {
-    expect(DEMO_ACCEPTANCE_MANIFEST.version).toBe(2)
-    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES])
+    expect(DEMO_ACCEPTANCE_MANIFEST.version).toBe(3)
+    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES, ...MISSING_BINDING_STAGES])
   })
 
   it('contains unique, nonempty IDs accepted by the runner metadata parser', () => {
@@ -83,6 +84,6 @@ describe('demo acceptance manifest', () => {
     expect(Reflect.set(stageIds, '0', 'unexpected')).toBe(false)
     expect(Reflect.set(stageIds, 'length', 0)).toBe(false)
     expect(() => Array.prototype.push.call(stageIds, 'unexpected')).toThrow(TypeError)
-    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES])
+    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES, ...MISSING_BINDING_STAGES])
   })
 })
