@@ -1025,6 +1025,14 @@ checks deployed programs without signing, and `pnpm build:public` bundles the
 validated manifest with development wallets disabled. These tools do not deploy
 the program, create devnet fixtures or certify the wallet demonstration.
 
+The [delivery backlog](docs/backlog.md) tracks the independent integration and
+real-operator pilot fronts separately from the public demonstration critical path.
+Preparation artifacts do not constitute a completed network integration or pilot.
+The [independent lifecycle example](docs/integration-example.md) uses the public
+`@aveo/backend-aveo/integration` entry point with a host-supplied backend; the
+concrete RPC backend is not extracted yet. The [operator pilot kit](docs/operator-pilot.md)
+includes tasks, consent boundaries and an empty evidence template, not a completed pilot.
+
 ## Estrutura
 
 ```
