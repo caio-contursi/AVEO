@@ -169,6 +169,83 @@ were stopped. Ledgers, private fixtures and public reports/screens were preserve
 in the temporary directories; the unrelated existing environment was not stopped.
 These paths are local evidence, not durable public hosting or a released demo.
 
+## Ordered cycle and partial balance display
+
+The 2026-10-10 follow-up first reran the blockchain cycle with fresh synthetic
+fixtures in `/tmp/aveo-cycle-Sspkb5/artifacts/`. All 42 live stages passed, including
+signed batched renewal, rejected external transfers and validator-clock expiry.
+The independently resumed recovery receipt was verified after subsequent ledger
+activity, using historical transaction metadata rather than current balances.
+Chromium then passed ten checks against this same local deployment, with exactly
+one browser submission and read-only recovery after reload at desktop and 393 px.
+Browser evidence is in
+`/tmp/aveo-browser-review-kx6dEQ/local-wallet-evidence-1791656864904/`.
+
+`pnpm local:cycle` consolidates fixture creation, signing/recovery, the 42-stage
+runner and independent receipt verification, in that order. It requires explicit
+literal loopback RPC/WebSocket URLs and `AVEO_LOCAL_GENESIS_HASH`, checks identity
+before creating a new private temporary directory, and preserves stage outcomes
+in `local-cycle-report.json`. It does not start or deploy a validator, replace
+the browser test, publish a demo or run the entire security matrix. It reports
+the matrix separately so a passing cycle is not mistaken for full security
+acceptance. Existing fixtures are never overwritten by the command.
+The report distinguishes `RUNNING`, `PASS`, `FAIL` and unexecuted stages. A process
+interruption must not be interpreted as success. Its expected stage IDs are
+deliberately strict and must be updated when the acceptance runner changes.
+SIGINT/SIGTERM and bounded-stage timeouts terminate only the command's own child
+process group, including the nested acceptance runner, and stop subsequent stages.
+Hard process termination cannot guarantee a final report update or undo an
+already submitted transaction; use the original signature for recovery.
+
+```sh
+AVEO_RPC_URL=http://127.0.0.1:18899 \
+AVEO_WS_URL=ws://127.0.0.1:18900 \
+AVEO_LOCAL_GENESIS_HASH=<verified-approved-local-genesis> \
+pnpm local:cycle
+```
+
+The maintained command was also executed against the isolated ledger and passed
+all four orchestration stages, including another fresh 42/42 live acceptance run.
+Its report is `/tmp/aveo-local-cycle-zh5AMQ/local-cycle-report.json` and explicitly
+records `securityMatrix: NOT_FULL`.
+
+After blockchain acceptance, `readHoldings` isolates invalid decoded balances by
+asset/wallet pair. Valid amounts retain their bigint values and shared observation
+slot; an invalid pair has no numeric amount and the static `ReadUnverifiable`
+marker. A genuinely absent ATA still reports zero. A failed RPC batch remains a
+global read failure rather than invented partial success.
+
+The matrix and transfer screen identify unavailable balances and offer read-only
+retry while preserving valid values. Cached balances are still hidden during a
+refresh or failed batch. Missing source/destination amounts are not supplied as
+pre-transfer balance evidence. The stricter `tokenBalances` used by transaction
+verification is unchanged: invalid verification data still prevents a verified
+outcome. Displaying a balance never establishes eligibility or permission to
+transfer.
+
+Browser partial-display evidence:
+`/tmp/aveo-browser-review-kx6dEQ/partial-holdings-1791657193781/`.
+The read-only experiment injected one truncated account response: X/Alfa became
+unavailable while X/Beta remained `21 BETA` and the treasury remained visible.
+Retry restored the real `49 ALFA` balance, with zero submissions and no page
+errors. Desktop and 393 px screenshots were inspected; the page had no horizontal
+overflow, and the matrix retained its deliberate internal horizontal scroll.
+This controlled RPC fault is not evidence that a ledger account was corrupted.
+The final experiment also checked the transfer screen's unavailable source and
+valid destination hints, then retried there and returned to the recovered matrix.
+An earlier expansion of the harness timed out on a selector that omitted the
+hash-routing prefix; the selector was corrected before this passing experiment.
+
+Final verification passed: 1,863 app/script tests plus 41 backend tests (1,904
+total), application/workspace/test type checks, lint and the production build.
+This increment adds 44 orchestrator tests and 19 partial-display tests; earlier
+strict transaction balance tests still pass unchanged. Existing SQLite and
+Zod/Rollup warnings remain, with no new build warnings. No dependencies, Rust
+code, instruction interfaces or account layouts changed. The laboratory services were stopped
+after acceptance; private fixtures and public evidence were preserved outside
+the worktree. Screens still show a verbose partial-balance banner and mixed
+fixture/UI languages; those presentation objections remain in the backlog.
+
 ## Reviewer objections and follow-up proposals
 
 Confirmed local execution closes the previous synthetic signing/recovery evidence

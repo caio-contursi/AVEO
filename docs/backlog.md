@@ -79,3 +79,8 @@ transactions, outreach or real pilot occurred in this increment.
   the Desk's supported operation types, so UI recovery does not rely solely on
   stored metadata or a successful signature status. Expand only with tests for
   each supported instruction shape.
+
+- **LOCAL-05:** share one versioned acceptance-stage manifest between the runner
+  and orchestrator, preserving strict evidence checks without duplicating 42 IDs.
+- **UX-01:** expose the holdings observation slot and shorten the partial-balance
+  banner while retaining the distinction between unavailable and zero amounts.
