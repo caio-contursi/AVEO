@@ -637,6 +637,50 @@ also reports its existing experimental SQLite warning during backend tests.
 These results establish local behavior, not a devnet deployment or the full
 T01–T17 security matrix.
 
+### Verified balance observations
+
+`app/src/api/token-balance.ts` validates observed associated token account (ATA)
+balances for both inventory and post-confirmation readback. An ATA is the
+standard token account derived for a wallet and mint; these observations are
+not a sum of every token account the wallet may own. A genuinely absent account
+at the returned RPC slot remains zero. A present account must match the expected
+ATA address, Token-2022 program owner, mint and wallet owner, be non-executable,
+decode successfully and be initialized or frozen. Frozen accounts retain their
+balance; this check does not authorize transfers or replace the hook.
+
+Invalid data rejects the entire requested balance read with a static
+`ReadUnverifiable` error, rather than manufacturing zero or returning a partially
+trusted result. Inventory and readback share this rule. Failed readback preserves
+the existing unknown-evidence/original-signature recovery path; it does not
+resend a transaction or prove that confirmation failed.
+
+The matrix and transfer form explicitly distinguish unavailable balances from
+zero in English and Portuguese. Their retry refreshes only holdings. Cached
+amounts remain hidden while the query is failing or refreshing, independently
+of eligibility. A balance error neither approves nor rejects a transfer by
+itself; existing explicit preparation, simulation and execution guards remain.
+
+An isolated Chromium review passed 12 checks across both routes and languages at
+393px: absent accounts display observed zero; a malformed synthetic RPC account
+hides cached balances and displays the static warning; a one-query read-only
+retry recovers after the fixture is corrected. Screenshots showed no measured
+page overflow, and no uncaught page errors, wallet-key access or attempted writes
+occurred. These are injected JSON-RPC fixtures, not live validator acceptance.
+Unit tests use the existing Token-2022 encoder, including frozen accounts,
+extensions, maximum `u64` balance, invalid identities/states and truncated data.
+The prior preparation-cancellation checks (three) and matrix/clipboard focus
+checks (28) were also rerun successfully with the new balance warning present.
+The final `pnpm verify` passed 1,525 app/script tests in 64 files and four backend
+tests, type checks, lint and production build. Only the existing Zod/Rollup
+annotation and Node SQLite experimental warnings remain.
+
+Reviewer limits: one invalid account hides all balances in the requested batch,
+by design. A valid RPC observation is not authenticated independently of its
+provider, is not transfer authorization and may become stale. Browser evidence
+is temporary outside the repository and mobile behavior is emulated. Live wallet
+and on-chain recovery still need separate acceptance; Caio's review remains
+required. No new dependency or program/interface change was introduced.
+
 ### Read-only plan preparation
 
 `app/src/features/operations/preparation.ts` and `usePlanPreparation.ts` separate
@@ -918,6 +962,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
+- Share the real Token-2022 balance fixture factory between inventory and
+  readback tests so identity and extension boundary coverage cannot drift.
+- Exercise both read-only balance retry controls with native keyboard activation
+  in a maintained browser workflow, including simultaneous eligibility errors.
 - Add a maintained browser fixture for pending preparation HTTP reads, asserting
   navigation cancellation separately from independent background queries.
 - Inventory cancellable read-only queries outside preparation before extending
