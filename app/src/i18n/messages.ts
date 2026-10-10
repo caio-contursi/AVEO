@@ -93,6 +93,7 @@ const pt = {
   'receipts.invalidExport': 'Não foi possível exportar: metadados do recibo inválidos.',
   'receipts.manualExport': 'JSON pronto para cópia manual.',
   'receipts.manualText': 'JSON do recibo público para cópia manual',
+  'receipts.selectManualText': 'Selecionar JSON para copiar',
   'receipts.historyExportNote': 'Exporta uma cópia do histórico local atualmente visível nesta tela, não de todas as abas ou dispositivos. Contém apenas metadados públicos não confiáveis; não inclui confirmações salvas, chaves nem endereço RPC e não comprova confirmação na blockchain.',
   'receipts.historyPreviewCounter': 'Backup público: {bytes} / {maxBytes} bytes UTF-8.',
   'receipts.historyPreviewNote': 'Tamanho do JSON público formatado, diferente do armazenamento compacto. Não mede a cota do navegador nem garante persistência; exportar não libera espaço.',
@@ -226,6 +227,8 @@ const pt = {
   'assets.no': 'não',
   'assets.matrix': 'Quem pode mover o quê, agora',
   'assets.matrixHint': 'Clique numa célula para ver a prova e a leitura',
+  'assets.matrixScrollHint': 'Deslize a tabela para ver todos os ativos ou, com ela em foco, use as setas horizontais.',
+  'assets.matrixScrollRegion': 'Matriz de elegibilidade por carteira e ativo',
   'assets.noProofs': 'Nenhuma prova encontrada para as carteiras do manifest.',
 
   'detail.title': '{wallet} em {asset}',
@@ -458,6 +461,7 @@ const en: Record<MessageKey, string> = {
   'receipts.invalidExport': 'Could not export: receipt metadata is invalid.',
   'receipts.manualExport': 'JSON ready for manual copy.',
   'receipts.manualText': 'Public receipt JSON for manual copy',
+  'receipts.selectManualText': 'Select JSON to copy',
   'receipts.historyExportNote': 'Exports a snapshot of the local history currently visible on this page, not all tabs or devices. It contains only untrusted public metadata; no cached confirmations, keys or RPC URL, and does not prove blockchain confirmation.',
   'receipts.historyPreviewCounter': 'Public backup: {bytes} / {maxBytes} UTF-8 bytes.',
   'receipts.historyPreviewNote': 'Size of the formatted public JSON, different from compact storage. Does not measure browser quota or guarantee persistence; exporting does not free space.',
@@ -591,6 +595,8 @@ const en: Record<MessageKey, string> = {
   'assets.no': 'no',
   'assets.matrix': 'Who can move what, right now',
   'assets.matrixHint': 'Click a cell to see the proof and the read',
+  'assets.matrixScrollHint': 'Swipe the table to see all assets or focus it and use the horizontal arrow keys.',
+  'assets.matrixScrollRegion': 'Eligibility matrix by wallet and asset',
   'assets.noProofs': 'No proofs found for the manifest wallets.',
 
   'detail.title': '{wallet} in {asset}',
