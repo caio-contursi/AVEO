@@ -84,6 +84,10 @@ transactions, outreach or real pilot occurred in this increment.
   including an interrupted outbound/return pair, without implying atomic cleanup.
 - **SEC-06:** isolate a destination-only revoked signer so acceptance proves the
   destination validation independently of an earlier source failure.
+- **DEMO-01:** after approved public deployment, capture the six scenes with an
+  extension wallet and publish transaction links tied to the exact release.
+- **DEMO-02:** maintain the browser walkthrough in an isolated CI environment,
+  keeping real local ledger checks separate from controlled failure responses.
 
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed

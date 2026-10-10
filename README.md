@@ -346,6 +346,12 @@ Não rode `anchor keys sync`. O program ID já está no código. A keypair de de
 
 ## Automated local acceptance
 
+The default Desk entry is a bilingual six-scene demonstration. The
+[judge walkthrough](docs/judge-walkthrough.md) explains the operator setup,
+public local evidence export (`pnpm demo:evidence`), read-only transaction
+verification and explicit historical/current-state distinction. This is not a
+public devnet release or an automatic transaction player.
+
 Use Node 22 or later. With the local validator running, generate the synthetic
 fixtures and run the acceptance checks without opening the Desk:
 
