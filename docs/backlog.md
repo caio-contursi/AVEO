@@ -5,6 +5,54 @@ Public devnet deployment and the six-scene demonstration remain the critical pat
 described in [public-demo-release.md](public-demo-release.md). Parallel work below
 must not change program interfaces, add dependencies or delay that acceptance.
 
+## Optional differentiators — only after mandatory acceptance
+
+**Status:** proposed, not implemented or scheduled. This ordering is an internal
+product judgment about feasibility and demonstration value, not a prediction of
+judges' scores. More features are not automatically a stronger submission.
+
+**Entry gate:** all six conditions in [audit-candidate-plan.md](audit-candidate-plan.md)
+must pass for the delivered release: current evidence, mandatory security cases,
+real browser/wallet execution, interruption recovery, public demonstration and
+clear delivery material. INT-01 and PILOT-01 remain higher-value work than a new
+token or an unverified protocol-compatibility claim.
+
+**Time gate:** reserve time for regression, public-demo rehearsal and submission
+before selecting any extra. Allow only one optional slice per implementation
+owner at a time; stop if it adds an unresolved security boundary, fails acceptance
+or consumes the rehearsal reserve. Do not weaken mandatory gates to make room.
+The effort bands below are provisional incremental engineering estimates, not
+delivery commitments; they exclude external approvals and provider lead times.
+
+| Order / proposal | Smallest useful slice and likely demonstration benefit | Specialist / human dependency | Effort and acceptance |
+| --- | --- | --- | --- |
+| 1 — **PLUS-01: bounded incident monitoring** | Reuse existing reads to detect a synthetic proof losing validity, group affected assets and show the last successful observation. Demonstrates proactive operations rather than another dashboard. | Operations/testing specialist; Caio reviews scripts/UI, Bruno reviews the incident narrative. | Approximately 6–12 hours if existing reads suffice. Prove detection, RPC outage, restart and no duplicate alerts on localnet, then the approved devnet release. No signing automation, 24/7 availability claim or production SLA. |
+| 2 — **PLUS-02: operator review and handoff** | A compact read-only incident/evidence handoff lets another operator understand what happened and what remains unresolved. Prefer this to a full enterprise user-management system. | UX/backend specialist; Caio owns implementation, Bruno validates usefulness with an operator. | Approximately 6–12 hours for a non-sensitive evidence handoff without accounts. Prove no secrets in exports, unambiguous unknown states and source transaction links. Authenticated multiuser administration is a separate, re-estimated scope requiring server-enforced permissions; a UI role toggle is not access control. |
+| 3 — **PLUS-03: advisory explanation, AI optional** | Explain a verified failure and the available next step in plain language. Start with deterministic explanations from existing error/evidence codes; add AI only if it measurably improves understanding. | UX/integration specialist; Caio reviews data boundaries, Bruno approves the product experiment. | Approximately 4–8 hours for deterministic explanations; AI effort remains unestimated until a provider/design is approved. AI must not decide eligibility, change policies or sign. Require explicit human approval for dependencies, cost and external data sharing; test unavailable service and fabricated explanations against verified facts. |
+| 4 — **PLUS-04: KYC-provider sandbox adapter** | Demonstrate how a synthetic provider result becomes an attestation consumed by the existing policy. This can clarify the real-world integration boundary without collecting identity documents. | SAS/backend specialist and on-chain reviewer; Caio and Bruno review the shared attestation interface. | Re-estimate after selecting a provider and validating its contract; no provider or new dependency is approved here. Prove accepted, expired and revoked synthetic attestations without bypassing SAS validation. Real KYC requires human-led provider, consent, privacy and data-retention decisions; never put identity documents or personal data on-chain. |
+| 5 — **PLUS-05: mainnet-readiness packet, not deployment** | Document release provenance, authority/upgrade powers, operational limits and rollback/incident procedures. Reuse SEC-01 and SEC-02 rather than creating a second audit packet. | Security/release specialist; Bruno owns custody and deployment decisions, an independent auditor owns an actual audit. | Approximately 4–8 hours to consolidate existing evidence, excluding missing controls and external audit. Acceptance is a reproducible packet with explicit gaps, not a production certification. Mainnet deployment, real funds, key custody and audit spending require separate human decisions and are outside this optional implementation authorization. |
+| 6 — **PLUS-06: own token — defer unless necessity is demonstrated** | Evaluate a concrete utility that cannot be achieved with existing assets/accounts. A branded token by itself does not strengthen compliance enforcement or prove adoption. | Product/economics reviewer; Bruno decides whether there is a real need. | At most 1–2 hours for a written go/no-go rationale, not token implementation. Default decision: do not build for this submission. Any issuance/economic design needs its own approved scope, risks and tests; no price, fundraising or investment claims. |
+
+**Parallel work boundary:** specialists may prepare scoped designs and tests, but
+this backlog entry does not launch agents or authorize feature implementation.
+No new stack, major dependencies, personal wallets, real assets or production
+identity collection are authorized. Changes crossing Caio/Bruno ownership must
+be reviewed by both before implementation.
+
+**Reviewer stop rule:** an optional feature is accepted only with passing tests
+and build, a reproducible demonstration and explicit limitations. If it cannot
+be verified before release freeze, omit it from the shipped interface and pitch;
+retain the proposal here instead of presenting unfinished work as a differentiator.
+
+**Ideator follow-ups:**
+
+- **PLUS-07:** compare the operator's incident-resolution time before and after
+  PLUS-01 using the PILOT-01 protocol; label internal measurements separately
+  from independent operator evidence.
+- **PLUS-08:** use one compact, read-only evidence view for handoff, demonstration
+  and integration examples, reducing duplicate screens while retaining origin,
+  observation time and unresolved-state warnings.
+
 ## INT-01 — Minimal independently usable integration
 
 **Owner:** integration specialist; Caio reviews the backend/application boundary.
