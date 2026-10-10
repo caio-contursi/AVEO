@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:public": "tsc -b && AVEO_PUBLIC_RELEASE=true vite build",
+    "manifest:public": "tsx scripts/public-manifest.ts",
+    "devnet:preflight": "tsx scripts/devnet-preflight.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "typecheck:tests": "tsc --project tsconfig.test.json",

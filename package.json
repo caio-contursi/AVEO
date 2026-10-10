@@ -19,6 +19,9 @@
     "demo:faults": "pnpm --filter @aveo/app demo:faults",
     "demo:http-faults": "pnpm --filter @aveo/app demo:http-faults",
     "demo:health": "pnpm --filter @aveo/app demo:health",
+    "build:public": "pnpm --filter @aveo/app build:public",
+    "manifest:public": "pnpm --filter @aveo/app manifest:public",
+    "devnet:preflight": "pnpm --filter @aveo/app devnet:preflight",
     "dev": "pnpm --filter @aveo/app dev"
   },
   "pnpm": {

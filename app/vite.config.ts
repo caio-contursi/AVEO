@@ -2,7 +2,9 @@ import react from '@vitejs/plugin-react'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Plugin } from 'vite'
+import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
+import { publicRelease } from './scripts/public-release'
 
 /**
  * Só no servidor de desenvolvimento: serve os arquivos gerados pelo script de fixtures (app/.dev).
@@ -39,8 +41,8 @@ function devFixtures(): Plugin {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), devFixtures()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), devFixtures(), publicRelease({ ...loadEnv(mode, process.cwd(), ''), ...process.env }, process.cwd())],
   server: { port: 5173, strictPort: true },
   build: {
     rollupOptions: {
@@ -57,4 +59,4 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
   },
-})
+}))
