@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aveo — clareza para movimentar ativos tokenizados | v0.1</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; color: #152b2a; background: #e7eeeb; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; }
+.page { width: 210mm; height: 297mm; padding: 18mm 19mm 20mm; background: #fafcf9; position: relative; break-after: page; }
+.page:last-child { break-after: auto; }
+.brand { font-size: 20px; font-weight: 700; letter-spacing: 3px; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #42766b; margin: 22px 0 12px; }
+h1 { font-size: 43px; line-height: 1.12; letter-spacing: -1.5px; margin: 26px 0; max-width: 570px; }
+h2 { font-size: 30px; line-height: 1.17; letter-spacing: -.7px; margin: 14px 0 22px; }
+h3 { font-size: 17px; margin: 0 0 8px; }
+p { margin: 0 0 15px; }
+.lead { font-size: 19px; line-height: 1.5; }
+.muted, .small { color: #526760; }
+.small { font-size: 11px; line-height: 1.45; }
+.callout { border-left: 4px solid #16856b; background: #eaf3ed; padding: 16px 20px; margin: 22px 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+.card { border: 1px solid #d6e3db; border-radius: 10px; padding: 17px; }
+.card p:last-child { margin-bottom: 0; }
+.number { font-size: 41px; line-height: 1.1; font-weight: 700; color: #137961; margin-bottom: 10px; }
+.tag { display: inline-block; font-size: 10px; letter-spacing: .7px; text-transform: uppercase; background: #e5eee8; padding: 4px 8px; border-radius: 4px; margin-bottom: 10px; }
+.steps { padding: 0; margin: 20px 0; list-style: none; counter-reset: step; }
+.steps li { counter-increment: step; border-top: 1px solid #d6e3db; padding: 10px 0 10px 35px; position: relative; }
+.steps li::before { content: counter(step, decimal-leading-zero); position: absolute; left: 0; font-size: 12px; color: #137961; font-weight: 700; top: 13px; }
+.steps strong { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 18px 0; }
+th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid #d6e3db; }
+th { color: #137961; }
+a { color: #137961; text-decoration: underline; }
+.footer { position: absolute; left: 19mm; right: 19mm; bottom: 11mm; border-top: 1px solid #d6e3db; padding-top: 7px; font-size: 10px; color: #526760; display: flex; justify-content: space-between; }
+.divider { height: 3px; width: 64px; background: #16856b; margin: 30px 0; }
+@media screen { .page { margin: 16px auto; box-shadow: 0 8px 35px #152b2a15; } }
+@media print { body { background: white; } .page { margin: 0; } }
+</style>
+</head>
+<body>
+<section class="page" data-page="1">
+<main>
+<div class="brand">AVEO</div>
+<div class="eyebrow">Guia de narrativa • versão 0.1 • 10 de outubro de 2026</div>
+<h1>Tokenizar é o começo.<br>Movimentar com regras é o próximo passo.</h1>
+<p class="lead">O Aveo ajuda operadores de ativos tokenizados na Solana a entender <strong>quem pode movimentar cada ativo</strong>, aplicar regras na blockchain e acompanhar a correção quando uma prova perde validade.</p>
+<div class="divider"></div>
+<p>Um ativo tokenizado é a representação digital de um ativo em uma blockchain. Elegibilidade significa cumprir os requisitos definidos para uma operação. Compliance é cumprir as regras aplicáveis — um trabalho mais amplo do que verificar uma prova digital.</p>
+<div class="callout"><h3>A frase que deve ficar</h3><p class="lead">Uma prova. Regras por ativo.<br>Uma decisão que o operador consegue verificar.</p></div>
+<p><strong>Promessa de produto:</strong> reduzir a distância entre “a carteira tem uma prova” e “esta transferência pode acontecer agora”.</p>
+<p class="small">Material de trabalho para Bruno e Caio. Evidência atual: prova de conceito com ativos sintéticos em rede local. Não apresentar como produto auditado, solução jurídica completa ou demonstração pública já implantada. Este guia é em português; a versão final em inglês será um entregável separado.</p>
+</main>
+<div class="footer"><span>Aveo • narrativa e evidências • v0.1</span><span>01 / 06</span></div>
+</section>
+<section class="page" data-page="2">
+<main>
+<div class="brand">AVEO</div><div class="eyebrow">01 • Quem precisa e por quê</div>
+<h2>O problema não termina<br>quando o token é emitido.</h2>
+<p class="lead">Imagine um operador responsável por dois ativos. A mesma carteira atende à regra do primeiro, mas não à do segundo. Amanhã, a prova dessa carteira pode expirar.</p>
+<p>Ele precisa responder: <strong>o que pode acontecer, o que está bloqueado, quais ativos foram afetados e o que confirma a correção?</strong> Essa é a situação que a demonstração do Aveo reproduz; ainda não é um relato de cliente.</p>
+<div class="grid">
+<div class="card"><span class="tag">Cliente inicial • hipótese</span><h3>Operadores de emissores e plataformas de tokenização</h3><p>Especialmente equipes que administram mais de um ativo na Solana e precisam acompanhar provas e regras diferentes.</p></div>
+<div class="card"><span class="tag">Quem usa • hipótese</span><h3>Operações e responsáveis pelas regras</h3><p>Quem investiga um bloqueio, coordena a renovação de uma prova e precisa mostrar o estado depois da operação.</p></div>
+</div>
+<h3>Uma sequência simples para explicar</h3>
+<ol class="steps">
+<li><strong>Conhecer os fatos.</strong> Ler a prova da carteira e a regra de cada ativo.</li>
+<li><strong>Aplicar a decisão.</strong> Verificar os requisitos durante a transferência, não apenas na tela.</li>
+<li><strong>Resolver com evidência.</strong> Preparar a correção e consultar novamente a blockchain.</li>
+</ol>
+<p class="small">Não substituímos a instituição que verifica os fatos, define políticas ou assume responsabilidades legais. O sistema depende da qualidade das provas e dos poderes administrativos configurados.</p>
+</main><div class="footer"><span>Aveo • comprador e dor ainda precisam de entrevistas</span><span>02 / 06</span></div>
+</section>
+<section class="page" data-page="3">
+<main>
+<div class="brand">AVEO</div><div class="eyebrow">02 • Mercado, sem inflar a promessa</div>
+<h2>Uma oportunidade grande.<br>Uma entrada específica.</h2>
+<div class="grid">
+<div class="card"><div class="number">US$ 2 tri</div><h3>Projeção para 2030</h3><p>A McKinsey estimou esse valor para ativos financeiros tokenizados, excluindo criptomoedas e stablecoins. Estudo publicado em junho de 2024; não é o tamanho atual do mercado. <a href="https://www.mckinsey.com/industries/financial-services/our-insights/from-ripples-to-waves-the-transformational-power-of-tokenizing-assets">[1]</a></p></div>
+<div class="card"><div class="number">US$ 8 bi</div><h3>Emissões acumuladas</h3><p>Autores de um boletim do BIS registraram esse volume de títulos públicos tokenizados até julho de 2025. É uma referência histórica de emissões, não valor atual em circulação. <a href="https://www.bis.org/publications/bulletin-107-tokenisation-government-bonds-assessment-and-roadmap">[2]</a></p></div>
+</div>
+<p>O BIS também descreve benefícios potenciais de eficiência e transparência, mas ressalta benefícios ainda não comprovados e riscos de complexidade e incerteza regulatória. Isso sustenta investigar a necessidade — não comprova demanda pelo Aveo. <a href="https://www.bis.org/publications/fsi-summary-financial-stability-implications-tokenisation-executive-summary">[3]</a></p>
+<div class="callout"><h3>A conexão que podemos defender</h3><p>Se mais ativos passam a circular com regras, operadores precisam saber quando essas regras são atendidas. O Aveo trabalha nessa camada operacional.</p><p class="small">Esta conexão é nossa interpretação de produto. Ainda não medimos sua contribuição para crescimento, liquidez, receita ou adoção do mercado.</p></div>
+<p><strong>Mercado de ativos não é mercado de software.</strong> O valor tokenizado não é receita disponível ao Aveo. Nosso mercado inicial precisa ser estimado por número de operadores compatíveis × preço anual que aceitam pagar.</p>
+<p class="small">Não há hoje um tamanho verificável do mercado endereçável do Aveo na Solana, preço validado ou participação projetada. Fontes [1]–[3] consultadas em 10/10/2026; seus anos e escopos estão preservados. Não somar os dois números: são medidas diferentes.</p>
+</main><div class="footer"><span>Aveo • contexto de mercado ≠ validação comercial</span><span>03 / 06</span></div>
+</section>
+<section class="page" data-page="4">
+<main>
+<div class="brand">AVEO</div><div class="eyebrow">03 • Mostrar, em vez de prometer</div>
+<h2>A demonstração deve contar<br>uma história verificável.</h2>
+<ol class="steps">
+<li><strong>Uma prova atende dois ativos.</strong> “Não repetimos os fatos da carteira para cada ativo; cada política avalia o que precisa.”</li>
+<li><strong>Uma regra aceita; outra rejeita.</strong> “A prova é compartilhada. A permissão não é universal.”</li>
+<li><strong>A regra funciona fora do Desk.</strong> “A tela explica. O programa da transferência aplica a regra.”</li>
+<li><strong>O atestador autorizado fecha a prova.</strong> “O que era permitido deixa de ser. Mostramos uma tentativa bloqueada.”</li>
+<li><strong>O operador vê o impacto agrupado.</strong> “Uma causa pode afetar vários ativos; não deve virar várias investigações isoladas.”</li>
+<li><strong>A correção é confirmada por uma nova leitura.</strong> “Não basta clicar em renovar. Precisamos verificar o estado depois.”</li>
+</ol>
+<div class="callout"><h3>O momento de impacto</h3><p class="lead">Mostrar uma transferência bloqueada fora da interface e depois uma correção confirmada — com o motivo e a evidência visíveis.</p></div>
+<p><strong>Em linguagem simples:</strong> a prova é uma declaração digital; a política é a regra por ativo; o vínculo conecta carteira, ativo e prova; o Transfer Hook é o programa chamado durante a transferência para verificar as condições.</p>
+<p class="small">Fechamento → impacto → renovação é uma sequência; a rejeição externa por expiração é um teste posterior separado. Não montar uma continuidade fictícia. Autoridades administrativas ainda podem modificar configurações; mint e burn não estão cobertos por essas regras de transferência.</p>
+<p class="small">Roteiro-alvo, não aceite público completo. Carteira de extensão e percurso público em devnet ainda não foram validados. Não afirmar compatibilidade plena com MPL-3643: integração continua pendente.</p>
+</main><div class="footer"><span>Aveo • dados sintéticos • explicação ≠ garantia jurídica</span><span>04 / 06</span></div>
+</section>
+<section class="page" data-page="5">
+<main>
+<div class="brand">AVEO</div><div class="eyebrow">04 • Resultado, evidência e limite</div>
+<h2>Transparência começa<br>nas próprias afirmações.</h2>
+<table>
+<thead><tr><th>Benefício pretendido</th><th>O que demonstramos / como validar</th></tr></thead>
+<tbody>
+<tr><td><strong>Elegibilidade aplicada</strong></td><td>Transferências locais permitidas e rejeitadas, inclusive fora do Desk. Não equivale a cumprir toda legislação aplicável.</td></tr>
+<tr><td><strong>Explicabilidade</strong></td><td>Motivo, estado e evidência de execução. Distinguir erro do cliente, do Token-2022 e do programa Aveo; não chamar toda rejeição de erro do hook.</td></tr>
+<tr><td><strong>Menos retrabalho</strong></td><td>Reutilização da prova e impacto agrupado. Ganho de tempo ainda não medido com operador independente.</td></tr>
+<tr><td><strong>Recuperação cuidadosa</strong></td><td>Processo local verifica a assinatura original sem reenviar. Recuperação no navegador após resposta perdida da carteira ainda tem lacunas.</td></tr>
+</tbody></table>
+<div class="grid">
+<div class="card"><span class="tag">Evidência técnica local</span><h3>56 verificações blockchain</h3><p>7 cenários de falha de comunicação; recuperação com um envio. 2.163 testes da aplicação/scripts e 41 do backend passaram.</p></div>
+<div class="card"><span class="tag">Não comprovado</span><h3>Adoção e economia</h3><p>Sem piloto externo concluído, disposição de pagamento demonstrada, auditoria independente ou implantação pública validada.</p></div>
+</div>
+<h3>Como transformar potencial em resultado</h3>
+<p>Convidar um operador para resolver o mesmo incidente com e sem Aveo. Medir tempo, número de passos, erros e capacidade de explicar o resultado. Publicar método, limitações e feedback somente com consentimento.</p>
+<p class="small">Base desta versão: código 5eeea4e; docs/security-matrix-progress.md e docs/operator-pilot.md. Ciclo local: /tmp/aveo-local-cycle-2lqUgJ. Matriz de segurança NOT_FULL. Testes não são auditoria; arquivos temporários não são evidência pública permanente.</p>
+</main><div class="footer"><span>Aveo • evidências de 10/10/2026 • não é versão de produção</span><span>05 / 06</span></div>
+</section>
+<section class="page" data-page="6">
+<main>
+<div class="brand">AVEO</div><div class="eyebrow">05 • Como apresentar e evoluir</div>
+<h2>Abra com a dor.<br>Feche com a prova.</h2>
+<h3>Roteiro-base de 60–90 segundos</h3>
+<p>“Tokenizar um ativo não resolve quem pode movimentá-lo. Uma carteira pode atender à regra de um ativo e não à de outro; sua prova também pode expirar.</p>
+<p>O Aveo reúne prova, regra e evidência em um fluxo que o operador consegue acompanhar. Uma declaração pode servir a vários ativos, mas cada ativo mantém sua própria política. A transferência verifica a regra na blockchain, mesmo fora da nossa tela.</p>
+<p>Na demonstração local, mostramos uma operação permitida, outra bloqueada e a correção confirmada por uma nova leitura. Nosso próximo passo é validar a experiência pública e medir com operadores quanto retrabalho esse fluxo realmente evita.”</p>
+<h3>Respostas honestas às perguntas difíceis</h3>
+<table><tbody>
+<tr><td><strong>Já garante compliance?</strong></td><td>Não. Aplica os fatos e regras configurados; responsabilidades legais e qualidade das provas continuam externas.</td></tr>
+<tr><td><strong>Quem paga?</strong></td><td>Hipótese: emissor ou plataforma paga pela integração e operação. Preço e comprador ainda precisam de validação.</td></tr>
+<tr><td><strong>Por que não uma lista de carteiras?</strong></td><td>A proposta combina fatos reutilizáveis, políticas por ativo e acompanhamento de incidentes. A vantagem comparativa ainda precisa de benchmark.</td></tr>
+<tr><td><strong>Já pode ir para produção?</strong></td><td>Não. Há lacunas de segurança, carteira, implantação, auditoria e controles operacionais explicitadas no plano.</td></tr>
+</tbody></table>
+<p class="small"><strong>Atualização:</strong> preservar v0.1. Criar v0.2 quando houver implantação verificável, entrevista/piloto consentido ou mudança relevante de evidência. Atualizar fontes, commit e limites; gerar novo PDF e recibo de integridade. Não atualizar sozinho em segundo plano: a revisão acontece em cada rodada solicitada.</p>
+<p class="small"><strong>Próxima conversa:</strong> “Como vocês descobrem quais ativos uma prova vencida afeta? Podem nos mostrar um caso sintético e testar esse percurso por 20 minutos?” Isso é convite de pesquisa, não anúncio de parceria.</p>
+</main><div class="footer"><span>Aveo • menos promessa, mais clareza e evidência</span><span>06 / 06</span></div>
+</section>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "version": "0.1",
+  "language": "pt-BR",
+  "asOf": "2026-10-10",
+  "sourceCommit": "5eeea4e",
+  "source": "aveo-narrative-v0.1.pt-BR.html",
+  "pdf": "aveo-narrative-v0.1.pt-BR.pdf",
+  "receipt": "receipt-v0.1.json",
+  "pages": 6,
+  "status": "Working narrative; local evidence, not public-release acceptance",
+  "sources": [
+    {
+      "id": "1",
+      "publisher": "McKinsey",
+      "published": "2024-06-20",
+      "checked": "2026-10-10",
+      "url": "https://www.mckinsey.com/industries/financial-services/our-insights/from-ripples-to-waves-the-transformational-power-of-tokenizing-assets",
+      "claim": "Approximately USD 2 trillion of tokenized financial assets by 2030; projection, excluding cryptocurrencies and stablecoins; not Aveo revenue or current market size."
+    },
+    {
+      "id": "2",
+      "publisher": "BIS Bulletin authors",
+      "published": "2025-07-10",
+      "checked": "2026-10-10",
+      "url": "https://www.bis.org/publications/bulletin-107-tokenisation-government-bonds-assessment-and-roadmap",
+      "claim": "USD 8 billion of tokenized government bond issuance to date; historical cumulative issuance, not current outstanding value."
+    },
+    {
+      "id": "3",
+      "publisher": "BIS Financial Stability Institute",
+      "published": "2025-08-28",
+      "checked": "2026-10-10",
+      "url": "https://www.bis.org/publications/fsi-summary-financial-stability-implications-tokenisation-executive-summary",
+      "claim": "Potential efficiency/transparency benefits coexist with unproven benefits and complexity/regulatory risks; not evidence of demand for Aveo."
+    }
+  ],
+  "updatePolicy": "Preserve published snapshots. Create a new version for material evidence changes; review claims and sources, rerender, visually inspect and commit. No automatic scheduled updates.",
+  "renderCommand": "PLAYWRIGHT_BROWSERS_PATH=/absolute/path/to/isolated/browsers node scripts/render-presentation.mjs /absolute/path/to/isolated/playwright/index.mjs docs/presentation/manifest-v0.1.json",
+  "validationCommand": "node --test scripts/render-presentation.test.mjs"
+}

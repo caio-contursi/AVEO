@@ -98,6 +98,12 @@ must not be relabeled as customers, willingness to pay or a validated pilot.
 
 ## Follow-up proposals (not part of the current increment)
 
+- **PITCH-01:** validate the Portuguese narrative with a consenting first-time
+  reader, recording whether they can explain the user, problem, evidence and
+  limitations without prompting; do not count editorial feedback as demand.
+- **PITCH-02:** prepare the English submission narrative after public-demo
+  acceptance, using the same dated claim inventory and preserving Portuguese
+  PDF snapshots rather than silently changing their evidence.
 - **INT-02:** run the independent integration consumer in a clean environment
   against an approved devnet release, detecting accidental imports from UI internals.
 - **PILOT-02:** repeat the same task protocol with a second independent operator
