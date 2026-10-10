@@ -1018,6 +1018,10 @@ persistence or confirmation on chain.
 
 ## Public devnet release preparation
 
+See [isolated localnet signing and recovery acceptance](docs/localnet-acceptance.md)
+for the fresh synthetic-wallet experiment, real browser/ledger evidence and its
+explicit limits. This does not establish public deployment or extension-wallet acceptance.
+
 See [the public demonstration release plan](docs/public-demo-release.md) for
 ownership, explicit public build configuration and six real-network acceptance
 scenes. `pnpm manifest:public` prepares a public manifest, `pnpm devnet:preflight`
