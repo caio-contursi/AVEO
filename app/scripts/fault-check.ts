@@ -17,6 +17,9 @@ import { recheckSubmission } from '../src/features/operations/execution'
 import { AcceptanceReportBuilder } from './acceptance-report'
 import { createHttpFaultProxy } from './http-fault-proxy'
 import { FAULT_READ_METHODS } from './fault-read-methods'
+import { localArtifactDirectory, requireLocalEndpoints, requireLocalGenesis } from './localnet-safety'
+import { pinGenesis } from './local-cycle'
+import { FAULT_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 
 class FaultExpectation extends Error {}
 function expect(condition: unknown, message: string): asserts condition {
@@ -28,6 +31,17 @@ export function requireLocalFaultEndpoint(endpoint: string): void {
   try { url = new URL(endpoint) } catch { throw new FaultExpectation('Invalid local RPC endpoint') }
   expect(['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname), 'Fault checks require an explicit loopback RPC')
   expect(!url.username && !url.password && !url.search && !url.hash && url.pathname === '/', 'Fault RPC must not contain credentials, query or a proxy path')
+}
+
+export function faultAcceptanceConfiguration(appRoot: string, env: NodeJS.ProcessEnv) {
+  const endpoint = env.AVEO_RPC_URL
+  const genesis = env.AVEO_LOCAL_GENESIS_HASH
+  expect(endpoint && genesis && (env.AVEO_CLUSTER === undefined || env.AVEO_CLUSTER === 'localnet'),
+    'Fault acceptance requires explicit local RPC and genesis pin')
+  requireLocalEndpoints(endpoint, 'ws://127.0.0.1')
+  requireLocalGenesis(genesis, genesis)
+  const directory = localArtifactDirectory(appRoot, env.AVEO_DEV_DIR)
+  return { endpoint, genesis, directory }
 }
 
 export type RpcFault = 'none' | 'unavailable' | 'stale-slot' | 'account-timeout' | 'confirmation-timeout'
@@ -65,15 +79,14 @@ export function faultContext(base: ApiContext, mode: RpcFault) {
   return { ctx: { ...base, rpc }, counters }
 }
 
-const stages = [
-  'fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident',
-  'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open',
-  'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves',
-] as const
+const stages = FAULT_ACCEPTANCE_MANIFEST.stageIds
 
 export async function runFaultAcceptance(transport: 'sdk-injected' | 'http-loopback' = 'sdk-injected'): Promise<void> {
   const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  const reportFile = path.join(appRoot, '.dev', transport === 'http-loopback' ? 'http-fault-report.json' : 'fault-report.json')
+  const { endpoint, genesis, directory } = faultAcceptanceConfiguration(appRoot, process.env)
+  // Refuse the wrong validator before opening evidence or creating a report.
+  await pinGenesis(endpoint, genesis)
+  const reportFile = path.join(directory, transport === 'http-loopback' ? 'http-fault-report.json' : 'fault-report.json')
   let http: Awaited<ReturnType<typeof createHttpFaultProxy>> | undefined
   const report = new AcceptanceReportBuilder(new Date().toISOString())
   let current = 0
@@ -83,11 +96,10 @@ export async function runFaultAcceptance(transport: 'sdk-injected' | 'http-loopb
   const pass = () => { line(`PASS ${stages[current]}`); current++ }
   line(`ACCEPTANCE_RUN ${JSON.stringify({ stages })}`)
   try {
-    const endpoint = process.env.AVEO_RPC_URL ?? 'http://127.0.0.1:8899'
     requireLocalFaultEndpoint(endpoint)
-    const deployment = parseDeployment(JSON.parse(readFileSync(path.join(appRoot, '.dev', 'deployment.json'), 'utf8')))
+    const deployment = parseDeployment(JSON.parse(readFileSync(path.join(directory, 'deployment.json'), 'utf8')))
     expect(deployment.cluster === 'localnet' && deployment.programs.aveoHook === AVEO_HOOK_PROGRAM_ID, 'Fault checks require the supported local deployment')
-    const prior = JSON.parse(readFileSync(path.join(appRoot, '.dev', 'acceptance-report.json'), 'utf8')) as {
+    const prior = JSON.parse(readFileSync(path.join(directory, 'acceptance-report.json'), 'utf8')) as {
       status: string; startedAt: string; scope: string; stages: { id: string; status: string; evidence: { signature?: string; status?: string; mints?: string[] }[] }[]
     }
     expect(prior.status === 'PASS' && prior.scope === 'localnet-synthetic', 'Run demo:report successfully before fault checks')
@@ -174,7 +186,7 @@ export async function runFaultAcceptance(transport: 'sdk-injected' | 'http-loopb
     await http?.close()
   }
   const result = report.finish(exitCode, new Date().toISOString())
-  mkdirSync(path.dirname(reportFile), { recursive: true })
+  mkdirSync(path.dirname(reportFile), { recursive: true, mode: 0o700 })
   writeFileSync(reportFile, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 })
   console.log(`${result.status} fault-check (${current}/${stages.length}): ${reportFile}`)
   process.exitCode = result.status === 'PASS' ? 0 : 1

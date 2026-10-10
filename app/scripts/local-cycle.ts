@@ -5,18 +5,19 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isSignature } from '@solana/kit'
-import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
+import { DEMO_ACCEPTANCE_MANIFEST, FAULT_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { requireLocalGenesis } from './localnet-safety'
 
 export const MAX_STAGE_MS = 6 * 60_000
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const stages = ['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume'] as const
+const stages = ['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume', 'demo:http-faults'] as const
 // Keep the existing export as an alias of the producer's immutable contract.
 export const EXPECTED_DEMO_STAGE_IDS = DEMO_ACCEPTANCE_MANIFEST.stageIds
 type Stage = typeof stages[number]
 const scripts: Record<Stage, string> = {
   fixtures: 'fixtures.ts', 'local:recovery': 'local-recovery-check.ts',
   'demo:report': 'demo-report.ts', 'local:recovery:resume': 'local-recovery-resume.ts',
+  'demo:http-faults': 'http-fault-check.ts',
 }
 const failure = () => new Error('Local cycle failed; inspect the private cycle report and approved validator prerequisites.')
 function check(value: unknown): asserts value { if (!value) throw failure() }
@@ -182,7 +183,7 @@ export async function runLocalCycle(env: NodeJS.ProcessEnv = process.env,
         const matrix = demo.matrix.map(object)
         check(matrix.every((m) => ['PASS', 'NOT_RUN'].includes(String(m.status))) &&
           new Set(matrix.map((m) => m.id)).size === 17 && matrix.every((m, i) => m.id === `T${String(i + 1).padStart(2, '0')}`))
-        // This runner leaves full T04/T05/T10/T17 unexercised even with 42/42 PASS.
+        // Passing every stage does not exercise full T04/T05/T10/T17 coverage.
         check(matrix.filter((m) => ['T04', 'T05', 'T10', 'T17'].includes(String(m.id))).every((m) => m.status === 'NOT_RUN'))
         report.securityMatrix = 'NOT_FULL'
       } else if (stage.id === 'local:recovery:resume') {
@@ -190,6 +191,23 @@ export async function runLocalCycle(env: NodeJS.ProcessEnv = process.env,
         const resume = read(report.resumeFile)
         check(resume.scope === 'localnet-synthetic' && resume.status === 'PASS' && resume.signature === signature &&
           resume.genesis === genesis && resume.signingCalls === 0 && resume.submissionCalls === 0)
+      } else if (stage.id === 'demo:http-faults') {
+        const fault = read('http-fault-report.json')
+        check(fault.version === 1 && fault.scope === 'localnet-synthetic' && fault.status === 'PASS' && fault.exitCode === 0 &&
+          Array.isArray(fault.issues) && fault.issues.length === 0 && Array.isArray(fault.stages) &&
+          fault.stages.length === FAULT_ACCEPTANCE_MANIFEST.stageIds.length)
+        const checked = fault.stages.map(object)
+        check(checked.every((s, i) => s.status === 'PASS' && s.id === FAULT_ACCEPTANCE_MANIFEST.stageIds[i]))
+        check(Array.isArray(fault.matrix))
+        const t14 = fault.matrix.map(object).filter((entry) => entry.id === 'T14')
+        check(t14.length === 1 && t14[0]!.status === 'PASS')
+        // A successful child exit is insufficient: every fault stage must retain
+        // public evidence of zero send attempts on the approved transport.
+        check(checked.every((s) => Array.isArray(s.evidence) && s.evidence.length > 0))
+        const evidence = checked.flatMap((s) => (s.evidence as unknown[]).map(object))
+        check(evidence[0]?.faultTransport === 'http-loopback' &&
+          evidence.filter((e) => e.sendCalls !== undefined).every((e) => e.sendCalls === 0))
+        check(checked.slice(1).every((s) => (s.evidence as unknown[]).map(object).some((e) => e.sendCalls === 0)))
       }
       stage.status = 'PASS'
     } catch {

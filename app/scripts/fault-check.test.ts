@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAccounts } from '../src/api/accounts'
 import type { ApiContext } from '../src/api/context'
 import { confirmSignature } from '../src/api/transactions'
-import { faultContext, requireLocalFaultEndpoint } from './fault-check'
+import { faultAcceptanceConfiguration, faultContext, requireLocalFaultEndpoint } from './fault-check'
 
 const address = getAddressDecoder().decode(new Uint8Array(32).fill(3))
 const signature = parseSignature(getBase58Decoder().decode(new Uint8Array(64).fill(4)))
@@ -18,6 +18,23 @@ function base() {
 afterEach(() => { vi.useRealTimers() })
 
 describe('read-only fault acceptance guard', () => {
+  const genesis = 'G6n5zJA5XhwnkxAteU8k56YV2BNNQ1bhHvk62GszivWM'
+  const environment = { AVEO_RPC_URL: 'http://127.0.0.1:19899', AVEO_LOCAL_GENESIS_HASH: genesis }
+  it('selects isolated evidence without falling back to repository artifacts', () => {
+    expect(faultAcceptanceConfiguration('/repo/app', { ...environment, AVEO_DEV_DIR: '/tmp/isolated' }))
+      .toEqual({ endpoint: environment.AVEO_RPC_URL, genesis, directory: '/tmp/isolated' })
+    expect(faultAcceptanceConfiguration('/repo/app', environment).directory).toBe('/repo/app/.dev')
+  })
+  it.each([
+    {}, { ...environment, AVEO_LOCAL_GENESIS_HASH: undefined },
+    { ...environment, AVEO_RPC_URL: undefined }, { ...environment, AVEO_CLUSTER: 'devnet' },
+    { ...environment, AVEO_LOCAL_GENESIS_HASH: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' },
+    { ...environment, AVEO_RPC_URL: 'http://2130706433:19899' },
+    { ...environment, AVEO_RPC_URL: 'https://localhost' },
+    { ...environment, AVEO_DEV_DIR: 'relative' }, { ...environment, AVEO_DEV_DIR: '/' },
+  ])('refuses unpinned, public or ambiguous configuration %#', (env) => {
+    expect(() => faultAcceptanceConfiguration('/repo/app', env)).toThrow()
+  })
   it.each(['http://127.0.0.1:8899', 'http://localhost:8899/', 'http://[::1]:8899', 'https://localhost'])('accepts explicit loopback %s', (url) => {
     expect(() => requireLocalFaultEndpoint(url)).not.toThrow()
   })

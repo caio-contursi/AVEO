@@ -4,6 +4,8 @@ import { AUTHORIZATION_STAGES } from './authorization-checks'
 import { BOUNDARY_STAGES } from './boundary-checks'
 import { FALSE_KYC_STAGES } from './kyc-checks'
 import { PERSISTENCE_STAGES } from './persistence-check'
+import { SCHEMA_VALIDITY_STAGES } from './schema-validity-checks'
+import { SAS_ADVERSARIAL_STAGES } from './sas-adversarial-checks'
 
 // Pin the existing emission order independently of the producer and consumer aliases.
 const versionOneOrder = `
@@ -52,10 +54,9 @@ delegate-approval-revoked
 `.trim().split('\n')
 
 describe('demo acceptance manifest', () => {
-  it('versions the exact original 42-stage emission order', () => {
-    expect(DEMO_ACCEPTANCE_MANIFEST.version).toBe(1)
-    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toHaveLength(42)
-    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual(versionOneOrder)
+  it('preserves the original order and versions the appended adversarial stages', () => {
+    expect(DEMO_ACCEPTANCE_MANIFEST.version).toBe(2)
+    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES])
   })
 
   it('contains unique, nonempty IDs accepted by the runner metadata parser', () => {
@@ -82,6 +83,6 @@ describe('demo acceptance manifest', () => {
     expect(Reflect.set(stageIds, '0', 'unexpected')).toBe(false)
     expect(Reflect.set(stageIds, 'length', 0)).toBe(false)
     expect(() => Array.prototype.push.call(stageIds, 'unexpected')).toThrow(TypeError)
-    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual(versionOneOrder)
+    expect(DEMO_ACCEPTANCE_MANIFEST.stageIds).toEqual([...versionOneOrder, ...SCHEMA_VALIDITY_STAGES, ...SAS_ADVERSARIAL_STAGES])
   })
 })

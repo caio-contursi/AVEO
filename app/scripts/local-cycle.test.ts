@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
-import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
+import { DEMO_ACCEPTANCE_MANIFEST, FAULT_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { cycleEndpoints, executeStage, EXPECTED_DEMO_STAGE_IDS, MAX_STAGE_MS, pinGenesis, runLocalCycle, type CycleDependencies, type StageRequest } from './local-cycle'
 
 const genesis = '4nfcdrcw57kgy95FkeDLZ5aVcjMThnMpW1acN1gsmZyF'
@@ -21,6 +21,12 @@ function demo() {
   return { version: 1, scope: 'localnet-synthetic', status: 'PASS', exitCode: 0, issues: [],
     stages: EXPECTED_DEMO_STAGE_IDS.map((id) => ({ id: String(id), status: 'PASS' })),
     matrix: Array.from({ length: 17 }, (_, i) => ({ id: `T${String(i + 1).padStart(2, '0')}`, status: [3, 4, 9, 16].includes(i) ? 'NOT_RUN' : 'PASS' })) }
+}
+function faultReport() {
+  return { version: 1, scope: 'localnet-synthetic', status: 'PASS', exitCode: 0, issues: [] as string[],
+    stages: FAULT_ACCEPTANCE_MANIFEST.stageIds.map((id, i) => ({ id: String(id), status: 'PASS',
+      evidence: [i === 0 ? { faultTransport: 'http-loopback' } : { sendCalls: 0 }] })),
+    matrix: [{ id: 'T14', status: 'PASS' }] }
 }
 function write(directory: string, name: string, value: unknown) {
   fs.writeFileSync(path.join(directory, name), JSON.stringify(value), { mode: 0o600 })
@@ -42,6 +48,7 @@ function harness(adapt?: (request: StageRequest) => void): CycleDependencies {
     if (request.stage === 'demo:report') write(request.directory, 'acceptance-report.json', demo())
     if (request.stage === 'local:recovery:resume') write(request.directory, resumedName,
       { scope: 'localnet-synthetic', status: 'PASS', signature, genesis, signingCalls: 0, submissionCalls: 0 })
+    if (request.stage === 'demo:http-faults') write(request.directory, 'http-fault-report.json', faultReport())
     adapt?.(request)
   }) }
 }
@@ -72,7 +79,7 @@ describe('bounded synthetic local cycle', () => {
     expect(fs.statSync(first.directory).mode & 0o777).toBe(0o700)
     expect(fs.statSync(first.reportFile).mode & 0o777).toBe(0o600)
     expect(first.report).toMatchObject({ status: 'PASS', securityMatrix: 'NOT_FULL', recoveryFile: recoveryName, resumeFile: resumedName })
-    expect(first.report.stages.map((s) => s.id)).toEqual(['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume'])
+    expect(first.report.stages.map((s) => s.id)).toEqual(['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume', 'demo:http-faults'])
     expect(first.report.stages.every((s) => s.status === 'PASS')).toBe(true)
     const calls = vi.mocked(deps.execute).mock.calls.slice(0, 4)
     expect(calls.every(([r]) => r.env.AVEO_DEV_DIR === first.directory && r.env.AVEO_LOCAL_GENESIS_HASH === genesis)).toBe(true)
@@ -102,7 +109,7 @@ describe('bounded synthetic local cycle', () => {
     expect(() => cycleEndpoints({ ...env, ...change })).toThrow()
   })
 
-  it.each(['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume'])(
+  it.each(['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume', 'demo:http-faults'])(
     'stops later stages after %s fails and retains a private static failure report', async (failed) => {
       const deps = harness((r) => { if (r.stage === failed) throw new Error('CHILD_SECRET rawTransaction endpoint') })
       const result = await runLocalCycle(env, deps)
@@ -175,6 +182,32 @@ describe('bounded synthetic local cycle', () => {
       { scope: 'localnet-synthetic', status: 'PASS', signature: '2'.repeat(88), genesis, signingCalls: 0, submissionCalls: 0 }) })
     expect((await runLocalCycle(env, deps)).report.status).toBe('FAIL')
   })
+
+  it.each(['missing', 'stage-fail', 'order', 'duplicate', 'scope', 'matrix', 'duplicate-matrix',
+    'issues', 'send', 'missing-evidence', 'transport', 'exit'])(
+    'rejects an exit-zero fault report with invalid %s evidence', async (kind) => {
+      const deps = harness((request) => {
+        if (request.stage !== 'demo:http-faults') return
+        const report = faultReport()
+        if (kind === 'missing') report.stages.pop()
+        if (kind === 'stage-fail') report.stages[1]!.status = 'NOT_RUN'
+        if (kind === 'order') [report.stages[1], report.stages[2]] = [report.stages[2]!, report.stages[1]!]
+        if (kind === 'duplicate') report.stages[1]!.id = report.stages[0]!.id
+        if (kind === 'scope') report.scope = 'devnet'
+        if (kind === 'matrix') report.matrix[0]!.status = 'NOT_RUN'
+        if (kind === 'duplicate-matrix') report.matrix.push({ id: 'T14', status: 'PASS' })
+        if (kind === 'issues') report.issues.push('Invalid evidence')
+        if (kind === 'send') report.stages[1]!.evidence = [{ sendCalls: 1 }]
+        if (kind === 'missing-evidence') report.stages[1]!.evidence = []
+        if (kind === 'transport') report.stages[0]!.evidence = [{ faultTransport: 'sdk-injected' }]
+        if (kind === 'exit') report.exitCode = 1
+        write(request.directory, 'http-fault-report.json', report)
+      })
+      const result = await runLocalCycle(env, deps)
+      expect(result.report.status).toBe('FAIL')
+      expect(result.report.stages.at(-1)!.status).toBe('FAIL')
+      expect(deps.execute).toHaveBeenCalledTimes(5)
+    })
 
   it('bounds even an identity transport that ignores abort', async () => {
     vi.useFakeTimers()

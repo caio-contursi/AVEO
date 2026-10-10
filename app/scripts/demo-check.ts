@@ -3,6 +3,9 @@
 // Evidence contains public addresses, signatures, slots, codes, token balances and delegated allowances only.
 import assert from 'node:assert/strict'
 import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
+import { runSchemaValidityChecks } from './schema-validity-checks'
+import { runSasAdversarialChecks } from './sas-adversarial-checks'
+import type { AdversarialContext } from './adversarial-context'
 import { runAuthorizationChecks } from './authorization-checks'
 import { runBoundaryChecks } from './boundary-checks'
 import { existsSync } from 'node:fs'
@@ -42,7 +45,7 @@ import { hexToBytes, parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applyVerification } from '../src/features/incidents/model'
 import { checkIncidentPersistence } from './persistence-check'
 import { requireFalseKycSnapshots } from './kyc-checks'
-import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send } from './lib'
+import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send, verifyLocalValidator } from './lib'
 
 class ExpectationFailed extends Error {}
 
@@ -202,6 +205,7 @@ async function main(): Promise<void> {
   try {
     requireLoopback(RPC_URL, ['http:', 'https:'])
     requireLoopback(WS_URL, ['ws:', 'wss:'])
+    await verifyLocalValidator()
     expect(existsSync(DEPLOYMENT_FILE), 'Missing deployment manifest; run localnet fixtures first')
     expect(existsSync(WALLETS_FILE), 'Missing synthetic wallets; run localnet fixtures first')
     const deployment = parseDeployment(loadDeployment())
@@ -241,6 +245,7 @@ async function main(): Promise<void> {
       return signature
     }
     const reject = async (payer: KeyPairSigner, instructions: Instruction[], expectedCode: ReasonCode) => {
+      await verifyLocalValidator()
       const simulation = await simulate(ctx, instructions, payer.address)
       expect(!simulation.ok && simulation.error?.code === expectedCode, 'Simulation must reject with the expected hook code')
       expectHookRejection(simulation.logs, expectedCode)
@@ -310,6 +315,7 @@ async function main(): Promise<void> {
 
     // T11: an external wallet builds Token-2022 directly, without a Desk plan or builder.
     const externalTransfer = async (withExtras: boolean, expectedCode?: ReasonCode) => {
+      await verifyLocalValidator()
       const asset = assets[0]!
       const before = (await tokenBalances(ctx, asset.mint, [treasury.address, x.address])).balances
       expect(before[0]! > 0n, 'External source must have tokens for a meaningful transfer')
@@ -761,6 +767,17 @@ async function main(): Promise<void> {
       evidence({ asset: delegatedAsset.id, source: x.address, signer: x.address, delegatedAllowanceAfter: after.source.delegatedAmount, slot: after.slot })
     }
     pass()
+    const verifier = deployment.verifiers.find((entry) => entry.id === 'A')
+    expect(verifier, 'Verifier A required for adversarial acceptance')
+    const adversarial: AdversarialContext = {
+      ctx, deployment, assets, x: xSigner, treasury: treasurySigner,
+      issuer: signer('issuer', deployment.issuer), verifier: signer('verifier-a', verifier.authority),
+      nonce: async () => (await newDevWallet('nonce', 'nonce', 'investor')).signer.address,
+      send: checkedSend, reject, transfer, emit: evidence,
+      complete: (stage) => { expect(stages[current] === stage, 'Unexpected adversarial stage order'); pass() },
+    }
+    await runSchemaValidityChecks(adversarial)
+    await runSasAdversarialChecks(adversarial)
     console.log(`PASS demo-check (${stages.length}/${stages.length})`)
   } catch (error) {
     // Never serialize wallet records, error objects, endpoint URLs or raw RPC logs.

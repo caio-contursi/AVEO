@@ -1,7 +1,10 @@
 // Demo acceptance contract only: importing this module never starts a runner or reads fixtures.
 // Version changes describe stage-contract changes, independently of the report schema version.
+import { SCHEMA_VALIDITY_STAGES } from './schema-validity-checks'
+import { SAS_ADVERSARIAL_STAGES } from './sas-adversarial-checks'
+
 export const DEMO_ACCEPTANCE_MANIFEST = Object.freeze({
-  version: 1,
+  version: 2,
   stageIds: Object.freeze([
     'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
     'external-with-extra-accounts', 'external-without-extra-accounts',
@@ -19,5 +22,16 @@ export const DEMO_ACCEPTANCE_MANIFEST = Object.freeze({
     'short-lived-X-proof-bound', 'validator-clock-reaches-expiry',
     'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'delegate-expired-owner-rejected',
     'valid-X-proof-bindings-restored', 'delegate-approval-revoked',
+    ...SCHEMA_VALIDITY_STAGES,
+    ...SAS_ADVERSARIAL_STAGES,
+  ] as const),
+} as const)
+
+export const FAULT_ACCEPTANCE_MANIFEST = Object.freeze({
+  version: 1,
+  stageIds: Object.freeze([
+    'fault-localnet-preconditions', 'rpc-account-timeout', 'rpc-unavailable-incident',
+    'rpc-stale-read-keeps-open', 'confirmation-timeout-keeps-open',
+    'read-only-recheck-recovers-signature', 'fresh-complete-readback-resolves',
   ] as const),
 } as const)
