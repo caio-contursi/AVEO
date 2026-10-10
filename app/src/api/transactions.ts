@@ -4,7 +4,6 @@ import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budge
 import {
   TOKEN_2022_PROGRAM_ADDRESS,
   findAssociatedTokenPda,
-  getTokenDecoder,
   getTransferCheckedInstruction,
   resolveExtraAccountMetasForExecute,
 } from '@solana-program/token-2022'
@@ -35,6 +34,7 @@ import type { ApiContext } from './context'
 import { reason, type DiagnosticReason } from './diagnostics'
 import { failureReason } from './errors'
 import { getSetBindingInstruction, getUpdatePolicyInstruction } from './instructions'
+import { decodeTokenBalance } from './token-balance'
 
 /** Limite usado só na simulação; a transação real usa o consumo medido com folga. */
 const SIMULATION_CU_LIMIT = 1_400_000
@@ -321,20 +321,12 @@ async function transactionLogs(ctx: ApiContext, signature: Signature, signal?: A
   }
 }
 
-/** Saldos das token accounts (readback). Conta inexistente vale 0. */
+/** Read back observed ATA balances; absent accounts are zero, invalid accounts reject the read. */
 export async function tokenBalances(ctx: ApiContext, mint: Address, owners: Address[]): Promise<{ slot: number; balances: bigint[] }> {
   const accounts = await tokenAccountsFor(mint, owners)
   const { slot, accounts: raw } = await readAccounts(ctx, accounts)
-  const decoder = getTokenDecoder()
   return {
     slot,
-    balances: raw.map((account) => {
-      if (!account) return 0n
-      try {
-        return decoder.decode(account.data).amount
-      } catch {
-        return 0n
-      }
-    }),
+    balances: raw.map((account, i) => decodeTokenBalance(account, { address: accounts[i]!, mint, owner: owners[i]! })),
   }
 }
