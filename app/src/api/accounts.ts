@@ -2,6 +2,7 @@
 import { DeskError } from '@aveo/contracts'
 import { getBase64Encoder, type Address } from '@solana/kit'
 import type { ApiContext } from './context'
+import { throwIfReadAborted, withReadAbort } from './cancellation'
 
 export interface RawAccount {
   address: Address
@@ -23,7 +24,7 @@ function toRpcError(error: unknown): DeskError {
   return new DeskError('ReadUnverifiable', message)
 }
 
-export type RpcReader = Pick<ApiContext, 'rpc' | 'commitment'>
+export type RpcReader = Pick<ApiContext, 'rpc' | 'commitment' | 'readAbortSignal'>
 
 /**
  * Read accounts at one slot with a 10-second deadline by default.
@@ -35,6 +36,7 @@ export async function readAccounts(
   minContextSlot?: number,
   timeoutMs = 10_000,
 ): Promise<AccountsRead> {
+  throwIfReadAborted(ctx.readAbortSignal)
   if (minContextSlot !== undefined && (!Number.isSafeInteger(minContextSlot) || minContextSlot < 0)) {
     throw new DeskError('ReadUnverifiable', 'Invalid minimum account read slot.')
   }
@@ -50,6 +52,8 @@ export async function readAccounts(
   }
 
   const controller = new AbortController()
+  const onAbort = () => controller.abort()
+  ctx.readAbortSignal?.addEventListener('abort', onAbort, { once: true })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const deadline = new Promise<never>((_, reject) => {
@@ -59,16 +63,18 @@ export async function readAccounts(
       }, timeoutMs)
     })
     // Race also bounds transports that ignore cancellation; late rejections remain handled.
-    const response = await Promise.race([
-      ctx.rpc
-        .getMultipleAccounts(addresses, {
-          encoding: 'base64',
-          commitment: ctx.commitment,
-          ...(minContextSlot !== undefined ? { minContextSlot: BigInt(minContextSlot) } : {}),
-        })
-        .send({ abortSignal: controller.signal }),
-      deadline,
-    ])
+    const response = await withReadAbort(ctx.readAbortSignal, () =>
+      Promise.race([
+        ctx.rpc
+          .getMultipleAccounts(addresses, {
+            encoding: 'base64',
+            commitment: ctx.commitment,
+            ...(minContextSlot !== undefined ? { minContextSlot: BigInt(minContextSlot) } : {}),
+          })
+          .send({ abortSignal: controller.signal }),
+        deadline,
+      ]),
+    )
     const rawSlot = response?.context?.slot
     const slot = typeof rawSlot === 'bigint' || typeof rawSlot === 'number' ? Number(rawSlot) : NaN
     if (!Number.isSafeInteger(slot) || slot < 0 || (minContextSlot !== undefined && slot < minContextSlot)) {
@@ -92,10 +98,12 @@ export async function readAccounts(
       ),
     }
   } catch (error) {
+    throwIfReadAborted(ctx.readAbortSignal)
     if (error instanceof DeskError) throw error
     throw new DeskError('ReadUnverifiable', 'Account read failed.')
   } finally {
     if (timer !== undefined) clearTimeout(timer)
+    ctx.readAbortSignal?.removeEventListener('abort', onAbort)
   }
 }
 

@@ -1,6 +1,6 @@
 import { getAddressDecoder } from '@solana/kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readAccounts, type RpcReader } from './accounts'
+import { readAccount, readAccounts, type RpcReader } from './accounts'
 
 const address = getAddressDecoder().decode(new Uint8Array(32).fill(1))
 const owner = getAddressDecoder().decode(new Uint8Array(32).fill(2))
@@ -17,6 +17,97 @@ afterEach(() => {
 })
 
 describe('readAccounts', () => {
+  it.each([false, true])('rejects pre-aborted requests without RPC, empty: %s', async (empty) => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    controller.abort(new Error('secret reason'))
+    const send = vi.fn()
+    const { ctx, getMultipleAccounts } = reader(send)
+    ctx.readAbortSignal = controller.signal
+    await expect(readAccounts(ctx, empty ? [] : [address])).rejects.toMatchObject({ name: 'AbortError', message: 'Read cancelled.' })
+    expect(getMultipleAccounts).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([false, true])('cancels promptly when transport rejects on abort: %s', async (rejectOnAbort) => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const remove = vi.spyOn(controller.signal, 'removeEventListener')
+    const add = vi.spyOn(controller.signal, 'addEventListener')
+    const send = vi.fn(({ abortSignal }: { abortSignal: AbortSignal }) => new Promise<never>((_, reject) => {
+      if (rejectOnAbort) abortSignal.addEventListener('abort', () => reject(new Error('secret transport')), { once: true })
+    }))
+    const { ctx } = reader(send)
+    ctx.readAbortSignal = controller.signal
+    const result = readAccount(ctx, address)
+    const transportSignal = send.mock.calls[0]![0].abortSignal
+    expect(transportSignal).not.toBe(controller.signal)
+    controller.abort(new Error('secret abort reason'))
+    await expect(result).rejects.toMatchObject({ name: 'AbortError', message: 'Read cancelled.' })
+    expect(transportSignal.aborted).toBe(true)
+    expect(transportSignal.reason).not.toEqual(new Error('secret abort reason'))
+    expect(vi.getTimerCount()).toBe(0)
+    expect(remove).toHaveBeenCalledTimes(add.mock.calls.length)
+    for (const [, listener] of add.mock.calls) expect(remove).toHaveBeenCalledWith('abort', listener)
+  })
+
+  it('handles a late transport rejection after external cancellation', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    let rejectRpc!: (error: Error) => void
+    const { ctx } = reader(vi.fn(() => new Promise<never>((_, reject) => { rejectRpc = reject })))
+    ctx.readAbortSignal = controller.signal
+    const result = readAccounts(ctx, [address])
+    controller.abort('secret reason')
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' })
+    rejectRpc(new Error('secret endpoint'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not abort a completed transport when its former caller later cancels', async () => {
+    const controller = new AbortController()
+    const send = vi.fn((_options: { abortSignal: AbortSignal }) => Promise.resolve({
+      context: { slot: 42n }, value: [null],
+    }))
+    const { ctx } = reader(send)
+    ctx.readAbortSignal = controller.signal
+    await readAccount(ctx, address)
+    controller.abort('secret reason')
+    expect(send.mock.calls[0]![0].abortSignal.aborted).toBe(false)
+  })
+
+  it.each(['success', 'failure', 'timeout', 'validation failure'] as const)(
+    'removes external listeners and timers after %s', async (outcome) => {
+      vi.useFakeTimers()
+      const controller = new AbortController()
+      const add = vi.spyOn(controller.signal, 'addEventListener')
+      const remove = vi.spyOn(controller.signal, 'removeEventListener')
+      const send = vi.fn(() => {
+        if (outcome === 'failure') throw new Error('secret endpoint')
+        if (outcome === 'timeout') return new Promise<never>(() => {})
+        return Promise.resolve({ context: { slot: outcome === 'validation failure' ? -1n : 42n }, value: [null] })
+      })
+      const { ctx } = reader(send)
+      ctx.readAbortSignal = controller.signal
+      const result = readAccounts(ctx, [address], undefined, 25)
+      if (outcome === 'success') await expect(result).resolves.toMatchObject({ slot: 42 })
+      else {
+        const assertion = expect(result).rejects.toMatchObject({
+          code: 'ReadUnverifiable',
+          ...(outcome === 'timeout' ? { message: 'Account read timed out.' } : {}),
+        })
+        if (outcome === 'timeout') await vi.advanceTimersByTimeAsync(25)
+        await assertion
+      }
+      expect(controller.signal.aborted).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(remove).toHaveBeenCalledTimes(add.mock.calls.length)
+      for (const [, listener] of add.mock.calls) expect(remove).toHaveBeenCalledWith('abort', listener)
+    },
+  )
+
   it('preserves order, null accounts, commitment, and minimum slot', async () => {
     const send = vi.fn().mockResolvedValue({
       context: { slot: 42n },
