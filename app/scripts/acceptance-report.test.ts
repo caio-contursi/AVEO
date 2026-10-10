@@ -13,6 +13,18 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 }
 
 describe('public acceptance receipt', () => {
+  it('retains typed schema/signer observations without accepting malformed authority evidence', () => {
+    const report = builder(['schema'])
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ schemaPaused: true, authorizedSigners: [address] })}`)
+    report.acceptLine('PASS schema')
+    expect(report.finish(0, NOW).stages[0]!.evidence).toEqual([{ schemaPaused: true, authorizedSigners: [address] }])
+    for (const evidence of [{ schemaPaused: 1 }, { authorizedSigners: ['not-an-address'] }]) {
+      const invalid = builder(['schema'])
+      invalid.acceptLine(`EVIDENCE ${JSON.stringify(evidence)}`)
+      invalid.acceptLine('PASS schema')
+      expect(invalid.finish(0, NOW).status).toBe('FAIL')
+    }
+  })
   it('retains only typed synthetic KYC facts without claiming complete T04 coverage', () => {
     const stages = ['false-kyc-proof-bound', 'false-kyc-transfers-rejected', 'false-kyc-original-bindings-restored']
     const report = builder(stages)

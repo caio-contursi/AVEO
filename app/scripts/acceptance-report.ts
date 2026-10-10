@@ -43,6 +43,8 @@ const evidenceSchema = z.object({
   clockUnix: slot.optional(),
   policyVersion: amount.optional(),
   policyActive: z.boolean().optional(),
+  schemaPaused: z.boolean().optional(),
+  authorizedSigners: z.array(address).optional(),
   rpcReadCalls: slot.optional(),
   sendCalls: slot.optional(),
   abortedRequests: slot.optional(),
