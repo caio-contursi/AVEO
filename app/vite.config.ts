@@ -5,6 +5,7 @@ import type { Plugin } from 'vite'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 import { publicRelease } from './scripts/public-release'
+import { localArtifactDirectory } from './scripts/localnet-safety'
 
 /**
  * Só no servidor de desenvolvimento: serve os arquivos gerados pelo script de fixtures (app/.dev).
@@ -27,7 +28,7 @@ function devFixtures(): Plugin {
         const pathname = req.url?.split('?')[0] ?? ''
         if (!(pathname in files)) return next()
         const name = files[pathname]
-        const file = name ? path.resolve(server.config.root, '.dev', name) : null
+        const file = name ? path.join(localArtifactDirectory(server.config.root, process.env.AVEO_DEV_DIR), name) : null
         if (!file || !existsSync(file)) {
           res.statusCode = 404
           res.end('not found')

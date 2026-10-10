@@ -23,18 +23,25 @@ import {
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
 import { failureReason } from '../src/api/errors'
 import type { Deployment } from '../src/config/deployment'
+import { localArtifactDirectory, requireLocalEndpoints, requireLocalGenesis } from './localnet-safety'
 
 export const RPC_URL = process.env.AVEO_RPC_URL ?? 'http://127.0.0.1:8899'
 export const WS_URL = process.env.AVEO_WS_URL ?? 'ws://127.0.0.1:8900'
+requireLocalEndpoints(RPC_URL, WS_URL)
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-export const DEV_DIR = path.resolve(here, '../.dev')
+export const DEV_DIR = localArtifactDirectory(path.resolve(here, '..'), process.env.AVEO_DEV_DIR)
 export const DEPLOYMENT_FILE = path.join(DEV_DIR, 'deployment.json')
 export const WALLETS_FILE = path.join(DEV_DIR, 'wallets.json')
 
 export const rpc = createSolanaRpc(RPC_URL)
 export const rpcSubscriptions = createSolanaRpcSubscriptions(WS_URL)
 const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions })
+
+export async function verifyLocalValidator(): Promise<void> {
+  const genesis = await rpc.getGenesisHash().send({ abortSignal: AbortSignal.timeout(10_000) })
+  requireLocalGenesis(genesis, process.env.AVEO_LOCAL_GENESIS_HASH)
+}
 
 /** Carteira sintética salva em .dev/wallets.json (formato de keypair da Solana CLI: 64 bytes). */
 export interface DevWalletRecord {
@@ -64,8 +71,8 @@ export function loadDeployment(): Deployment {
 }
 
 export function writeJson(file: string, value: unknown): void {
-  mkdirSync(path.dirname(file), { recursive: true })
-  writeFileSync(file, JSON.stringify(value, null, 2) + '\n')
+  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+  writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
 }
 
 export class TxFailure extends Error {
@@ -78,6 +85,7 @@ export class TxFailure extends Error {
 
 /** Assina com o pagador (e demais signers das instruções), envia e espera a confirmação. */
 export async function send(payer: KeyPairSigner, instructions: Instruction[], units = 400_000): Promise<Signature> {
+  await verifyLocalValidator()
   const { value: blockhash } = await rpc.getLatestBlockhash().send()
   const message = pipe(
     createTransactionMessage({ version: 0 }),

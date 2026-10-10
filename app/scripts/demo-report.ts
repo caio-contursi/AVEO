@@ -5,9 +5,10 @@ import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { AcceptanceReportBuilder } from './acceptance-report'
+import { localArtifactDirectory } from './localnet-safety'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const reportFile = path.join(appRoot, '.dev', 'acceptance-report.json')
+const reportFile = path.join(localArtifactDirectory(appRoot, process.env.AVEO_DEV_DIR), 'acceptance-report.json')
 const report = new AcceptanceReportBuilder(new Date().toISOString())
 const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/demo-check.ts'], {
   cwd: appRoot,

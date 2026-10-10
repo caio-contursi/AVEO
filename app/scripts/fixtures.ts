@@ -50,6 +50,7 @@ import {
   rpc,
   rpcSubscriptions,
   send,
+  verifyLocalValidator,
   writeJson,
   type DevWalletRecord,
 } from './lib'
@@ -75,6 +76,7 @@ async function requirePrograms() {
 
 async function main() {
   const xTtl = argNumber('--x-ttl', 20 * 60)
+  await verifyLocalValidator()
   await requirePrograms()
   log('Programas encontrados', RPC_URL)
 
