@@ -219,6 +219,48 @@ wallet rejection, RPC failure and recovery of the original signature. Caio's
 Desk review is still required. No browser was available for this round; no
 real-wallet, local-validator, Rust-build or live devnet acceptance was run.
 
+### Chromium follow-up: mobile readability and initial language
+
+The subsequent review used real headless Chromium 156 controlled by Playwright
+installed outside the repository. It covered 80 route/profile/theme/language
+combinations: all five routes, desktop, Pixel 7 emulation, 320px emulation and
+CSS 200% zoom stress, in Portuguese/English and light/dark themes. CSS zoom is
+not native browser zoom; emulation is not a physical-device or Safari test.
+
+The first browser round exposed fragmented navigation/matrix words, excessive
+content before the mobile transfer form and an English UI whose document still
+declared Portuguese. The follow-up synchronizes document language on initial
+mount and later changes, keeps navigation labels intact and gives the matrix
+readable columns inside its existing horizontal scroll wrapper. Mobile workflow
+stages use compact rows; all safety notes, observed statuses and blockers remain
+visible. Desktop layout and MPL-3643 transfer authorization are unchanged.
+
+After the fixes, the transfer form starts at y=960 rather than y=1198 CSS pixels
+in light/PT Pixel 7 emulation, and y=1099 rather than y=1481 at 320px: reductions
+of 20% and 26%. All 80 scenarios had correct document language, no measured
+page-level horizontal overflow and no JavaScript exceptions. Intentional matrix
+scrolling is not counted as page overflow. Fourteen targeted browser checks
+passed, including keyboard focus/navigation, wallet disclosure without connection,
+initial/restored language, linked field errors, honest blocked preparation,
+read-only network retry and internally scrolled, intact matrix verdict badges.
+Computed error-text contrast remained 6.54:1 in light and 7.64:1 in dark mode;
+this targeted measurement is not a full accessibility audit.
+
+Reviewer objections remain explicit: the form is still below the first mobile
+viewport; matrix scrolling needs a clearer discovery cue; successful wallet
+signing, interrupted submission and original-signature recovery were not tested
+against a functioning validator. No real transactions were sent, no wallet keys
+were read and no application dependencies were added. Test tooling and screenshots
+remain temporary, outside the repository, rather than maintained browser CI.
+Caio's Desk review remains required.
+
+The browser-based score was 7.0/10 before these corrections. My follow-up
+assessment is **7.8/10**, equally weighting visual architecture (8.0), elegance
+(8.0) and fluidity (7.4). Honest comment: readability and observed flow are now
+more consistent, but mobile density and the untested signing/recovery journey
+prevent an exceptional-UX or judging-ready claim. This is a subjective technical
+review, not evidence of a hackathon jury's assessment.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -774,6 +816,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
+- Add an accessible horizontal-scroll cue to the narrow matrix so additional
+  assets are discoverable without sacrificing readable wallet/verdict columns.
+- Turn the isolated Chromium checks into a maintained browser acceptance workflow,
+  including restored language and first-use task timing, subject to tooling approval.
 - Extend browser acceptance to 320px and 200% zoom in both themes, including
   unknown matrix cells, read-only retries and explicit field-error announcements.
 - Re-score this provisional UX assessment after a timed first-use wallet
