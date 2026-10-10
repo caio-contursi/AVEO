@@ -72,6 +72,11 @@ transactions, outreach or real pilot occurred in this increment.
 
 ## Local recovery follow-up proposals
 
+- **SEC-01:** generate a read-only authority inventory for a pinned release,
+  comparing issuer, hook, mint and upgrade powers with human-approved expectations.
+- **SEC-02:** reproduce the audit packet from a clean clone in continuous
+  verification, recording binary provenance separately from unit-test results.
+
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed
   transaction and proving recovery after a validator restart.
@@ -82,5 +87,10 @@ transactions, outreach or real pilot occurred in this increment.
 
 - **LOCAL-05:** share one versioned acceptance-stage manifest between the runner
   and orchestrator, preserving strict evidence checks without duplicating 42 IDs.
+  Implemented in `app/scripts/acceptance-stages.ts`; producer and consumer share
+  the immutable contract and tests reject incomplete or altered stage sequences.
+- **LOCAL-06:** record the acceptance-manifest version in future reports so
+  historical evidence identifies its stage contract without changing current
+  report compatibility silently.
 - **UX-01:** expose the holdings observation slot and shorten the partial-balance
   banner while retaining the distinction between unavailable and zero amounts.
