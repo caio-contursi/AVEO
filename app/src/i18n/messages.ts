@@ -117,6 +117,7 @@ const pt = {
   'event.rechecked': 'Assinatura consultada novamente ({signature}); resultado: {status}',
   'incidents.verifyFailed': 'Não foi possível concluir a verificação. As evidências foram mantidas; consulte novamente, sem reenviar a transação.',
   'incidents.pendingRenewal': 'Há uma renovação enviada aguardando verificação ou com resultado desconhecido. Consulte a assinatura original em Recibos e verifique a elegibilidade; não prepare nem envie outra renovação para este incidente.',
+  'incidents.submissionUnknown': 'O resultado da submissão permanece não resolvido e nenhuma assinatura está disponível. Não prepare nem reenvie a renovação. Revise a atividade da carteira; uma leitura de elegibilidade não esclarece esta submissão.',
   'operations.prepareFailed': 'Não foi possível preparar e simular esta ação. Nenhuma transação foi enviada; confira os dados e tente preparar novamente.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Quem pode mover o quê, com qual prova, e como fechar o incidente.',
@@ -421,6 +422,7 @@ const pt = {
   'event.resolved': 'Resolvido com leitura nova no slot {slot}',
   'event.stillBlocked': 'A leitura nova ainda mostra bloqueio ({code})',
   'event.unknown': 'Confirmação desconhecida: consulte a rede antes de tentar de novo',
+  'event.submissionUnknown': 'Submissão sem assinatura disponível: resultado não resolvido. Não reenvie; revise a atividade da carteira.',
 }
 
 export type MessageKey = keyof typeof pt
@@ -543,6 +545,7 @@ const en: Record<MessageKey, string> = {
   'event.rechecked': 'Signature queried again ({signature}); result: {status}',
   'incidents.verifyFailed': 'Verification could not be completed. Evidence was retained; query again without resubmitting the transaction.',
   'incidents.pendingRenewal': 'A submitted renewal is awaiting verification or has an unknown result. Query the original signature in Receipts and verify eligibility; do not prepare or submit another renewal for this incident.',
+  'incidents.submissionUnknown': 'The submission outcome remains unresolved and no signature is available. Do not prepare or resend the renewal. Review wallet activity; an eligibility read does not settle this submission.',
   'operations.prepareFailed': 'Could not prepare and simulate this action. No transaction was sent; check the inputs and prepare again.',
   'app.name': 'Aveo Compliance Desk',
   'app.tagline': 'Who can move what, under which proof, and how to close the incident.',
@@ -847,6 +850,7 @@ const en: Record<MessageKey, string> = {
   'event.resolved': 'Resolved with a fresh read at slot {slot}',
   'event.stillBlocked': 'The fresh read still shows a block ({code})',
   'event.unknown': 'Unknown confirmation: check the network before trying again',
+  'event.submissionUnknown': 'Submission with no available signature: outcome unresolved. Do not resend; review wallet activity.',
 }
 
 export const messages = { pt, en } as const

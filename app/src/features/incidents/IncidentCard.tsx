@@ -19,7 +19,7 @@ import { labelFor } from '../operations/labels'
 import { SimulationSummary } from '../operations/SimulationSummary'
 import { runPlan } from '../operations/useExecutePlan'
 import { getSubmissionJournal } from '../operations/submission-journal'
-import { applySends, applyVerification, markPrepared, type DeskIncident, type SendOutcome } from './model'
+import { applySends, applyVerification, isAmbiguousSend, markPrepared, type DeskIncident, type SendOutcome } from './model'
 import { useIncidentStore } from './store'
 import { usePlanPreparation } from '../operations/usePlanPreparation'
 import { canPrepareRenewal, groupRenewalCandidates, hasPendingRenewal, sameRenewalIntent } from './renewal'
@@ -82,6 +82,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
     (c): c is { mint: string; proof: ProofRow } => c.proof !== undefined && !c.proof.boundTo.includes(c.mint as SolanaAddress),
   )
   const pendingRenewal = hasPendingRenewal(incident)
+  const signaturelessUnknown = incident.evidence.some((item) => item.status === 'unknown' && !item.signature)
   const preparation = usePlanPreparation<RenewalReview[]>([
     ctx.cluster, ctx.rpcUrl, ctx.programId, ctx.commitment, ctx.deployment, connected?.address,
     incident.id, incident.key, incident.type, incident.wallet, incident.proof, incident.affectedMints,
@@ -178,8 +179,10 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
             }
           },
         })
-        outcomes.push('error' in result ? { error: result.error } : { evidence: result.evidence })
-        if (!('error' in result) && result.evidence.status === 'unknown') break
+        const outcome: SendOutcome = 'error' in result
+          ? { error: result.error, sendBlocked: result.sendBlocked } : { evidence: result.evidence }
+        outcomes.push(outcome)
+        if (isAmbiguousSend(outcome)) break
       }
     } catch {
       if (mounted.current) setActionError(new Error(t('incidents.verifyFailed')))
@@ -326,7 +329,7 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
                 <SimulationSummary key={key} plan={plan} title={title} />
               ))}
               <div className="actions">
-                <button type="button" className="primary" disabled={signable.length === 0 || !isSigner || busy !== undefined} onClick={() => void sign()}>
+                <button type="button" className="primary" disabled={!canPrepareRenewal(incident) || signable.length === 0 || !isSigner || busy !== undefined} onClick={() => void sign()}>
                   {busy === 'sign' && <Spinner />} {t('incidents.sign', { wallet: walletLabel })}
                 </button>
                 <span className="small muted">{t('wallet.required', { wallet: walletLabel })}</span>
@@ -345,7 +348,8 @@ export function IncidentCard({ incident }: { incident: DeskIncident }) {
               {busy === 'verify' && <Spinner />} {t('incidents.verify')}
             </button>
           </div>
-          {pendingRenewal && <p className="small warn-text" role="alert">{t('incidents.pendingRenewal')}</p>}
+          {pendingRenewal && <p className="small warn-text" role="alert">{t(signaturelessUnknown
+            ? 'incidents.submissionUnknown' : 'incidents.pendingRenewal')}</p>}
           {recordedStatusLabel && <p className="small" role="status" aria-live="polite">
             {t('incidents.recheckRecorded', { status: recordedStatusLabel })}
           </p>}

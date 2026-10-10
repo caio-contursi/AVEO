@@ -152,6 +152,57 @@ beforeEach(() => {
 })
 
 describe('grouped renewal integration with controlled lifecycle callbacks', () => {
+  it.each([
+    { error: { code: 'ConfirmationUnknown', message: 'Unknown submission' }, sendBlocked: true },
+    { error: { code: 'ConfirmationUnknown', message: 'Unknown submission' } },
+    { error: { code: 'SimulationFailed', message: 'Submission blocked' }, sendBlocked: true },
+    { evidence: { status: 'unknown', logs: [] } },
+  ])('stops all later groups and retains a signatureless ambiguity: %j', async (result) => {
+    mocks.twoProofs = true
+    await prepare()
+    mocks.runPlan.mockResolvedValueOnce(result)
+    mocks.buttons.find((item) => item.className === 'primary')!.onClick()
+    await vi.waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    expect(mocks.runPlan).toHaveBeenCalledOnce()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.current).toMatchObject({ state: 'awaiting-confirmation', evidence: [{ status: 'unknown' }] })
+    if ('error' in result) {
+      expect(mocks.current?.evidence[0]?.error).toEqual({
+        code: 'ConfirmationUnknown', message: 'Submission outcome is unknown',
+      })
+    }
+    expect(mocks.current?.evidence[0]?.signature).toBeUndefined()
+    expect(mocks.current?.events.some((event) => event.kind === 'sendFailed' || event.kind === 'signed')).toBe(false)
+    const html = render()
+    expect(html).toContain(messages.en['incidents.submissionUnknown'])
+    expect(html).not.toContain(messages.en['incidents.prepare'])
+    expect(html).not.toContain(messages.en['incidents.recheck'])
+    button(messages.en['incidents.verify']).onClick()
+    await vi.waitFor(() => expect(mocks.inspect).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(mocks.busy).toBeUndefined())
+    expect(mocks.current?.state).toBe('awaiting-confirmation')
+    expect(render()).not.toContain(messages.en['incidents.prepare'])
+    expect(mocks.runPlan).toHaveBeenCalledOnce()
+  })
+
+  it.each(['en', 'pt'] as const)('explains unresolved signatureless submissions without inviting a retry (%s)', async (language) => {
+    mocks.language = language
+    render(); button(messages[language]['incidents.prepare']).onClick()
+    await vi.waitFor(() => expect(mocks.current?.state).toBe('action-prepared'))
+    render()
+    mocks.runPlan.mockResolvedValueOnce({ error: { code: 'ConfirmationUnknown', message: 'Unknown submission' }, sendBlocked: true })
+    mocks.buttons.find((item) => item.className === 'primary')!.onClick()
+    await vi.waitFor(() => expect(mocks.invalidate).toHaveBeenCalled())
+    const html = render()
+    expect(html).toContain(messages[language]['incidents.submissionUnknown'])
+    expect(html).toContain(messages[language]['event.submissionUnknown'])
+    expect(html).not.toContain(messages[language]['event.unknown'])
+    expect(html).not.toContain(messages[language]['incidents.pendingRenewal'])
+    expect(html).not.toContain(messages[language]['incidents.prepare'])
+    expect(html).not.toContain(messages[language]['incidents.recheck'])
+    expect(mocks.current?.events.some((event) => event.kind === 'signed' || event.kind === 'sendFailed')).toBe(false)
+  })
+
   it('invalidates a prepared review after a policy version changes without serializing bigint directly', async () => {
     await prepare()
     mocks.policyVersion = 2n
