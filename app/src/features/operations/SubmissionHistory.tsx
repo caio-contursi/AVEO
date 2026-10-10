@@ -108,7 +108,8 @@ export function SubmissionHistoryExport({ receipts, getSnapshot }: {
           {preview.status === 'tooLarge' && <p className="small warn-text">{t('receipts.historyPreviewTooLarge')}</p>}
         </>}
     </div>
-    <button type="button" disabled={!exportable || state?.status === 'copying'}
+    <button type="button" disabled={!exportable}
+      aria-disabled={state?.status === 'copying' || undefined} aria-busy={state?.status === 'copying' || undefined}
       onClick={() => { void exporter.copy(receipts, isCurrent) }}>{t('receipts.copyHistory')}</button>{' '}
     <button type="button" disabled={!exportable}
       onClick={() => { exporter.manual(receipts, isCurrent) }}>{t('receipts.exportHistory')}</button>{' '}
@@ -257,7 +258,8 @@ function ReceiptView({ receipt, result, busy, disabled, onRecheck, onRemove, mat
         {busy && <Spinner />} {t(busy ? 'evidence.rechecking' : 'evidence.recheck')}
       </button>
       <p className="small muted">{t('receipts.exportNote')}</p>
-      <button type="button" disabled={exportStatus === 'copying'} onClick={() => { void copyReceipt() }}>
+      <button type="button" aria-disabled={exportStatus === 'copying' || undefined}
+        aria-busy={exportStatus === 'copying' || undefined} onClick={() => { void copyReceipt() }}>
         {t('receipts.copyReceipt')}
       </button>{' '}
       <button type="button" disabled={exportStatus === 'copying'} onClick={showExport}>{t('receipts.exportReceipt')}</button>
