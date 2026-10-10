@@ -23,6 +23,7 @@
     "manifest:public": "pnpm --filter @aveo/app manifest:public",
     "devnet:preflight": "pnpm --filter @aveo/app devnet:preflight",
     "local:recovery": "pnpm --filter @aveo/app local:recovery",
+    "local:cycle": "pnpm --filter @aveo/app local:cycle",
     "local:recovery:resume": "pnpm --filter @aveo/app local:recovery:resume",
     "dev": "pnpm --filter @aveo/app dev"
   },
