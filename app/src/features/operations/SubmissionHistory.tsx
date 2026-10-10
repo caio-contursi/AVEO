@@ -4,6 +4,7 @@ import type { ApiContext } from '../../api/context'
 import { confirmSignature, type Confirmation } from '../../api/transactions'
 import { useDesk } from '../../app/desk'
 import { Address } from '../../components/Address'
+import { ManualCopyText } from '../../components/ManualCopyText'
 import { Badge, Card, EmptyState, Spinner } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { getSubmissionJournal, type SubmissionJournal, type SubmissionReceipt } from './submission-journal'
@@ -118,8 +119,8 @@ export function SubmissionHistoryExport({ receipts, getSnapshot }: {
         : state.status === 'copied' ? 'receipts.historyCopied'
           : state.status === 'invalidExport' ? 'receipts.historyInvalidExport' : `receipts.${state.status}`)}
     </p>
-    {state?.text !== undefined && <textarea aria-label={t('receipts.historyManualText')} readOnly rows={16}
-      value={state.text} onFocus={(event) => { event.currentTarget.select() }} />}
+    {state?.text !== undefined && <ManualCopyText text={state.text}
+      label={t('receipts.historyManualText')} selectLabel={t('receipts.selectManualText')} />}
   </div>
 }
 
@@ -263,8 +264,8 @@ function ReceiptView({ receipt, result, busy, disabled, onRecheck, onRemove, mat
       <p className="small" role="status" aria-live="polite" aria-atomic="true">
         {exportStatus && t(`receipts.${exportStatus}`)}
       </p>
-      {exportText !== undefined && <textarea aria-label={t('receipts.manualText')} readOnly rows={16}
-        value={exportText} onFocus={(event) => { event.currentTarget.select() }} />}
+      {exportText !== undefined && <ManualCopyText text={exportText}
+        label={t('receipts.manualText')} selectLabel={t('receipts.selectManualText')} />}
       {removalState === 'idle' && <button type="button" disabled={removalBlocked}
         onClick={() => { removal.request(removalBlocked) }}>{t('receipts.removeLocal')}</button>}
       {warningVisible && <div role="group" aria-labelledby={warningId} aria-busy={removing}>
