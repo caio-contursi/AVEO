@@ -145,6 +145,12 @@ transactions, outreach or real pilot occurred in this increment.
   one technical panel expands, preserving the compact narrative without hiding evidence.
 - **SEC-08:** expose the observed rejection layer in public acceptance evidence,
   distinguishing client resolution, Token-2022 TLV validation and an actual Aveo hook failure.
+- **SEC-09:** complete T04's absent-source-binding subcase for both assets using
+  funded synthetic source accounts created before fixture mint-authority revocation.
+  Account for additional supply, isolate valid destinations and verify confirmed
+  rejection with unchanged balances and protected bytes; retain NOT_FULL until
+  every required subcase has evidence. Caio reviews fixture/script changes and
+  Bruno reviews the enforcement assertions.
 
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed

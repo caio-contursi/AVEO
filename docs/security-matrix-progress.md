@@ -4,9 +4,12 @@
 
 Passing a runner is not passing every security case. Live ledger results,
 controlled transport faults and unit tests are recorded separately. The original
-17-case matrix is not relaxed to produce a perfect score. Synthetic localnet is
-the only approved transaction environment; no new protocol or program interface
-is introduced by this increment.
+17-case matrix is not relaxed to produce a perfect score. The evidence in this
+document uses synthetic localnet. Synthetic localnet signing and devnet deployment/
+test transactions are authorized as recorded in the candidate plan; devnet still
+requires secure access to the configured program key and release prerequisites.
+No personal wallets, real assets, mainnet, new protocol or program interface are
+introduced by this increment.
 
 ## Workstreams and remaining objections
 
@@ -220,3 +223,36 @@ creating excess whitespace; this is a presentation objection, not a safety
 claim. Mobile viewports are emulation, not physical-device acceptance.
 No wallet signing, extension interaction or interrupted browser submission
 is proven by this read-only walkthrough.
+
+## Authorization reconfirmation and fresh local cycle — 2026-10-10
+
+Owner authorization is not an outstanding blocker. Localnet synthetic signing
+and sending were reconfirmed; the existing devnet authorization remains subject
+to program-key access and release prerequisites. No key contents or seed phrase
+were requested, no program identity changed, and no devnet/mainnet transaction
+was sent in this increment.
+
+Starting source commit: `d5aaadc`. Before signing, the literal-loopback RPC
+returned the pinned genesis above and confirmed slots advanced from 1,564 to
+1,569. The existing cycle used fresh synthetic fixtures in
+`/tmp/aveo-local-cycle-2lqUgJ`; it did not reuse or overwrite prior fixture files.
+
+`local-cycle-report.json` passed all five child stages. Its acceptance report
+passed all 56 live stages; its HTTP fault report passed all seven controlled
+transport stages. The recovery report records one signature and one submission.
+The independent resume report verified that same original signature with zero
+signing calls and zero submission calls. These are private local evidence paths,
+not a publicly hosted demonstration or extension-wallet acceptance.
+
+The cycle still records `securityMatrix: NOT_FULL`. A separate read-only
+specialist review identified absent source-binding coverage for both assets as
+the next small mandatory increment, tracked in SEC-09 in the backlog. Funding
+those sources requires explicit fixture supply accounting before mint-authority
+revocation; do not substitute an empty account for a funded-source scenario.
+T05/T10/T17, persistent signatureless wallet-submission recovery after reload,
+real extension-wallet acceptance and public deployment remain open.
+
+After the cycle, `pnpm verify` passed 2,163 application/script tests and 41
+backend tests, type checks, lint and frontend build. Existing SQLite experimental
+and Zod/Rollup annotation warnings remain. No Rust source changed or new SBF
+binary was compiled in this authorization-reconfirmation increment.
