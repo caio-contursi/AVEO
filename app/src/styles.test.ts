@@ -168,6 +168,18 @@ describe('responsive and interaction stylesheet contracts', () => {
     })
   })
 
+  it('keeps the matrix focus ring inside its scroll viewport and its instruction readable', () => {
+    expect(rule('.matrix-scroll-region:focus-visible')).toMatchObject({
+      outline: '3px solid var(--accent)', 'outline-offset': '-3px',
+    })
+    const hint = rule('.matrix-scroll-hint')
+    for (const tokens of [light, dark]) {
+      expectContrast(hint.color, 'var(--surface)', tokens, 'matrix scroll instruction')
+    }
+    expect(hint).not.toHaveProperty('position')
+    expect(hint).not.toHaveProperty('animation')
+  })
+
   it('compacts safety content without hiding, truncating or fixing its height', () => {
     for (const selector of ['.banner', '.page-description', '.workflow', '.workflow-head p',
       '.workflow-steps', '.workflow-step', '.workflow-status', '.workflow-summary']) {

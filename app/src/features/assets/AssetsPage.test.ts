@@ -91,6 +91,11 @@ describe.each(['en', 'pt'] as const)('eligibility-first page (%s)', (language) =
     expect(html).toContain('<th scope="row"><strong>Investor</strong></th>')
     expect(html).toContain('<th scope="col">Asset</th>')
     expect(html).toContain(`<caption class="sr-only">${messages[language]['assets.matrix']}</caption>`)
+    expect(html).toContain(`role="region" aria-label="${messages[language]['assets.matrixScrollRegion']}"`)
+    expect(html).not.toContain('tabindex="0"')
+    // SSR cannot know layout: do not claim overflow before measuring it.
+    expect(html).not.toContain(messages[language]['assets.matrixScrollHint'])
+    expect(html).not.toContain('aria-describedby=')
   })
 
   it('offers an explicit read-only retry instead of leaving a failed matrix silently unknown', () => {

@@ -4,6 +4,7 @@ import type { DeskSnapshot } from '../../api/diagnostics'
 import { useReadyDesk } from '../../app/desk'
 import { formatAmount } from '../../components/format'
 import { describeReason } from '../../components/describeReason'
+import { MatrixScrollRegion } from '../../components/MatrixScrollRegion'
 import { Card, ErrorState, LoadingState, VerdictBadge } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { labelFor } from '../operations/labels'
@@ -31,7 +32,7 @@ function Matrix() {
       {results.some((query) => query.error) && <ErrorState title={t('ux.inspectUnavailable')} onRetry={() => {
         for (const query of results) if (query.error) void query.refetch()
       }} />}
-      <div className="table-wrap">
+      <MatrixScrollRegion>
         <table className="matrix">
           <caption className="sr-only">{t('assets.matrix')}</caption>
           <thead>
@@ -86,7 +87,7 @@ function Matrix() {
             ))}
           </tbody>
         </table>
-      </div>
+      </MatrixScrollRegion>
       {selectedSnapshot && <SnapshotDetail snapshot={selectedSnapshot} onClose={() => setSelected(null)} />}
     </>
   )

@@ -769,6 +769,17 @@ tr.dim td {
   scrollbar-gutter: stable;
 }
 
+.matrix-scroll-region:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.matrix-scroll-hint {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+
 dl.kv {
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
