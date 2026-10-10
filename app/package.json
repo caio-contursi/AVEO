@@ -14,6 +14,7 @@
     "manifest:public": "tsx scripts/public-manifest.ts",
     "devnet:preflight": "tsx scripts/devnet-preflight.ts",
     "local:recovery": "tsx scripts/local-recovery-check.ts",
+    "local:recovery:resume": "tsx scripts/local-recovery-resume.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "typecheck:tests": "tsc --project tsconfig.test.json",
