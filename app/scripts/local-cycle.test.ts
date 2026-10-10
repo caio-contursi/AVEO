@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
+import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { cycleEndpoints, executeStage, EXPECTED_DEMO_STAGE_IDS, MAX_STAGE_MS, pinGenesis, runLocalCycle, type CycleDependencies, type StageRequest } from './local-cycle'
 
 const genesis = '4nfcdrcw57kgy95FkeDLZ5aVcjMThnMpW1acN1gsmZyF'
@@ -51,6 +52,10 @@ afterEach(() => {
 })
 
 describe('bounded synthetic local cycle', () => {
+  it('preserves the expected-stage export as the shared frozen manifest list', () => {
+    expect(EXPECTED_DEMO_STAGE_IDS).toBe(DEMO_ACCEPTANCE_MANIFEST.stageIds)
+    expect(Object.isFrozen(EXPECTED_DEMO_STAGE_IDS)).toBe(true)
+  })
   it('persists a running state rather than a failure while a child stage executes', async () => {
     const deps = harness((request) => {
       const report = JSON.parse(fs.readFileSync(path.join(request.directory, 'local-cycle-report.json'), 'utf8'))
@@ -134,12 +139,19 @@ describe('bounded synthetic local cycle', () => {
       expect(deps.execute).toHaveBeenCalledTimes(2)
     })
 
-  it.each(['count', 'stage-fail', 'duplicate', 'arbitrary-ids', 'order', 'matrix-fail', 'matrix-full', 'issues', 'exit'])(
+  it.each(['count', 'missing-first', 'missing-middle', 'extra', 'extra-duplicate', 'unexpected-id', 'missing-id',
+    'stage-fail', 'duplicate', 'arbitrary-ids', 'order', 'matrix-fail', 'matrix-full', 'issues', 'exit'])(
     'rejects false demo PASS: %s', async (kind) => {
       const deps = harness((r) => {
         if (r.stage !== 'demo:report') return
         const report = demo()
         if (kind === 'count') report.stages.pop()
+        if (kind === 'missing-first') report.stages.shift()
+        if (kind === 'missing-middle') report.stages.splice(20, 1)
+        if (kind === 'extra') report.stages.push({ id: 'unexpected-stage', status: 'PASS' })
+        if (kind === 'extra-duplicate') report.stages.push({ ...report.stages[0]! })
+        if (kind === 'unexpected-id') report.stages[20]!.id = 'unexpected-stage'
+        if (kind === 'missing-id') Reflect.deleteProperty(report.stages[20]!, 'id')
         if (kind === 'stage-fail') report.stages[0]!.status = 'NOT_RUN'
         if (kind === 'duplicate') report.stages[1]!.id = report.stages[0]!.id
         if (kind === 'arbitrary-ids') report.stages.forEach((s, i) => { s.id = `arbitrary-${i}` })
@@ -150,7 +162,11 @@ describe('bounded synthetic local cycle', () => {
         if (kind === 'exit') report.exitCode = 1
         write(r.directory, 'acceptance-report.json', report)
       })
-      expect((await runLocalCycle(env, deps)).report.status).toBe('FAIL')
+      const result = await runLocalCycle(env, deps)
+      expect(result.report.status).toBe('FAIL')
+      expect(result.report.stages[2]!.status).toBe('FAIL')
+      expect(result.report.stages[3]!.status).toBe('NOT_RUN')
+      expect(result.report.securityMatrix).toBe('NOT_RUN')
       expect(deps.execute).toHaveBeenCalledTimes(3)
     })
 

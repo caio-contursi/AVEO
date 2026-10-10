@@ -2,8 +2,9 @@
 // pnpm --filter @aveo/app exec tsx scripts/demo-check.ts [--self-test]
 // Evidence contains public addresses, signatures, slots, codes, token balances and delegated allowances only.
 import assert from 'node:assert/strict'
-import { AUTHORIZATION_STAGES, runAuthorizationChecks } from './authorization-checks'
-import { BOUNDARY_STAGES, runBoundaryChecks } from './boundary-checks'
+import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
+import { runAuthorizationChecks } from './authorization-checks'
+import { runBoundaryChecks } from './boundary-checks'
 import { existsSync } from 'node:fs'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
 import { findAssociatedTokenPda, getApproveCheckedInstruction, getRevokeInstruction, getTokenDecoder, getTransferCheckedInstruction, resolveExtraAccountMetasForExecute, type Token } from '@solana-program/token-2022'
@@ -39,8 +40,8 @@ import { findProofsForWallet } from '../src/api/proofs'
 import { buildInstructions, confirmSignature, simulate, tokenBalances } from '../src/api/transactions'
 import { hexToBytes, parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applyVerification } from '../src/features/incidents/model'
-import { checkIncidentPersistence, PERSISTENCE_STAGES } from './persistence-check'
-import { FALSE_KYC_STAGES, requireFalseKycSnapshots } from './kyc-checks'
+import { checkIncidentPersistence } from './persistence-check'
+import { requireFalseKycSnapshots } from './kyc-checks'
 import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send } from './lib'
 
 class ExpectationFailed extends Error {}
@@ -190,19 +191,7 @@ async function selfTest(): Promise<void> {
   console.log('PASS self-test: loopback guards, exact balance and allowance deltas, delegate identity and revocation, hook rejection matching, missing-extra ledger errors, unchanged accounts and bounded Clock polling')
 }
 
-const stages = [
-  'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
-  'external-with-extra-accounts', 'external-without-extra-accounts', ...AUTHORIZATION_STAGES, ...BOUNDARY_STAGES,
-  'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
-  'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected', ...FALSE_KYC_STAGES,
-  'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping', ...PERSISTENCE_STAGES,
-  'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
-  'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
-  'issuer-inactivates-alfa-only', 'issuer-restores-active-alfa-policy',
-  'short-lived-X-proof-bound', 'validator-clock-reaches-expiry',
-  'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'delegate-expired-owner-rejected', 'valid-X-proof-bindings-restored',
-  'delegate-approval-revoked',
-] as const
+const stages = DEMO_ACCEPTANCE_MANIFEST.stageIds
 
 async function main(): Promise<void> {
   if (process.argv.includes('--self-test')) return selfTest()

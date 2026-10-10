@@ -5,31 +5,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isSignature } from '@solana/kit'
+import { DEMO_ACCEPTANCE_MANIFEST } from './acceptance-stages'
 import { requireLocalGenesis } from './localnet-safety'
 
 export const MAX_STAGE_MS = 6 * 60_000
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const stages = ['fixtures', 'local:recovery', 'demo:report', 'local:recovery:resume'] as const
-// demo-check has no side-effect-free export of its complete stage list.
-// Pin this contract here: runner changes must be reviewed before acceptance.
-export const EXPECTED_DEMO_STAGE_IDS = [
-  'localnet-preconditions', 'shared-proof-X', 'successful-transfers',
-  'external-with-extra-accounts', 'external-without-extra-accounts',
-  'direct-hook-execute-rejected', 'unsigned-policy-update-rejected', 'unsigned-binding-rejected',
-  'boundary-zero-amount', 'boundary-excessive-amount', 'boundary-max-u64-rejected', 'boundary-exact-balance',
-  'boundary-same-owner-distinct-accounts', 'boundary-fixtures-restored',
-  'delegate-approved-owner-transfer', 'policy-differences-Y-B-Z',
-  'non-issuer-policy-update-rejected', 'wrong-subject-binding-rejected',
-  'false-kyc-proof-bound', 'false-kyc-transfers-rejected', 'false-kyc-original-bindings-restored',
-  'close-X-proofs', 'rejected-transfers-unchanged-balances', 'scan-grouping',
-  'persistence-initial-save', 'persistence-process-restart', 'persistence-repeated-scan',
-  'issue-renewal-proof', 'signed-batched-rebind', 'fresh-readback', 'renewed-successful-transfers',
-  'issuer-removes-A-alfa-only', 'issuer-restores-alfa-policy',
-  'issuer-inactivates-alfa-only', 'issuer-restores-active-alfa-policy',
-  'short-lived-X-proof-bound', 'validator-clock-reaches-expiry',
-  'expired-proof-rejects-both-directions', 'external-expired-proof-rejected', 'delegate-expired-owner-rejected',
-  'valid-X-proof-bindings-restored', 'delegate-approval-revoked',
-] as const
+// Keep the existing export as an alias of the producer's immutable contract.
+export const EXPECTED_DEMO_STAGE_IDS = DEMO_ACCEPTANCE_MANIFEST.stageIds
 type Stage = typeof stages[number]
 const scripts: Record<Stage, string> = {
   fixtures: 'fixtures.ts', 'local:recovery': 'local-recovery-check.ts',
@@ -192,7 +175,7 @@ export async function runLocalCycle(env: NodeJS.ProcessEnv = process.env,
       } else if (stage.id === 'demo:report') {
         const demo = read('acceptance-report.json')
         check(demo.version === 1 && demo.scope === 'localnet-synthetic' && demo.status === 'PASS' && demo.exitCode === 0 &&
-          Array.isArray(demo.issues) && demo.issues.length === 0 && Array.isArray(demo.stages) && demo.stages.length === 42)
+          Array.isArray(demo.issues) && demo.issues.length === 0 && Array.isArray(demo.stages) && demo.stages.length === EXPECTED_DEMO_STAGE_IDS.length)
         const checked = demo.stages.map(object)
         check(checked.every((s, i) => s.status === 'PASS' && s.id === EXPECTED_DEMO_STAGE_IDS[i]))
         check(Array.isArray(demo.matrix) && demo.matrix.length === 17)
