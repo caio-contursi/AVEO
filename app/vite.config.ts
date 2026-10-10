@@ -64,6 +64,7 @@ export default defineConfig(({ mode }) => ({
           react: ['react', 'react-dom', 'react-router', '@tanstack/react-query'],
           solana: ['@solana/kit', '@solana/sysvars', '@solana-program/token-2022', '@solana-program/system', '@solana-program/compute-budget'],
           wallet: ['@solana/react', '@wallet-standard/react'],
+          validation: ['zod'],
         },
       },
     },
