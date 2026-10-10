@@ -1016,6 +1016,15 @@ persistence or confirmation on chain.
 - Document the security matrix's error vocabulary next to the deployed program
   names so judging evidence cannot confuse transfer-context and signature failures.
 
+## Public devnet release preparation
+
+See [the public demonstration release plan](docs/public-demo-release.md) for
+ownership, explicit public build configuration and six real-network acceptance
+scenes. `pnpm manifest:public` prepares a public manifest, `pnpm devnet:preflight`
+checks deployed programs without signing, and `pnpm build:public` bundles the
+validated manifest with development wallets disabled. These tools do not deploy
+the program, create devnet fixtures or certify the wallet demonstration.
+
 ## Estrutura
 
 ```
