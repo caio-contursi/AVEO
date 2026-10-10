@@ -23,8 +23,9 @@ function devFixtures(): Plugin {
       const files: Record<string, string | null> = {
         '/dev/deployment.json': 'deployment.json',
         '/dev/wallets.json': allowWallets ? 'wallets.json' : null,
+        '/dev/judge-evidence.json': env.VITE_CLUSTER === 'localnet' ? 'judge-evidence.json' : null,
       }
-      server.middlewares.use((req, res, next) => {
+      server.middlewares.use(async (req, res, next) => {
         const pathname = req.url?.split('?')[0] ?? ''
         if (!(pathname in files)) return next()
         const name = files[pathname]
@@ -36,7 +37,17 @@ function devFixtures(): Plugin {
         }
         res.setHeader('content-type', 'application/json')
         res.setHeader('cache-control', 'no-store')
-        res.end(readFileSync(file))
+        if (name === 'judge-evidence.json' || name === 'deployment.json') {
+          try {
+            // Let Vite transform workspace TypeScript instead of Node's strip-only loader.
+            const { readJudgeEvidenceResponse, readDevDeploymentResponse } = await server.ssrLoadModule('/scripts/judge-evidence.ts')
+            res.end(name === 'judge-evidence.json'
+              ? readJudgeEvidenceResponse(path.dirname(file)) : readDevDeploymentResponse(path.dirname(file)))
+          } catch {
+            res.statusCode = 404
+            res.end('not found')
+          }
+        } else res.end(readFileSync(file))
       })
     },
   }
@@ -45,6 +56,7 @@ function devFixtures(): Plugin {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), devFixtures(), publicRelease({ ...loadEnv(mode, process.cwd(), ''), ...process.env }, process.cwd())],
   server: { port: 5173, strictPort: true },
+  ssr: { noExternal: ['@aveo/contracts'] },
   build: {
     rollupOptions: {
       output: {

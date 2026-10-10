@@ -31,6 +31,7 @@
     "scan:once": "tsx scripts/scan-once.ts",
     "demo:check": "tsx scripts/demo-check.ts",
     "demo:report": "tsx scripts/demo-report.ts",
+    "demo:evidence": "tsx scripts/judge-evidence.ts",
     "demo:faults": "tsx scripts/fault-check.ts",
     "demo:http-faults": "tsx scripts/http-fault-check.ts",
     "demo:health": "tsx scripts/demo-health.ts"

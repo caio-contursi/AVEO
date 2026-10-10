@@ -16,6 +16,7 @@
     "scan:once": "pnpm --filter @aveo/app scan:once",
     "demo:check": "pnpm --filter @aveo/app demo:check",
     "demo:report": "pnpm --filter @aveo/app demo:report",
+    "demo:evidence": "pnpm --filter @aveo/app demo:evidence",
     "demo:faults": "pnpm --filter @aveo/app demo:faults",
     "demo:http-faults": "pnpm --filter @aveo/app demo:http-faults",
     "demo:health": "pnpm --filter @aveo/app demo:health",

@@ -32,6 +32,9 @@ function rejectSecrets(value: unknown, ancestors = new Set<object>()): void {
   ancestors.delete(value)
 }
 
+/** Shared by public dev-server projections without implying a devnet deployment. */
+export function assertNoManifestSecrets(value: unknown): void { rejectSecrets(value) }
+
 function unique<T>(items: T[], field: keyof T, collection: string): void {
   const seen = new Set<T[keyof T]>()
   for (const item of items) {

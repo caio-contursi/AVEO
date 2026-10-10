@@ -44,6 +44,7 @@ import { buildInstructions, confirmSignature, simulate, tokenBalances } from '..
 import { hexToBytes, parseDeployment } from '../src/config/deployment'
 import { EMPTY_STORE, applyScan, applyVerification } from '../src/features/incidents/model'
 import { checkIncidentPersistence } from './persistence-check'
+import { requireLocalGenesis } from './localnet-safety'
 import { requireFalseKycSnapshots } from './kyc-checks'
 import { DEPLOYMENT_FILE, WALLETS_FILE, RPC_URL, WS_URL, loadDeployment, loadDevWallets, newDevWallet, send, verifyLocalValidator } from './lib'
 
@@ -281,6 +282,11 @@ async function main(): Promise<void> {
       expectUnchangedAccount(before.accounts[0] ?? null, after.accounts[0] ?? null)
       evidence({ signer: payer.address, protectedAccount: target, hookCode: expectedCode, accountUnchanged: true, beforeSlot: before.slot, afterSlot: after.slot })
     }
+    // Bind this report to the observed validator and loaded deployment, before
+    // marking preconditions PASS. The environment pin is a check, not evidence.
+    const actualGenesis = await ctx.rpc.getGenesisHash().send({ abortSignal: AbortSignal.timeout(10_000) })
+    requireLocalGenesis(actualGenesis, process.env.AVEO_LOCAL_GENESIS_HASH)
+    evidence({ genesisHash: actualGenesis, deploymentGeneratedAt: deployment.generatedAt })
     pass()
 
     const inspectX = () => Promise.all(assets.map((asset) => inspectEligibility(ctx, asset.mint, x.address)))

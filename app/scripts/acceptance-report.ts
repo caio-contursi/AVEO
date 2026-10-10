@@ -2,12 +2,19 @@
 import { ONCHAIN_ERRORS } from '@aveo/contracts'
 import { isAddress, isSignature } from '@solana/kit'
 import { z } from 'zod'
+import { requireLocalGenesis } from './localnet-safety'
 
 const address = z.string().refine(isAddress)
 const slot = z.number().int().nonnegative().safe()
 const amount = z.string().regex(/^\d+$/)
+const genesisHash = z.string().max(44).refine((value) => {
+  if (!isAddress(value)) return false
+  try { requireLocalGenesis(value); return true } catch { return false }
+})
 
 const evidenceSchema = z.object({
+  genesisHash: genesisHash.optional(),
+  deploymentGeneratedAt: z.iso.datetime().optional(),
   signature: z.string().refine(isSignature).optional(),
   slot: slot.optional(),
   status: z.enum(['confirmed', 'failed', 'unknown']).optional(),

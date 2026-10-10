@@ -13,6 +13,45 @@ function builder(stages = ['shared-proof-X', 'successful-transfers']) {
 }
 
 describe('public acceptance receipt', () => {
+  it('retains public run binding at localnet preconditions while stripping private fields', () => {
+    const report = builder(['localnet-preconditions', 'shared-proof-X'])
+    const metadata = { genesisHash: address, deploymentGeneratedAt: NOW }
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ ...metadata, rpcUrl: 'private', secretKey: [1, 2, 3] })}`)
+    report.acceptLine('PASS localnet-preconditions')
+    report.acceptLine('PASS shared-proof-X')
+    const result = report.finish(0, NOW)
+    expect(result).toMatchObject({ version: 1, scope: 'localnet-synthetic', status: 'PASS', issues: [] })
+    expect(result.stages[0]!.evidence).toEqual([metadata])
+    expect(result.stages[1]!.evidence).toEqual([])
+    expect(JSON.stringify(result)).not.toMatch(/private|secretKey/)
+  })
+
+  it('keeps run binding fields optional for existing report consumers', () => {
+    const report = builder(['localnet-preconditions'])
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ slot: 1 })}`)
+    report.acceptLine('PASS localnet-preconditions')
+    expect(report.finish(0, NOW)).toMatchObject({ status: 'PASS', stages: [{ evidence: [{ slot: 1 }] }] })
+  })
+
+  it.each([
+    { genesisHash: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' },
+    { genesisHash: '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d' },
+    { genesisHash: '4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY' },
+    { genesisHash: 'not-a-genesis' }, { genesisHash: '1'.repeat(31) },
+    { genesisHash: 'z'.repeat(44) }, { genesisHash: '1'.repeat(45) },
+    { genesisHash: 1 }, { genesisHash: null },
+    { deploymentGeneratedAt: '2026-10-10' }, { deploymentGeneratedAt: 'not-a-date' },
+    { deploymentGeneratedAt: '2026-02-30T12:00:00.000Z' },
+    { deploymentGeneratedAt: 1 }, { deploymentGeneratedAt: null },
+  ])('rejects malformed or public-network run binding without retaining it: %j', (metadata) => {
+    const report = builder(['localnet-preconditions'])
+    report.acceptLine(`EVIDENCE ${JSON.stringify({ slot: 1, ...metadata })}`)
+    report.acceptLine('PASS localnet-preconditions')
+    expect(report.finish(0, NOW)).toMatchObject({
+      status: 'FAIL', issues: ['Invalid public evidence record'], stages: [{ evidence: [] }],
+    })
+  })
+
   it('retains typed schema/signer observations without accepting malformed authority evidence', () => {
     const report = builder(['schema'])
     report.acceptLine(`EVIDENCE ${JSON.stringify({ schemaPaused: true, authorizedSigners: [address] })}`)
