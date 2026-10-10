@@ -17,6 +17,131 @@ function setup() {
 }
 
 describe('read-only plan preparation lifecycle', () => {
+  it.each(['clear', 'scope', 'deactivate'] as const)('settles promptly on %s even when transport ignores cancellation', async (action) => {
+    const { preparation, publish } = setup()
+    const reply = deferred<{ intent: string }>()
+    let signal!: AbortSignal
+    const request = preparation.prepare('first-scope', (received) => {
+      signal = received
+      return reply.promise
+    })
+    const remove = vi.spyOn(signal, 'removeEventListener')
+    publish.mockClear()
+    if (action === 'clear') preparation.clear()
+    else if (action === 'scope') preparation.setScope('next-scope')
+    else preparation.deactivate()
+    expect(signal.aborted).toBe(true)
+    // The transport is still pending: cancellation itself must settle the request.
+    await expect(request).resolves.toBeUndefined()
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    expect(preparation.state.planning).toBe(false)
+    expect(preparation.state.error).toBeUndefined()
+    expect(publish).toHaveBeenCalledTimes(action === 'deactivate' ? 0 : 1)
+    publish.mockClear()
+    reply.reject(new Error('late private transport failure'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('gives accepted reads unique signals and preserves the new controller after old completion', async () => {
+    const { preparation } = setup()
+    const old = deferred<{ intent: string }>()
+    const next = deferred<{ intent: string }>()
+    let oldSignal!: AbortSignal, nextSignal!: AbortSignal
+    const first = preparation.prepare('first-scope', (signal) => {
+      oldSignal = signal
+      return old.promise
+    })
+    const duplicate = vi.fn(async () => ({ intent: 'duplicate' }))
+    await expect(preparation.prepare('first-scope', duplicate)).resolves.toBeUndefined()
+    expect(duplicate).not.toHaveBeenCalled()
+    expect(oldSignal.aborted).toBe(false)
+    preparation.clear()
+    const second = preparation.prepare('first-scope', (signal) => {
+      nextSignal = signal
+      return next.promise
+    })
+    await expect(first).resolves.toBeUndefined()
+    expect(nextSignal).not.toBe(oldSignal)
+    expect(nextSignal.aborted).toBe(false)
+    old.resolve({ intent: 'obsolete' })
+    await Promise.resolve()
+    preparation.clear()
+    expect(nextSignal.aborted).toBe(true)
+    await expect(second).resolves.toBeUndefined()
+  })
+
+  it('keeps completed signals un-aborted and removes their cancellation listeners', async () => {
+    const { preparation } = setup()
+    let signal!: AbortSignal
+    let remove!: ReturnType<typeof vi.spyOn>
+    const plan = { intent: 'complete' }
+    await expect(preparation.prepare('first-scope', (received) => {
+      signal = received
+      remove = vi.spyOn(signal, 'removeEventListener')
+      return Promise.resolve(plan)
+    })).resolves.toBe(plan)
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    preparation.clear()
+    preparation.setScope('next-scope')
+    preparation.deactivate()
+    expect(signal.aborted).toBe(false)
+  })
+
+  it('removes the cancellation listener after a synchronous sanitized failure', async () => {
+    const { preparation } = setup()
+    let signal!: AbortSignal
+    let remove!: ReturnType<typeof vi.spyOn>
+    await expect(preparation.prepare('first-scope', (received) => {
+      signal = received
+      remove = vi.spyOn(signal, 'removeEventListener')
+      throw new Error('private endpoint')
+    })).resolves.toBeUndefined()
+    expect(preparation.state.error).toBe('preparation-failed')
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    preparation.clear()
+    expect(signal.aborted).toBe(false)
+  })
+
+  it('does not invoke the builder if publishing already cancelled its signal', async () => {
+    const publish = vi.fn((state: { planning: boolean }) => {
+      if (state.planning) preparation.clear()
+    })
+    const preparation = new PlanPreparation<{ intent: string }>(publish)
+    preparation.setScope('first-scope')
+    const build = vi.fn(async () => ({ intent: 'unexpected' }))
+    await expect(preparation.prepare('first-scope', build)).resolves.toBeUndefined()
+    expect(build).not.toHaveBeenCalled()
+    expect(preparation.state).toEqual({ scope: 'first-scope', planning: false })
+  })
+
+  it('aborts only the previous mount when deactivated and reactivated', async () => {
+    const { preparation, publish } = setup()
+    const reply = deferred<{ intent: string }>()
+    let previous!: AbortSignal, current!: AbortSignal
+    const old = preparation.prepare('first-scope', (signal) => {
+      previous = signal
+      return reply.promise
+    })
+    publish.mockClear()
+    preparation.deactivate()
+    expect(publish).not.toHaveBeenCalled()
+    preparation.activate()
+    const next = preparation.prepare('first-scope', (signal) => {
+      current = signal
+      return new Promise(() => {})
+    })
+    await expect(old).resolves.toBeUndefined()
+    expect(previous.aborted).toBe(true)
+    expect(current.aborted).toBe(false)
+    reply.reject(new Error('obsolete'))
+    await Promise.resolve()
+    preparation.clear()
+    expect(current.aborted).toBe(true)
+    await expect(next).resolves.toBeUndefined()
+  })
+
   it('checks active scope independently of an in-flight plan and rejects detached scopes', async () => {
     const { preparation } = setup()
     const reply = deferred<{ intent: string }>()
@@ -168,8 +293,13 @@ describe('read-only plan preparation lifecycle', () => {
   it('keeps an in-flight request when the scope remains identical', async () => {
     const { preparation } = setup()
     const reply = deferred<{ intent: string }>()
-    const request = preparation.prepare('first-scope', () => reply.promise)
+    let signal!: AbortSignal
+    const request = preparation.prepare('first-scope', (received) => {
+      signal = received
+      return reply.promise
+    })
     preparation.setScope('first-scope')
+    expect(signal.aborted).toBe(false)
     const plan = { intent: 'same scope' }
     reply.resolve(plan)
     expect(await request).toBe(plan)

@@ -13,7 +13,7 @@ export function usePlanPreparation<T>(scope: readonly unknown[]) {
   }, [preparation])
   useLayoutEffect(() => { preparation.setScope(key) }, [preparation, key])
 
-  const prepare = useCallback((build: () => Promise<T>) => preparation.prepare(key, build), [preparation, key])
+  const prepare = useCallback((build: (signal: AbortSignal) => Promise<T>) => preparation.prepare(key, build), [preparation, key])
   const clear = useCallback(() => preparation.clear(), [preparation])
   const isCurrent = useCallback((plan: T) => preparation.isCurrent(key, plan), [preparation, key])
   const isActive = useCallback(() => preparation.isActiveScope(key), [preparation, key])
