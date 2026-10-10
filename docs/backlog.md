@@ -76,6 +76,14 @@ transactions, outreach or real pilot occurred in this increment.
   comparing issuer, hook, mint and upgrade powers with human-approved expectations.
 - **SEC-02:** reproduce the audit packet from a clean clone in continuous
   verification, recording binary provenance separately from unit-test results.
+- **SEC-03:** version matrix subcases independently of runner stages so an
+  operator can see exactly which adversarial boundary remains unexecuted.
+- **SEC-04:** add an absent-binding localnet transfer rehearsal that records
+  Token-2022 resolver rejection separately from hook rejection, with unchanged balances.
+- **SEC-05:** test delayed confirmation and interruption during fixture restoration,
+  including an interrupted outbound/return pair, without implying atomic cleanup.
+- **SEC-06:** isolate a destination-only revoked signer so acceptance proves the
+  destination validation independently of an earlier source failure.
 
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed

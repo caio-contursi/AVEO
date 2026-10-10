@@ -349,6 +349,24 @@ Não rode `anchor keys sync`. O program ID já está no código. A keypair de de
 Use Node 22 or later. With the local validator running, generate the synthetic
 fixtures and run the acceptance checks without opening the Desk:
 
+Set `AVEO_RPC_URL` and `AVEO_WS_URL` to explicit literal loopback endpoints and
+`AVEO_LOCAL_GENESIS_HASH` to the verified actual validator genesis first.
+`AVEO_DEV_DIR`, when set, must be an absolute non-root artifact directory.
+Fault acceptance requires the explicit RPC/genesis pin and checks it before
+opening fixture evidence; it no longer silently defaults to an RPC endpoint.
+
+For fresh isolated artifacts, `pnpm local:cycle` runs fixtures, one-submission
+recovery, all live checks, independent read-only recovery and HTTP fault checks
+in order. See [security matrix progress](docs/security-matrix-progress.md) for
+partial adversarial coverage and remaining release gates.
+
+The maintained validator explicitly retains up to 1,000,000 shreds (ledger
+fragments), instead of the smaller CLI default. Longer cycles need historical
+transactions for independent recovery; unavailable history must fail verification,
+not trigger a resend. This bounded local-test setting uses more disk space and is
+not a production archive guarantee. The maintained startup still resets its
+ledger; restart recovery requires preserving the same ledger without `--reset`.
+
 ```bash
 pnpm fixtures
 pnpm demo:check
@@ -449,7 +467,8 @@ Only a complete fresh eligibility readback can resolve the read-unverifiable
 incident. This runner holds no wallet keys, blocks transaction submission and
 records zero send calls throughout the successful seven-stage workflow.
 
-Its separate ignored `app/.dev/fault-report.json` maps these core checks to T14.
+Its separate `fault-report.json` in `AVEO_DEV_DIR` (or ignored `app/.dev` when
+unset) maps these core checks to T14.
 This is controlled SDK fault injection, not an HTTP outage, browser interaction
 test or independent network attestation. The two receipts are not merged: T14
 remains `NOT_RUN` in `acceptance-report.json`, and unrelated matrix cases remain

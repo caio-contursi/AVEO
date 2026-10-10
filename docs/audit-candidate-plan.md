@@ -35,6 +35,11 @@ The first execution increment is recorded in
 [candidate verification](candidate-verification.md): rebuilt SBF, fresh isolated
 42-stage regression and independent recovery passed; full matrix remains open.
 
+The next execution increment is tracked in
+[security matrix progress](security-matrix-progress.md); it adds guarded RPC
+fault acceptance and partial SAS/schema adversarial scenarios without promoting
+unexecuted subcases to full-case PASS.
+
 ## Parallel execution and ownership
 
 | Workstream | Specialist / human reviewer | Deliverable | Objective gate |
