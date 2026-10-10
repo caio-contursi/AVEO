@@ -299,6 +299,47 @@ signing or interrupted on-chain recovery; no transaction was sent and no wallet
 keys were accessed. Caio's UI review remains required. The prior 7.8/10 score
 is not increased merely for these focused reliability improvements.
 
+### Retained wallet context and pending clipboard focus
+
+The next refinement addresses both preceding review objections. At mobile widths,
+the eligibility matrix pins its semantic wallet headers on an opaque theme
+surface. Asset columns fit the space remaining beside the wallet column, rather
+than forcing a 220px verdict into a smaller viewport. A narrower wallet column
+at 360px and below retains readable labels in the tested fixture. Column sizing
+uses the current mobile gutters; spacing changes require browser revalidation.
+Desktop sizing and table semantics remain unchanged.
+
+Chromium's native focus scrolling did not account for the pinned column: the
+first implementation partially obscured verdict badges at 320px. The reviewed
+implementation locally aligns a focused diagnosis button beside that column
+using immediate `scrollIntoView`. It does not intercept arrows or globally
+handle keys, and fitting matrices do not reposition focused controls.
+
+Valid public-copy buttons now stay native-enabled during the pending request,
+with `aria-disabled` and `aria-busy` explaining their temporary unavailability.
+The existing synchronous clipboard guards reject repeated activation even before
+React commits. Invalid/empty history remains natively disabled. No completion
+callback restores focus: operators who move elsewhere retain their new focus.
+Manual export supersession and stale-response protection are unchanged.
+
+The focused Chromium review passed 28 checks across 320px, 393px and desktop,
+both themes and both languages. It verified pinned labels at left/middle/right,
+complete edge verdicts, actual Tab navigation to diagnosis controls with readable
+badges, and four pending-copy journeys for history/individual receipts. Clipboard
+delay/rejection was an injected promise in isolated sessions, not an operating
+system clipboard test. The earlier browser-permission-denial and byte-identical
+download checks remain evidence from the previous round, not a new claim here.
+The final `pnpm verify` passed 1,440 app/script tests in 58 files, four backend
+tests, types, lint and build; only the existing Zod/SQLite warnings remain.
+
+Reviewer limits: the matrix fixture has two assets and short wallet labels;
+larger datasets and long labels need additional acceptance. Intermediate scroll
+positions can still show partial columns. Mobile behavior was emulated in
+Chromium, not validated on physical devices, Safari or a screen reader. No
+wallet keys or transactions were used; successful signing and interrupted-chain
+recovery still require a functioning isolated validator. The 7.8/10 score remains
+provisional, and Caio's UI review remains required.
+
 `pnpm build:program` (Linux/macOS, com a toolchain instalada) usa `cargo build-sbf --tools-version v1.53` em vez de `anchor build`, porque o compilador que vem com a Solana CLI 2.3.0 não entende dependências recentes (edition 2024). No Windows, o equivalente é `pnpm --filter @aveo/app solana:build`.
 
 Não rode `anchor keys sync`. O program ID já está no código. A keypair de deploy não é versionada; sem ela não há deploy nesse endereço em devnet.
@@ -854,10 +895,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
-- Keep wallet row headers visible during internal horizontal matrix scrolling
-  so operators retain wallet/asset context at either edge.
-- Preserve keyboard focus during a pending clipboard request without stealing
-  focus if the operator moves elsewhere before the request completes.
+- Extend matrix browser fixtures to many assets and long wallet/asset labels,
+  checking pinned context, edge verdicts and keyboard reachability at narrow widths.
+- Exercise pending clipboard resolution/rejection together with receipt scope
+  changes in a maintained browser workflow, without moving the operator's focus.
 - Turn the isolated Chromium checks into a maintained browser acceptance workflow,
   including restored language and first-use task timing, subject to tooling approval.
 - Extend browser acceptance to 320px and 200% zoom in both themes, including
