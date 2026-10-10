@@ -656,11 +656,34 @@ transaction. Changing a form still respects the execution reset guard: unresolve
 submissions are not discarded. Their evidence and same-signature recheck remain
 managed by the separate existing execution lifecycle.
 
-Invalidating preparation does not abort a read/simulation already issued to the
-RPC, make an earlier observation current, or guarantee a future transfer.
-On-chain checks remain authoritative. Grouped incident preparation and manual
-eligibility verification also use scoped lifecycles; actual browser lifecycle
-tests remain pending.
+Invalidating preparation now aborts its read signal, on scope changes, explicit
+clear and screen closure. Account reads, SAS discovery, blockhash retrieval,
+simulation and the Token-2022 extra-account resolver receive that signal. A
+cloned `ApiContext` confines it to preparation; submission and original-signature
+confirmation keep the base context. Grouped incident preparation and its manual
+eligibility verification forward the same scoped signal. Independent background
+queries are deliberately unchanged.
+
+Cancellation settles obsolete preparation even when a transport ignores abort;
+late replies/errors cannot restore a plan or expose provider details. It cannot
+undo a request already processed remotely, make an earlier observation current,
+or guarantee a future transfer. On-chain checks remain authoritative.
+
+An isolated real Chromium session at 393px held HTTP RPC responses pending.
+Leaving Transfer aborted both four-account diagnosis requests while the separate
+eight-account holdings query remained independent. Returning allowed a fresh
+preparation; controlled unavailable reads showed a blocked flow and no signing
+action. Three checks passed without uncaught page errors, wallet-key access or
+attempted writes. Screenshots and reports remain temporary outside the repository.
+This is transport/lifecycle evidence, not a validator, wallet or on-chain test.
+Unit tests additionally cover pre-aborted reads, late rejection, signal/context
+isolation and interruption between simulation stages. The SDK resolver is mocked
+in adapter tests: live extra-account resolution still needs separate acceptance.
+The final `pnpm verify` passed 1,494 app/script tests in 62 files and four backend
+tests, type checks, lint and production build, with only the existing Zod/Rollup
+annotation and Node SQLite experimental warnings. No dependency was added.
+Caio's review remains required; these reliability checks do not raise the prior
+provisional visual score or establish hackathon readiness.
 
 ### Grouped incident renewal safety
 
@@ -895,6 +918,10 @@ persistence or confirmation on chain.
 
 ### Proposed backlog issues
 
+- Add a maintained browser fixture for pending preparation HTTP reads, asserting
+  navigation cancellation separately from independent background queries.
+- Inventory cancellable read-only queries outside preparation before extending
+  the signal boundary; never reuse it for signing, submission or confirmation.
 - Extend matrix browser fixtures to many assets and long wallet/asset labels,
   checking pinned context, edge verdicts and keyboard reachability at narrow widths.
 - Exercise pending clipboard resolution/rejection together with receipt scope
@@ -916,8 +943,6 @@ persistence or confirmation on chain.
   a presentation component without weakening its scope and no-resend guards.
 - Coordinate pending incident signatures across card remounts and cooperating
   tabs, including the wallet-prompt interval, without treating local metadata as authorization.
-- Thread cancellation through read-only planning so obsolete preparation can
-  stop pending RPC work without altering submission or confirmation semantics.
 - Extract the network adapter and incident model into shared packages so the
   Desk and CLI use the same application layer without importing frontend files.
 - Share binary account fixtures between Rust and TypeScript tests to detect
