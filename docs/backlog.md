@@ -88,10 +88,22 @@ transactions, outreach or real pilot occurred in this increment.
   extension wallet and publish transaction links tied to the exact release.
 - **DEMO-02:** maintain the browser walkthrough in an isolated CI environment,
   keeping real local ledger checks separate from controlled failure responses.
+- **SEC-07:** persist an unresolved wallet-submission intent before invoking a
+  sign-and-send extension, so a lost response without a signature cannot unlock
+  duplicate submission after reload; require an explicit reconciliation path.
+- **DEMO-03:** automate hosted-origin checks for genuine devnet evidence,
+  manifest coherence and browser RPC access, separate from configuration-only preflight.
+- **DEMO-04:** keep desktop scene cards from stretching their grid siblings when
+  one technical panel expands, preserving the compact narrative without hiding evidence.
+- **SEC-08:** expose the observed rejection layer in public acceptance evidence,
+  distinguishing client resolution, Token-2022 TLV validation and an actual Aveo hook failure.
 
 - **LOCAL-03:** configure and test historical RPC retention in a reproducible
   isolated validator runner, distinguishing unavailable history from a failed
   transaction and proving recovery after a validator restart.
+- **LOCAL-05:** require advancing confirmed slots before starting acceptance,
+  and serialize memory-heavy checks on constrained machines; a matching genesis
+  and successful health response alone do not establish a usable validator.
 - **LOCAL-04:** bring the synthetic CLI's transaction-to-receipt verification into
   the Desk's supported operation types, so UI recovery does not rely solely on
   stored metadata or a successful signature status. Expand only with tests for

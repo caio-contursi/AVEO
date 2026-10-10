@@ -7,15 +7,40 @@ the approved stack or program interface. The immediate target is a reproducible
 hackathon release candidate with explicit residual risks. An independently
 audited production release is a separate gate, not a label earned by more tests.
 
-Only synthetic signing on isolated localnet is currently authorized. Public
-devnet fixture creation, deployment, hosting publication and mainnet are not
-authorized by this plan. Bruno owns program/product decisions; Caio reviews
+Synthetic signing on isolated localnet and deployment/test transactions on
+devnet are authorized by the owner. Dedicated test wallets and test SOL only:
+personal wallets, real assets and mainnet remain excluded. Program-key access
+and the approved hosting destination remain prerequisites, not permissions
+supplied by this document. An external audit still needs a named reviewer,
+scope and approved budget before any financial commitment. Bruno owns
+program/product decisions; Caio reviews
 application, backend and script changes. No new framework, custody system or
 attestation protocol is introduced.
 
 MPL-3643 identity/policy interoperability remains an integration question:
 the current SAS proof, issuer policy and Token-2022 hook are implemented, but
 the MPL backend is not integrated. No compatibility certification is claimed.
+
+## Six mandatory hackathon acceptance conditions
+
+All six conditions are required for release sign-off. A passing unit suite,
+local ledger runner or build cannot substitute for a public-network/wallet
+condition. Keep failed and unexecuted conditions visible; never lower the
+criteria to obtain a desired score.
+
+| Condition | Required evidence | Current blocker / owner |
+| --- | --- | --- |
+| Current evidence | Verify final source commit; fresh app and Rust tests, build and blockchain acceptance; identify binary and fixture provenance | Orchestrator integrates final changes and reruns; historical reports are not final-release evidence |
+| Complete mandatory security | All T04/T05/T10/T17 subcases plus regression and recovery; rejected token transfers preserve balances; identify whether rejection occurs in resolver, Token-2022 or Aveo | Security specialists implement missing adversarial cases; Bruno reviews enforcement |
+| Complete browser flow | Actual preparation, simulation, wallet signing, submission, confirmation and fresh readback; explicit wallet refusal | QA plus an approved extension test wallet; synthetic/read-only browser evidence is insufficient |
+| Interrupted-operation recovery | Preserve original signature where available; no success invented from a send error; no automatic or manual duplicate submission while outcome is unresolved; test reload | Backend/QA specialist; wallet sign-and-send response loss without a signature requires a separate persistent safety design |
+| Public demonstration | Exact program deployed on devnet; genuine fixtures; public HTTPS Desk; external evaluator repeats all six scenes | Bruno supplies secure program key; deployment/integration specialist creates test fixtures; hosting owner selects destination |
+| Clear delivery packet | Clean-clone reproduction, authority inventory, honest limits, license, English presentation/video/links and a first-use rehearsal | Release specialist and consenting first-time evaluator; no fictional audit or pilot evidence |
+
+Parallel code work must have disjoint file ownership. Ledger mutations run
+sequentially against fresh disposable fixtures. A reviewer actively attempts
+to falsify each acceptance claim, including lost wallet responses, absent
+bindings, stale state, mismatched network/binary and missing transaction history.
 
 ## Starting evidence, not an audit verdict
 

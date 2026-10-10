@@ -81,8 +81,11 @@ this real-network acceptance.
 ## Current external prerequisites
 
 The configured program ID already exists in source. Public release still needs
-deployment authority for that exact ID, devnet fixture-signing authority and an
-approved hosting destination. If the original deployment key is unavailable,
+secure access to the deployment key for that exact ID and an approved hosting
+destination. The owner has authorized synthetic devnet deployment and test
+transactions; use dedicated test wallets, not the local fixture wallets or any
+personal wallet. Authorization does not establish that the required keys exist
+or that an external service has been configured. If the original deployment key is unavailable,
 the team must approve an identity/configuration change; do not silently invent
 a new ID. Existing local fixture scripts are localnet tooling and must not be
 pointed at devnet as an unreviewed shortcut.
@@ -113,3 +116,13 @@ binary identity or fixture correctness; manifest validation cannot detect every
 secret disguised as an ordinary label; Node RPC checks cannot prove hosted-browser
 CORS; and the wallet demonstration cannot pass while deployment is absent.
 Public-demo sign-off is therefore still pending.
+
+## Deployment-key check, 2026-10-10
+
+The temporary SBF build generated a program keypair outside the repository.
+Reading only its public address in a network-disabled container returned
+`28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS`, which is **not** the configured
+Aveo program ID. This artifact is not a deployment key for the configured ID.
+No private key was printed, exported or committed. No program identity changed.
+The owner must supply secure access to the matching program key, or explicitly
+approve a new identity and coordinated configuration update.
