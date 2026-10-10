@@ -32,6 +32,7 @@ function Matrix() {
       {results.some((query) => query.error) && <ErrorState title={t('ux.inspectUnavailable')} onRetry={() => {
         for (const query of results) if (query.error) void query.refetch()
       }} />}
+      {holdings.error && <ErrorState title={t('ux.balancesUnavailable')} onRetry={() => void holdings.refetch()} />}
       <MatrixScrollRegion>
         <table className="matrix">
           <caption className="sr-only">{t('assets.matrix')}</caption>

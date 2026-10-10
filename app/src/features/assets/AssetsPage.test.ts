@@ -7,26 +7,34 @@ import { messages, type Language } from '../../i18n/messages'
 import { AssetsPage } from './AssetsPage'
 
 const mocks = vi.hoisted(() => ({ failed: false, unknown: false, cached: false, fetching: false,
-  holdingsFailed: false, holdingsFetching: false, refetch: vi.fn(), retry: undefined as (() => void) | undefined,
-  inspect: vi.fn(), send: vi.fn() }))
+  holdingsFailed: false, holdingsFetching: false, holdingsRefetch: vi.fn(), refetch: vi.fn(), retry: undefined as (() => void) | undefined,
+  retries: [] as (() => void)[], inspect: vi.fn(), plan: vi.fn(), sign: vi.fn(), send: vi.fn() }))
 vi.mock('react/jsx-dev-runtime', async (original) => {
   const actual = await original<typeof import('react/jsx-dev-runtime')>()
   return { ...actual, jsxDEV: (...args: Parameters<typeof actual.jsxDEV>) => {
     const props = args[1] as { className?: string; onClick?: () => void }
-    if (args[0] === 'button' && !props.className && props.onClick) mocks.retry = props.onClick
+    if (args[0] === 'button' && !props.className && props.onClick) {
+      mocks.retry = props.onClick
+      mocks.retries.push(props.onClick)
+    }
     return actual.jsxDEV(...args)
   } }
 })
 vi.mock('../../app/desk', () => ({ useReadyDesk: () => ({
-  backend: { inspect: mocks.inspect, planTransfer: mocks.send },
+  backend: { inspect: mocks.inspect, planTransfer: mocks.plan },
+  ctx: { rpc: { sendTransaction: mocks.send } },
   deployment: {
     assets: [{ id: 'asset', mint: 'mint', label: 'Asset', symbol: 'ASSET', decimals: 0 }],
     wallets: [{ address: 'wallet', label: 'Investor', role: 'investor' }],
   },
 }) }))
+vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: {
+  signer: { signTransactions: mocks.sign, signAndSendTransactions: mocks.send },
+} }) }))
 vi.mock('./queries', () => ({
   useAssetsQuery: () => ({ data: { assets: [{ asset: { mint: 'mint' } }] }, refetch: vi.fn() }),
-  useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('Offline') : undefined, isFetching: mocks.holdingsFetching,
+  useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('Private RPC provider failure') : undefined, isFetching: mocks.holdingsFetching,
+    refetch: mocks.holdingsRefetch,
     data: { holdings: [{ mint: 'mint', wallet: 'wallet', amount: 7n }] } }),
   useInspectQueries: () => [{
     error: mocks.failed ? new Error('Offline') : undefined,
@@ -49,7 +57,7 @@ function render(language: Language) {
 }
 
 beforeEach(() => { vi.clearAllMocks(); mocks.failed = false; mocks.unknown = false; mocks.cached = false; mocks.fetching = false
-  mocks.holdingsFailed = false; mocks.holdingsFetching = false; mocks.retry = undefined })
+  mocks.holdingsFailed = false; mocks.holdingsFetching = false; mocks.retry = undefined; mocks.retries = [] })
 
 describe.each(['en', 'pt'] as const)('eligibility-first page (%s)', (language) => {
   it('puts inspection before configuration and offers navigation rather than automatic actions', () => {
@@ -126,8 +134,57 @@ describe.each(['en', 'pt'] as const)('eligibility-first page (%s)', (language) =
   })
 
   it.each(['holdingsFailed', 'holdingsFetching'] as const)('does not show cached balances during %s', (state) => {
+    mocks.cached = true
     expect(render(language)).toContain('7 ASSET')
     mocks[state] = true
-    expect(render(language)).not.toContain('7 ASSET')
+    const html = render(language)
+    expect(html).not.toContain('7 ASSET')
+    expect(html).toContain('class="badge ok"')
+    expect(html).toContain(messages[language]['verdict.eligible'])
+    expect(html).not.toContain('class="cell " disabled=""')
+    if (state === 'holdingsFetching') {
+      expect(html).not.toContain(messages[language]['ux.balancesUnavailable'])
+      expect(mocks.retries).toHaveLength(0)
+    }
+  })
+
+  it.each([false, true])('retries only holdings with a static localized error (inspection failed: %s)', (inspectionFailed) => {
+    mocks.cached = true
+    mocks.holdingsFailed = true
+    mocks.failed = inspectionFailed
+    const html = render(language)
+    const title = messages[language]['ux.balancesUnavailable']
+    expect(html).toContain(`<div class="state error" role="alert"><strong>${title}</strong><button type="button">${messages[language]['state.retry']}</button></div>`)
+    expect(html.indexOf(title)).toBeLessThan(html.indexOf('class="matrix"'))
+    expect(html).not.toContain('Private RPC provider failure')
+    expect(html).not.toContain('7 ASSET')
+    expect(mocks.retries).toHaveLength(inspectionFailed ? 2 : 1)
+    expect(mocks.holdingsRefetch).not.toHaveBeenCalled()
+    mocks.retry!()
+    expect(mocks.holdingsRefetch).toHaveBeenCalledOnce()
+    expect(mocks.refetch).not.toHaveBeenCalled()
+    expect(mocks.inspect).not.toHaveBeenCalled()
+    expect(mocks.plan).not.toHaveBeenCalled()
+    expect(mocks.sign).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+    const afterRetry = render(language)
+    expect(afterRetry).toContain(inspectionFailed ? 'class="badge unknown"' : 'class="badge ok"')
+    expect(afterRetry).toContain(messages[language][inspectionFailed ? 'verdict.unknown' : 'verdict.eligible'])
+  })
+
+  it('keeps the holdings error visible while retrying and hides it after recovery', () => {
+    mocks.cached = true
+    mocks.holdingsFailed = true
+    mocks.holdingsFetching = true
+    const html = render(language)
+    expect(html).toContain(messages[language]['ux.balancesUnavailable'])
+    expect(html).not.toContain('7 ASSET')
+    expect(html).toContain('class="badge ok"')
+    mocks.holdingsFailed = false
+    mocks.holdingsFetching = false
+    const recovered = render(language)
+    expect(recovered).not.toContain(messages[language]['ux.balancesUnavailable'])
+    expect(recovered).toContain('7 ASSET')
+    expect(recovered).toContain('class="badge ok"')
   })
 })

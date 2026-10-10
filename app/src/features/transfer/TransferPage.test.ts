@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   language: 'en' as Language,
   execution: { phase: 'idle' } as ExecutionState,
   contextMatches: true,
-  holdingsFailed: false, holdingsFetching: false,
+  holdingsFailed: false, holdingsFetching: false, refetchHoldings: vi.fn(), retryHoldings: undefined as (() => void) | undefined,
   connected: { address: 'source' } as { address: string } | undefined,
 }))
 const deployment = {
@@ -37,7 +37,8 @@ vi.mock('../../i18n/context', () => ({ useI18n: () => ({
   locale: 'en-US', t: (key: keyof typeof messages.en) => messages[mocks.language][key],
   has: (key: string): key is keyof typeof messages.en => key in messages.en,
 }) }))
-vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('Offline') : undefined,
+vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('private provider error') : undefined,
+  refetch: mocks.refetchHoldings,
   isFetching: mocks.holdingsFetching, data: { holdings: [
   { mint: 'mint', wallet: 'source', amount: 100n }, { mint: 'mint', wallet: 'destination', amount: 50n },
 ] } }) }))
@@ -68,6 +69,10 @@ vi.mock('../../components/ui', async (original) => {
   const ui = await original<typeof import('../../components/ui')>()
   return {
     ...ui,
+    ErrorState: (props: Parameters<typeof ui.ErrorState>[0]) => {
+      if (props.onRetry) mocks.retryHoldings = props.onRetry
+      return createElement(ui.ErrorState, props)
+    },
     Card: (props: { children: ReactNode; title?: ReactNode; aside?: ReactNode; className?: string }) => {
       const { children } = props
       for (const child of Array.isArray(children) ? children : [children]) {
@@ -88,6 +93,7 @@ beforeEach(() => {
   mocks.contextMatches = true
   mocks.holdingsFailed = false
   mocks.holdingsFetching = false
+  mocks.retryHoldings = undefined
   mocks.connected = { address: 'source' }
   mocks.sign = undefined
   mocks.submit = undefined
@@ -159,6 +165,30 @@ describe('transfer preparation integration', () => {
   it('disables preparation while the current simulation is pending', () => {
     mocks.preparation.planning = true
     expect(render()).toMatch(/<button type="submit" class="primary" disabled="">/)
+  })
+
+  it.each(['en', 'pt'] as const)('distinguishes unavailable balances from zero and retries only the read (%s)', (language) => {
+    mocks.language = language
+    mocks.holdingsFailed = true
+    const html = render()
+    expect(html).toContain(messages[language]['ux.balancesUnavailable'])
+    expect(html).toContain('role="alert"')
+    expect(html).not.toContain('private provider error')
+    expect(html).not.toContain('class="field-hint"')
+    expect(html).not.toMatch(/<button type="submit" class="primary" disabled/)
+    expect(mocks.refetchHoldings).not.toHaveBeenCalled()
+    mocks.retryHoldings!()
+    expect(mocks.refetchHoldings).toHaveBeenCalledOnce()
+    expect(mocks.prepare).not.toHaveBeenCalled()
+    expect(mocks.planTransfer).not.toHaveBeenCalled()
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.reset).not.toHaveBeenCalled()
+  })
+
+  it('does not falsely report unavailable balances during a successful refresh', () => {
+    mocks.holdingsFetching = true
+    expect(render()).not.toContain(messages.en['ux.balancesUnavailable'])
+    expect(mocks.retryHoldings).toBeUndefined()
   })
 
   it.each(['holdingsFailed', 'holdingsFetching'] as const)('does not present cached holdings as a current hint or capture them as pre-send evidence during %s', (state) => {

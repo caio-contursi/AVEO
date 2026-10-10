@@ -5,7 +5,7 @@ import type { DeskSnapshot } from '../../api/diagnostics'
 import { useReadyDesk } from '../../app/desk'
 import { formatAmount } from '../../components/format'
 import { ReasonList } from '../../components/reasons'
-import { Card, Field, Spinner, VerdictBadge } from '../../components/ui'
+import { Card, ErrorState, Field, Spinner, VerdictBadge } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { useWallet } from '../../wallet/context'
 import { useHoldingsQuery } from '../assets/queries'
@@ -124,6 +124,7 @@ export function TransferPage() {
       <OperationFlow plan={plan} planning={planning} preparationError={preparation.error} execution={execution.state} contextMatches={execution.contextMatches} submissionPlan={submissionPlan.current} />
       <section className="stack" aria-label={t('transfer.title')}>
         <Card title={t('transfer.title')} aside={<span className="muted small">{t('transfer.flow')}</span>}>
+          {holdings.error && <ErrorState title={t('ux.balancesUnavailable')} onRetry={() => void holdings.refetch()} />}
           <form onSubmit={(e) => void submit(e)} noValidate>
             <div className="form-row">
               <Field label={t('transfer.asset')}>
