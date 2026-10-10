@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "status": "NOT_RUN",
+  "session_id": null,
+  "participant": {
+    "anonymous_id": null,
+    "target_role": null,
+    "external": null,
+    "independent": null,
+    "accepted": null
+  },
+  "consent": {
+    "permission": false,
+    "status": "not_granted",
+    "accepted_at": null,
+    "anonymized_notes_allowed": false,
+    "public_feedback_allowed": false
+  },
+  "release": {
+    "url": null,
+    "commit": null,
+    "cluster": "devnet",
+    "program_id": null,
+    "manifest_reference": null
+  },
+  "prerequisites": {
+    "deployment_verified": null,
+    "public_url_verified": null,
+    "fixtures_verified": null,
+    "signing_authority_verified": null,
+    "manual_baseline_ready": null
+  },
+  "protocol": {
+    "condition_order": null,
+    "equivalent_fixture_sets_verified": null,
+    "blind_task_before_coaching": null,
+    "measurement_rules_accepted": null
+  },
+  "scenes": [
+    {
+      "id": "S01",
+      "title": "One proof, two assets",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    },
+    {
+      "id": "S02",
+      "title": "Independent policies",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    },
+    {
+      "id": "S03",
+      "title": "Transfer outside Desk",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    },
+    {
+      "id": "S04",
+      "title": "Proof expires",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    },
+    {
+      "id": "S05",
+      "title": "Grouped impact",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    },
+    {
+      "id": "S06",
+      "title": "Signed renewal",
+      "status": "NOT_RUN",
+      "tx_signatures": [],
+      "observation_slot": null,
+      "transaction_checks": [],
+      "fresh_reads": [],
+      "desk": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "manual_baseline": {
+        "elapsed_seconds": null,
+        "actions": null,
+        "errors": null,
+        "assistance_count": null,
+        "completed": null
+      },
+      "notes": []
+    }
+  ],
+  "blind_task": {
+    "id": "U01",
+    "title": "Diagnose an unfamiliar blocked transfer",
+    "status": "NOT_RUN",
+    "tx_signatures": [],
+    "observation_slot": null,
+    "transaction_checks": [],
+    "fresh_reads": [],
+    "desk": {
+      "elapsed_seconds": null,
+      "actions": null,
+      "errors": null,
+      "assistance_count": null,
+      "completed": null
+    },
+    "manual_baseline": {
+      "elapsed_seconds": null,
+      "actions": null,
+      "errors": null,
+      "assistance_count": null,
+      "completed": null
+    },
+    "notes": []
+  },
+  "feedback": {
+    "anonymized_observations": [],
+    "limitations": [],
+    "publication_permission": false
+  },
+  "validation": {
+    "external_human_checked": false,
+    "independence_checked": false,
+    "consent_checked": false,
+    "release_checked": false,
+    "all_required_evidence_checked": false,
+    "reviewer_approved": false,
+    "reviewed_at": null
+  }
+}
