@@ -1396,3 +1396,22 @@ summary {
     overflow-wrap: normal;
   }
 }
+
+/* Guided demonstration only. */
+.demo-page { display: grid; gap: 20px; }
+.demo-scenes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.demo-scene { min-width: 0; }
+.demo-scene-heading { display: flex; align-items: baseline; gap: 12px; }
+.demo-scene-heading h2 { margin: 0; }
+.demo-number { color: var(--muted); font-size: 24px; font-weight: 700; }
+.demo-details { margin-top: 16px; }
+.demo-details summary { cursor: pointer; }
+.demo-details code, .demo-details dd { overflow-wrap: anywhere; }
+.demo-details dd { margin: 4px 0 12px; }
+.demo-stage { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 12px; }
+.demo-stage h3 { font-size: 14px; overflow-wrap: anywhere; }
+.demo-observation { margin-block: 12px; }
+.demo-observation code { user-select: all; }
+@media (max-width: 760px) {
+  .demo-scenes { grid-template-columns: minmax(0, 1fr); }
+}

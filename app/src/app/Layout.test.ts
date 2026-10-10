@@ -67,7 +67,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('accessible desk shell', () => {
+  it.each(['en', 'pt'] as const)('places the demonstration first and uses its hero (%s)', (language) => {
+    const html = render('/demonstracao', language)
+    expect(html.indexOf('href="/demonstracao"')).toBeLessThan(html.indexOf('href="/carteiras"'))
+    expect(html).toContain(messages[language]['nav.demo'])
+    expect(html).toContain(`<h1>${messages[language]['demo.title']}</h1>`)
+  })
+
   it.each([
+    ['/demonstracao', 'demo.title', 'demo.description'],
     ['/carteiras', 'ux.assetsTitle', 'ux.assetsDescription'],
     ['/transferencia', 'ux.transferTitle', 'ux.transferDescription'],
     ['/incidentes', 'ux.incidentsTitle', 'ux.incidentsDescription'],
@@ -93,7 +101,7 @@ describe('accessible desk shell', () => {
     expect(html).toContain(`aria-pressed="false" lang="${language === 'en' ? 'pt' : 'en'}"`)
     expect(html).toContain('src="/favicon.svg" alt=""')
     expect(html).toContain('Wallet control')
-    expect(html.match(/href="\/(carteiras|transferencia|incidentes|recibos|rede)"/g)).toHaveLength(5)
+    expect(html.match(/href="\/(demonstracao|carteiras|transferencia|incidentes|recibos|rede)"/g)).toHaveLength(6)
   })
 
   it('focuses main content without mutating the hash route', () => {

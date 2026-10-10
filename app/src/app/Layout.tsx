@@ -8,6 +8,7 @@ import { WalletMenu } from '../wallet/WalletMenu'
 import { useDesk } from './desk'
 
 const NAV: { to: string; label: MessageKey }[] = [
+  { to: '/demonstracao', label: 'nav.demo' },
   { to: '/carteiras', label: 'nav.assets' },
   { to: '/transferencia', label: 'nav.transfer' },
   { to: '/incidentes', label: 'nav.incidents' },
@@ -16,6 +17,7 @@ const NAV: { to: string; label: MessageKey }[] = [
 ]
 
 const HERO: Record<string, { title: MessageKey; description: MessageKey }> = {
+  '/demonstracao': { title: 'demo.title', description: 'demo.description' },
   '/carteiras': { title: 'ux.assetsTitle', description: 'ux.assetsDescription' },
   '/transferencia': { title: 'ux.transferTitle', description: 'ux.transferDescription' },
   '/incidentes': { title: 'ux.incidentsTitle', description: 'ux.incidentsDescription' },
@@ -40,7 +42,7 @@ export function Layout() {
   const { t, locale } = useI18n()
   const desk = useDesk()
   const { pathname } = useLocation()
-  const hero = HERO[pathname.replace(/\/$/, '')] ?? HERO['/carteiras']
+  const hero = HERO[pathname.replace(/\/$/, '')] ?? HERO['/demonstracao']
   const queryClient = useQueryClient()
   const status = useQuery({
     queryKey: ['network-status'],

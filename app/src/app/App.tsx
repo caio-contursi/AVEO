@@ -19,9 +19,9 @@ const router = createHashRouter([
     path: '/',
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/carteiras" replace /> },
+      { index: true, element: <Navigate to="/demonstracao" replace /> },
       ...(routes as RouteObject[]),
-      { path: '*', element: <Navigate to="/carteiras" replace /> },
+      { path: '*', element: <Navigate to="/demonstracao" replace /> },
     ],
   },
 ])
