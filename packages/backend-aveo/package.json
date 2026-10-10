@@ -6,11 +6,12 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./integration": "./src/integration.ts",
     "./sqlite": "./src/sqlite.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/index.test.ts src/sqlite.test.ts"
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.integration-tests.json",
+    "test": "tsx --test src/index.test.ts src/sqlite.test.ts src/integration.test.ts"
   },
   "dependencies": { "@aveo/contracts": "workspace:*" },
   "devDependencies": {
