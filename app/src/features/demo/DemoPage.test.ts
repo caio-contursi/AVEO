@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import type { Signature } from '@solana/kit'
+import { getBase58Decoder, type Signature } from '@solana/kit'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
@@ -171,6 +171,30 @@ describe.each(['en', 'pt'] as const)('guided demonstration (%s)', (language) => 
     expect(html).toContain(messages[language]['demo.checked'])
     expect(html).toContain(messages[language]['demo.readClaims'])
     expect(html).not.toContain('PASS')
+  })
+
+  it('keeps a verified rebind signature neutral when referenced by historical readback', () => {
+    mocks.evidence.data = bundle()
+    const signature = getBase58Decoder().decode(new Uint8Array(64).fill(7)) as Signature
+    const renewal = mocks.evidence.data.scenes.find((scene) => scene.id === 'renewal')!
+    renewal.stages = [
+      { id: 'signed-batched-rebind', status: 'PASS', evidence: [{ signature, slot: 123 }] },
+      { id: 'fresh-readback', status: 'PASS', evidence: [{ signature, slots: [124, 125], verdicts: ['eligible', 'eligible'] }] },
+    ]
+    mocks.verification.data = [{ signature, status: 'verified', slot: 123 }]
+    const html = render(language)
+    const start = html.indexOf('<code>fresh-readback</code>')
+    expect(start).toBeGreaterThan(0)
+    const readback = html.slice(start, html.indexOf('</section>', start))
+    expect(readback).toContain(signature)
+    expect(readback).toContain(`<span class="badge neutral">${messages[language]['demo.signatureReference']}</span>`)
+    expect(readback).toContain(messages[language]['demo.ledgerSlot'].replace('{slot}', '123'))
+    expect(readback).toContain(messages[language]['demo.observation'])
+    expect(readback).not.toContain('class="badge ok"')
+    expect(readback).not.toContain(messages[language]['demo.verified'])
+    expect(readback).not.toContain(messages[language]['demo.checked'])
+    // The original rebind keeps its own transaction outcome badge.
+    expect(html.slice(0, start)).toContain(`<span class="badge ok">${messages[language]['demo.verified']}</span>`)
   })
 
   it.each(['refresh', 'failure'] as const)('suppresses cached green verification during %s', (state) => {

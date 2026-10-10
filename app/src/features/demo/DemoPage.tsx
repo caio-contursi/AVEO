@@ -121,12 +121,13 @@ export function DemoPage() {
                 {stage.evidence.length === 0 && <p>{t('demo.empty')}</p>}
                 {stage.evidence.map((entry, entryIndex) => {
                   const result = typeof entry.signature === 'string' ? results?.find((item) => item.signature === entry.signature) : undefined
+                  const historicalReference = stage.id === 'fresh-readback'
                   const reasonKey = has(`reason.${entry.hookCode}.generic`) ? `reason.${entry.hookCode}.generic` : `reason.${entry.hookCode}`
                   return <div key={entryIndex} className="demo-observation">
                     {typeof entry.signature === 'string' ? <>
                       <p className="small">{t('evidence.signature')}: <code>{entry.signature}</code></p>
-                      <Badge tone={result?.status === 'verified' ? 'ok' : result?.status === 'mismatch' ? 'bad' : 'neutral'}>
-                        {t(result?.status === 'verified' ? 'demo.verified' : result?.status === 'mismatch' ? 'demo.mismatch' : results ? 'demo.unavailable' : 'demo.recorded')}
+                      <Badge tone={historicalReference ? 'neutral' : result?.status === 'verified' ? 'ok' : result?.status === 'mismatch' ? 'bad' : 'neutral'}>
+                        {t(historicalReference ? 'demo.signatureReference' : result?.status === 'verified' ? 'demo.verified' : result?.status === 'mismatch' ? 'demo.mismatch' : results ? 'demo.unavailable' : 'demo.recorded')}
                       </Badge>
                     </> : <p className="small muted">{t('demo.observation')}</p>}
                     {entry.slot !== undefined && <p className="small">{t('demo.savedSlot', { slot: entry.slot })}</p>}

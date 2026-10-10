@@ -292,7 +292,11 @@ export async function verifyDemoTransactions(ctx: DemoReadContext, input: DemoEv
   const readTimeout = limit(ctx.readTimeoutMs, 10_000, 10_000)
   const deadline = Date.now() + limit(ctx.totalTimeoutMs, 60_000, 120_000)
   const read = <T>(callback: (signal: AbortSignal) => Promise<T>) => boundedRead(callback, signal, Math.min(readTimeout, deadline - Date.now()))
-  try { if (await read((abortSignal) => ctx.rpc.getGenesisHash().send({ abortSignal })) !== bundle.genesisHash) return unavailable() }
+  try {
+    if (await read((abortSignal) => ctx.rpc.getGenesisHash().send({ abortSignal })) !== bundle.genesisHash) {
+      return records.map(({ e }) => ({ signature: e.signature!, status: 'mismatch' as const }))
+    }
+  }
   catch { return unavailable() }
   const results: DemoTransactionResult[] = []
   for (const { stage, e, detail } of records) {

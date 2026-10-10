@@ -157,9 +157,9 @@ describe('read-only ledger recheck', () => {
   it('does not query transactions on a different genesis or aborted read', async () => {
     const bundle = fixture(); const mock = reads(bundle)
     mock.getGenesisHash.mockImplementation(() => ({ send: vi.fn(async () => addr(31)) }))
-    expect((await verifyDemoTransactions(mock.ctx, bundle)).every((r) => r.status === 'unavailable')).toBe(true)
+    expect((await verifyDemoTransactions(mock.ctx, bundle)).every((r) => r.status === 'mismatch')).toBe(true)
     const controller = new AbortController(); controller.abort()
-    await verifyDemoTransactions(mock.ctx, bundle, controller.signal)
+    expect((await verifyDemoTransactions(mock.ctx, bundle, controller.signal)).every((r) => r.status === 'unavailable')).toBe(true)
     expect(mock.getTransaction).not.toHaveBeenCalled()
   })
 
