@@ -93,6 +93,11 @@ impl SasCredential {
         let authority = read_pubkey(data, &mut offset)?;
         let name = read_vec_u8(data, &mut offset)?;
         let signers_len = read_u32(data, &mut offset)? as usize;
+        // Bound allocation by the bytes actually present, not an untrusted count.
+        require!(
+            signers_len <= data.len().saturating_sub(offset) / 32,
+            AveoError::InvalidSasOwnerOrData
+        );
         let mut authorized_signers = Vec::with_capacity(signers_len);
         for _ in 0..signers_len {
             authorized_signers.push(read_pubkey(data, &mut offset)?);
@@ -144,6 +149,7 @@ impl SasSchema {
         let layout = read_vec_u8(data, &mut offset)?;
         let _field_names = read_vec_u8(data, &mut offset)?;
         let is_paused_byte = read_exact(data, &mut offset, 1)?;
+        require!(is_paused_byte[0] <= 1, AveoError::InvalidSasOwnerOrData);
         let is_paused = is_paused_byte[0] == 1;
         let version_byte = read_exact(data, &mut offset, 1)?;
         let version = version_byte[0];

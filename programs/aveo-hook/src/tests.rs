@@ -668,6 +668,48 @@ fn presented_and_live_proofs_reject_subject_and_domain_mismatch() {
 }
 
 #[test]
+fn credential_rejects_signer_counts_larger_than_remaining_bytes() {
+    let fixture = ProofFixture::new();
+    let mut prefix = vec![SAS_CREDENTIAL_DISCRIMINATOR];
+    prefix.extend_from_slice(fixture.credential.authority.as_ref());
+    prefix.extend(encode_vec_u8(&fixture.credential.name));
+    for count in [1u32, 2, u32::MAX] {
+        let mut bytes = prefix.clone();
+        bytes.extend_from_slice(&count.to_le_bytes());
+        if count == 2 {
+            bytes.extend_from_slice(test_pubkey(2).as_ref());
+        }
+        assert_aveo_error(
+            SasCredential::try_from_bytes(&bytes),
+            AveoError::InvalidSasOwnerOrData,
+        );
+    }
+    let mut bytes = prefix;
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    assert!(SasCredential::try_from_bytes(&bytes)
+        .unwrap()
+        .authorized_signers
+        .is_empty());
+}
+
+#[test]
+fn schema_accepts_only_canonical_pause_boolean_bytes() {
+    let fixture = ProofFixture::new();
+    let accounts = fixture.accounts();
+    let mut bytes = accounts[1].data.clone();
+    let pause_offset = bytes.len() - 2;
+    for paused in 0u8..=u8::MAX {
+        bytes[pause_offset] = paused;
+        let parsed = SasSchema::try_from_bytes(&bytes);
+        if paused <= 1 {
+            assert_eq!(parsed.unwrap().is_paused, paused == 1);
+        } else {
+            assert_aveo_error(parsed, AveoError::InvalidSasOwnerOrData);
+        }
+    }
+}
+
+#[test]
 fn live_eligibility_rechecks_schema_pause_layout_and_signer_revocation() {
     for mutation in 0..3 {
         let mut fixture = ProofFixture::new();
