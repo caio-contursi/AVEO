@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   language: 'en' as Language,
   execution: { phase: 'idle' } as ExecutionState,
   contextMatches: true,
-  holdingsFailed: false, holdingsFetching: false, refetchHoldings: vi.fn(), retryHoldings: undefined as (() => void) | undefined,
+  holdingsFailed: false, holdingsFetching: false, invalidWallet: undefined as string | undefined, refetchHoldings: vi.fn(), retryHoldings: undefined as (() => void) | undefined,
   connected: { address: 'source' } as { address: string } | undefined,
 }))
 const deployment = {
@@ -34,13 +34,17 @@ vi.mock('../../app/desk', () => ({
   useDesk: () => ({ explorerUrl: () => null }),
 }))
 vi.mock('../../i18n/context', () => ({ useI18n: () => ({
-  locale: 'en-US', t: (key: keyof typeof messages.en) => messages[mocks.language][key],
+  locale: mocks.language === 'en' ? 'en-US' : 'pt-BR',
+  t: (key: keyof typeof messages.en, params: Record<string, string | number> = {}) => messages[mocks.language][key].replace(/\{(\w+)\}/g,
+    (match, name: string) => name in params ? String(params[name]) : match),
   has: (key: string): key is keyof typeof messages.en => key in messages.en,
 }) }))
 vi.mock('../assets/queries', () => ({ useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('private provider error') : undefined,
   refetch: mocks.refetchHoldings,
   isFetching: mocks.holdingsFetching, data: { holdings: [
-  { mint: 'mint', wallet: 'source', amount: 100n }, { mint: 'mint', wallet: 'destination', amount: 50n },
+  ...['source', 'destination'].map((wallet, i) => mocks.invalidWallet === wallet
+    ? { mint: 'mint', wallet, error: 'ReadUnverifiable' }
+    : { mint: 'mint', wallet, amount: [100n, 50n][i] }),
 ] } }) }))
 vi.mock('../operations/useExecutePlan', () => ({ useExecutePlan: () => ({
   state: mocks.execution, contextMatches: mocks.contextMatches,
@@ -93,6 +97,7 @@ beforeEach(() => {
   mocks.contextMatches = true
   mocks.holdingsFailed = false
   mocks.holdingsFetching = false
+  mocks.invalidWallet = undefined
   mocks.retryHoldings = undefined
   mocks.connected = { address: 'source' }
   mocks.sign = undefined
@@ -120,6 +125,50 @@ function preparedPlan(ok = true): DeskPlan {
 }
 
 describe('transfer preparation integration', () => {
+  describe.each(['en', 'pt'] as const)('partial holdings (%s)', (language) => {
+    it.each(['source', 'destination'])('keeps the valid hint when %s is invalid, retries only the read and omits incomplete evidence', (wallet) => {
+      mocks.language = language
+      mocks.invalidWallet = wallet
+      mocks.preparation.plan = preparedPlan()
+      const html = render()
+      const balance = (amount: string) => messages[language]['transfer.balance'].replace('{amount}', amount)
+      expect(html).toContain(balance(wallet === 'source' ? '50' : '100'))
+      expect(html).not.toContain(balance(wallet === 'source' ? '100' : '50'))
+      expect(html).not.toContain(balance('0'))
+      expect(html).toContain(messages[language]['ux.balanceUnavailable'])
+      expect(html).toContain(messages[language]['ux.balancesPartial'])
+      expect(html).toContain('role="alert"')
+      expect(html).not.toMatch(/<button type="submit" class="primary" disabled/)
+      expect(mocks.refetchHoldings).not.toHaveBeenCalled()
+      mocks.retryHoldings!()
+      expect(mocks.refetchHoldings).toHaveBeenCalledOnce()
+      expect(mocks.prepare).not.toHaveBeenCalled()
+      expect(mocks.planTransfer).not.toHaveBeenCalled()
+      expect(mocks.execute).not.toHaveBeenCalled()
+      expect(mocks.reset).not.toHaveBeenCalled()
+      mocks.sign!()
+      expect(mocks.execute).toHaveBeenCalledWith(mocks.preparation.plan, { balancesBefore: undefined })
+      mocks.invalidWallet = undefined
+      const recovered = render()
+      expect(recovered).toContain(balance('100'))
+      expect(recovered).toContain(balance('50'))
+      expect(recovered).not.toContain(messages[language]['ux.balancesPartial'])
+    })
+
+    it.each(['holdingsFailed', 'holdingsFetching'] as const)('hides every partial cached hint and omits evidence during %s', (state) => {
+      mocks.language = language
+      mocks.invalidWallet = 'destination'
+      mocks.preparation.plan = preparedPlan()
+      mocks[state] = true
+      const html = render()
+      expect(html).not.toContain('class="field-hint"')
+      expect(html).not.toContain(messages[language]['ux.balanceUnavailable'])
+      expect(html).not.toContain(messages[language]['ux.balancesPartial'])
+      mocks.sign!()
+      expect(mocks.execute).toHaveBeenCalledWith(mocks.preparation.plan, { balancesBefore: undefined })
+    })
+  })
+
   it('scopes preparation to network, deployment, form and connected wallet without preparing on render', () => {
     render()
     expect(mocks.scope).toEqual([
@@ -299,8 +348,8 @@ describe('transfer preparation integration', () => {
     mocks.connected = { address: 'destination' }
     mocks.execution = { phase: 'error', error: { code: 'SimulationFailed', message: 'Wallet rejected request' } }
     const html = render()
-    expect(html).toContain(messages.en['wallet.required'])
-    expect(html).toContain(messages.en['wallet.wrong'])
+    expect(html).toContain(messages.en['wallet.required'].replace('{wallet}', 'X'))
+    expect(html).toContain(messages.en['wallet.wrong'].replace('{wallet}', 'X'))
     expect(html).toContain('Wallet rejected request')
     expect(html).toContain('<details open="">')
     expect(html).toMatch(/<button type="button" class="primary" disabled=""/)

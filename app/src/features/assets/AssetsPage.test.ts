@@ -7,7 +7,7 @@ import { messages, type Language } from '../../i18n/messages'
 import { AssetsPage } from './AssetsPage'
 
 const mocks = vi.hoisted(() => ({ failed: false, unknown: false, cached: false, fetching: false,
-  holdingsFailed: false, holdingsFetching: false, holdingsRefetch: vi.fn(), refetch: vi.fn(), retry: undefined as (() => void) | undefined,
+  holdingsFailed: false, holdingsFetching: false, holdingsPartial: false, holdingsRefetch: vi.fn(), refetch: vi.fn(), retry: undefined as (() => void) | undefined,
   retries: [] as (() => void)[], inspect: vi.fn(), plan: vi.fn(), sign: vi.fn(), send: vi.fn() }))
 vi.mock('react/jsx-dev-runtime', async (original) => {
   const actual = await original<typeof import('react/jsx-dev-runtime')>()
@@ -25,7 +25,7 @@ vi.mock('../../app/desk', () => ({ useReadyDesk: () => ({
   ctx: { rpc: { sendTransaction: mocks.send } },
   deployment: {
     assets: [{ id: 'asset', mint: 'mint', label: 'Asset', symbol: 'ASSET', decimals: 0 }],
-    wallets: [{ address: 'wallet', label: 'Investor', role: 'investor' }],
+    wallets: [{ address: 'wallet', label: 'Investor', role: 'investor' }, { address: 'other', label: 'Other', role: 'investor' }],
   },
 }) }))
 vi.mock('../../wallet/context', () => ({ useWallet: () => ({ connected: {
@@ -35,14 +35,16 @@ vi.mock('./queries', () => ({
   useAssetsQuery: () => ({ data: { assets: [{ asset: { mint: 'mint' } }] }, refetch: vi.fn() }),
   useHoldingsQuery: () => ({ error: mocks.holdingsFailed ? new Error('Private RPC provider failure') : undefined, isFetching: mocks.holdingsFetching,
     refetch: mocks.holdingsRefetch,
-    data: { holdings: [{ mint: 'mint', wallet: 'wallet', amount: 7n }] } }),
-  useInspectQueries: () => [{
+    data: { holdings: [{ mint: 'mint', wallet: 'wallet', amount: 7n }, mocks.holdingsPartial
+      ? { mint: 'mint', wallet: 'other', error: 'ReadUnverifiable' }
+      : { mint: 'mint', wallet: 'other', amount: 9n }] } }),
+  useInspectQueries: () => ['wallet', 'other'].map((wallet) => ({
     error: mocks.failed ? new Error('Offline') : undefined,
     isFetching: mocks.fetching,
     refetch: mocks.refetch,
-    data: mocks.cached ? { verdict: 'eligible', reasons: [], wallet: 'wallet', mint: 'mint' }
-      : mocks.unknown ? { verdict: 'unknown', reasons: [], wallet: 'wallet', mint: 'mint' } : undefined,
-  }],
+    data: mocks.cached ? { verdict: 'eligible', reasons: [], wallet, mint: 'mint' }
+      : mocks.unknown ? { verdict: 'unknown', reasons: [], wallet, mint: 'mint' } : undefined,
+  })),
 }))
 vi.mock('./PolicyCard', () => ({ PolicyCard: () => 'POLICY_CONTROLS' }))
 vi.mock('./ProofsTable', () => ({ ProofsTable: () => 'PROOF_CONTROLS' }))
@@ -57,9 +59,49 @@ function render(language: Language) {
 }
 
 beforeEach(() => { vi.clearAllMocks(); mocks.failed = false; mocks.unknown = false; mocks.cached = false; mocks.fetching = false
-  mocks.holdingsFailed = false; mocks.holdingsFetching = false; mocks.retry = undefined; mocks.retries = [] })
+  mocks.holdingsFailed = false; mocks.holdingsFetching = false; mocks.holdingsPartial = false; mocks.retry = undefined; mocks.retries = [] })
 
 describe.each(['en', 'pt'] as const)('eligibility-first page (%s)', (language) => {
+  it('preserves valid balances and labels only the invalid cell, with a read-only retry and recovery', () => {
+    mocks.holdingsPartial = true
+    mocks.cached = true
+    const html = render(language)
+    expect(html).toContain('7 ASSET')
+    expect(html).not.toContain('9 ASSET')
+    expect(html).not.toContain('0 ASSET')
+    expect(html).toContain(messages[language]['ux.balancesPartial'])
+    expect(html.split(messages[language]['ux.balanceUnavailable'])).toHaveLength(2)
+    expect(html).toContain('class="badge ok"')
+    expect(mocks.retries).toHaveLength(1)
+    mocks.retry!()
+    expect(mocks.holdingsRefetch).toHaveBeenCalledOnce()
+    expect(mocks.refetch).not.toHaveBeenCalled()
+    expect(mocks.inspect).not.toHaveBeenCalled()
+    expect(mocks.plan).not.toHaveBeenCalled()
+    expect(mocks.sign).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+    mocks.holdingsFetching = true
+    const refreshing = render(language)
+    expect(refreshing).not.toContain('7 ASSET')
+    expect(refreshing).not.toContain(messages[language]['ux.balanceUnavailable'])
+    expect(refreshing).not.toContain(messages[language]['ux.balancesPartial'])
+    mocks.holdingsFetching = false
+    mocks.holdingsPartial = false
+    const recovered = render(language)
+    expect(recovered).toContain('7 ASSET')
+    expect(recovered).toContain('9 ASSET')
+    expect(recovered).not.toContain(messages[language]['ux.balancesPartial'])
+  })
+
+  it.each(['holdingsFailed', 'holdingsFetching'] as const)('hides all partial cached balances during %s', (state) => {
+    mocks.holdingsPartial = true
+    mocks[state] = true
+    const html = render(language)
+    expect(html).not.toContain('7 ASSET')
+    expect(html).not.toContain('9 ASSET')
+    expect(html).not.toContain(messages[language]['ux.balanceUnavailable'])
+    expect(html).not.toContain(messages[language]['ux.balancesPartial'])
+  })
   it('puts inspection before configuration and offers navigation rather than automatic actions', () => {
     const html = render(language)
     expect(html.indexOf('class="matrix"')).toBeLessThan(html.indexOf('class="technical-details"'))
@@ -115,7 +157,7 @@ describe.each(['en', 'pt'] as const)('eligibility-first page (%s)', (language) =
     expect(mocks.refetch).not.toHaveBeenCalled()
     expect(mocks.retry).toBeTypeOf('function')
     mocks.retry!()
-    expect(mocks.refetch).toHaveBeenCalledOnce()
+    expect(mocks.refetch).toHaveBeenCalledTimes(2)
     expect(mocks.send).not.toHaveBeenCalled()
   })
 

@@ -1,5 +1,6 @@
 // Leituras de apoio para as telas: estado da rede, políticas, provas e saldos dos ativos da demo.
 import { getMintDecoder } from '@solana-program/token-2022'
+import { DeskError } from '@aveo/contracts'
 import { getSysvarClockDecoder } from '@solana/sysvars'
 import { unwrapOption, type Address } from '@solana/kit'
 import type { DeploymentAsset } from '../config/deployment'
@@ -91,10 +92,15 @@ export async function readAssets(ctx: ApiContext): Promise<{ slot: number; asset
   }
 }
 
-export interface HoldingRow {
+export type HoldingRow = {
   mint: Address
   wallet: Address
   amount: bigint
+} | {
+  mint: Address
+  wallet: Address
+  amount?: undefined
+  error: 'ReadUnverifiable'
 }
 
 export async function readHoldings(ctx: ApiContext): Promise<{ slot: number; holdings: HoldingRow[] }> {
@@ -106,8 +112,13 @@ export async function readHoldings(ctx: ApiContext): Promise<{ slot: number; hol
   return {
     slot,
     holdings: pairs.map(({ asset, wallet }, i) => {
-      const amount = decodeTokenBalance(raw[i]!, { address: accounts[i]!, mint: asset.mint, owner: wallet.address })
-      return { mint: asset.mint, wallet: wallet.address, amount }
+      try {
+        const amount = decodeTokenBalance(raw[i]!, { address: accounts[i]!, mint: asset.mint, owner: wallet.address })
+        return { mint: asset.mint, wallet: wallet.address, amount }
+      } catch (error) {
+        if (!(error instanceof DeskError) || error.code !== 'ReadUnverifiable') throw error
+        return { mint: asset.mint, wallet: wallet.address, error: 'ReadUnverifiable' as const }
+      }
     }),
   }
 }

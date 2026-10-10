@@ -7,6 +7,7 @@ import { TOKEN_2022_PROGRAM_ID } from './constants'
 import type { ApiContext } from './context'
 import { readHoldings } from './inventory'
 import { tokenAccountsFor } from './transactions'
+import * as tokenBalance from './token-balance'
 
 vi.mock('./accounts', () => ({ readAccounts: vi.fn(), rpcCall: vi.fn() }))
 
@@ -30,17 +31,8 @@ async function fixture() {
   return { ctx, pairs, addresses, token }
 }
 
-async function expectUnverifiable(promise: ReturnType<typeof readHoldings>) {
-  await expect(promise).rejects.toBeInstanceOf(DeskError)
-  await expect(promise).rejects.toMatchObject({ name: 'DeskError', code: 'ReadUnverifiable', message: 'ReadUnverifiable' })
-  await promise.catch((error: DeskError) => {
-    expect(Object.keys(error).sort()).toEqual(['code', 'name'])
-    expect(error.cause).toBeUndefined()
-  })
-}
-
 describe('readHoldings', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks() })
 
   it('preserves asset/wallet ordering, bigint balances, frozen accounts, missing ATAs and the observation slot', async () => {
     const f = await fixture()
@@ -85,12 +77,33 @@ describe('readHoldings', () => {
     }],
   ]
 
-  it.each(invalidCases)('rejects the entire multi-pair read with a static error for %s', async (_name, invalidate) => {
+  it.each(invalidCases)('marks only the third row unavailable for %s', async (_name, invalidate) => {
     const f = await fixture()
     const accounts = f.pairs.map((_, i) => f.token(i))
     accounts[2] = invalidate(accounts[2]!, (overrides) => f.token(2, overrides), f.addresses[0]!)
     vi.mocked(readAccounts).mockResolvedValueOnce({ slot: 456, accounts })
-    await expectUnverifiable(readHoldings(f.ctx))
+    expect(await readHoldings(f.ctx)).toEqual({
+      slot: 456, holdings: f.pairs.map((pair, i) => i === 2
+        ? { ...pair, error: 'ReadUnverifiable' }
+        : { ...pair, amount: BigInt(i + 1) }),
+    })
+  })
+
+  it.each([
+    new Error('Transport failed'),
+    new DeskError('ReadUnverifiable', 'Account read returned an invalid account count.'),
+    new DeskError('ReadUnverifiable', 'Account read failed.'),
+  ])('rejects overall read failures without converting them into rows (%s)', async (error) => {
+    const f = await fixture()
+    vi.mocked(readAccounts).mockRejectedValueOnce(error)
+    await expect(readHoldings(f.ctx)).rejects.toBe(error)
+  })
+
+  it.each([new Error('Unexpected decode failure'), new DeskError('SimulationFailed')])('rethrows unexpected decode errors (%s)', async (error) => {
+    const f = await fixture()
+    vi.mocked(readAccounts).mockResolvedValueOnce({ slot: 456, accounts: f.pairs.map((_, i) => f.token(i)) })
+    vi.spyOn(tokenBalance, 'decodeTokenBalance').mockImplementationOnce(() => { throw error })
+    await expect(readHoldings(f.ctx)).rejects.toBe(error)
   })
 
   it('returns zero for an entirely absent inventory while retaining the RPC slot', async () => {

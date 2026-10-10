@@ -19,6 +19,8 @@ function Matrix() {
   const { deployment } = useReadyDesk()
   const [selected, setSelected] = useState<{ mint: string; wallet: string } | null>(null)
   const holdings = useHoldingsQuery()
+  const currentHoldings = holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings
+  const partialHoldings = currentHoldings?.some((row) => row.amount === undefined)
   const pairs = deployment.wallets.flatMap((w) => deployment.assets.map((a) => ({ mint: a.mint, wallet: w.address })))
   const results = useInspectQueries(pairs)
   const snapshotOf = (mint: string, wallet: string): DeskSnapshot | undefined => {
@@ -33,6 +35,7 @@ function Matrix() {
         for (const query of results) if (query.error) void query.refetch()
       }} />}
       {holdings.error && <ErrorState title={t('ux.balancesUnavailable')} onRetry={() => void holdings.refetch()} />}
+      {partialHoldings && <ErrorState title={t('ux.balancesPartial')} onRetry={() => void holdings.refetch()} />}
       <MatrixScrollRegion>
         <table className="matrix">
           <caption className="sr-only">{t('assets.matrix')}</caption>
@@ -54,7 +57,8 @@ function Matrix() {
                   const index = pairs.findIndex((p) => p.mint === a.mint && p.wallet === w.address)
                   const query = results[index]
                   const snapshot = query?.error || query?.isFetching ? undefined : query?.data
-                  const amount = holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings.find((h) => h.mint === a.mint && h.wallet === w.address)?.amount
+                  const holding = currentHoldings?.find((h) => h.mint === a.mint && h.wallet === w.address)
+                  const amount = holding?.amount
                   const isSelected = selected?.mint === a.mint && selected.wallet === w.address
                   const primary = snapshot?.reasons.find((r) => !r.hint)
                   return (
@@ -70,7 +74,7 @@ function Matrix() {
                         <span className="cell-top">
                           {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.isFetching && !query.error ? <span className="muted small">{t('state.loading')}</span> : <VerdictBadge verdict="unknown" />}
                           <span className="muted small">
-                            {amount !== undefined ? `${formatAmount(locale, amount, a.decimals)} ${a.symbol}` : ''}
+                            {amount !== undefined ? `${formatAmount(locale, amount, a.decimals)} ${a.symbol}` : holding ? t('ux.balanceUnavailable') : ''}
                           </span>
                         </span>
                         <span className="small muted">

@@ -72,7 +72,17 @@ export function TransferPage() {
   }, [connected, deployment.wallets, execution.state.phase, execution.state.sendBlocked])
 
   const asset = deployment.assets.find((a) => a.id === form.asset)!
-  const balanceOf = (wallet: string) => holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings.find((h) => h.mint === asset.mint && h.wallet === wallet)?.amount
+  const currentHoldings = holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings
+  const partialHoldings = currentHoldings?.some((row) => row.amount === undefined)
+  const holdingOf = (wallet: string) => currentHoldings?.find((h) => h.mint === asset.mint && h.wallet === wallet)
+  const balanceOf = (wallet: string) => holdingOf(wallet)?.amount
+  const balanceHint = (wallet: string) => {
+    const holding = holdingOf(wallet)
+    if (!holding) return undefined
+    return holding.amount !== undefined
+      ? t('transfer.balance', { amount: formatAmount(locale, holding.amount, asset.decimals) })
+      : t('ux.balanceUnavailable')
+  }
 
   const update = (patch: Partial<FormState>) => {
     if (!execution.reset()) return
@@ -125,6 +135,7 @@ export function TransferPage() {
       <section className="stack" aria-label={t('transfer.title')}>
         <Card title={t('transfer.title')} aside={<span className="muted small">{t('transfer.flow')}</span>}>
           {holdings.error && <ErrorState title={t('ux.balancesUnavailable')} onRetry={() => void holdings.refetch()} />}
+          {partialHoldings && <ErrorState title={t('ux.balancesPartial')} onRetry={() => void holdings.refetch()} />}
           <form onSubmit={(e) => void submit(e)} noValidate>
             <div className="form-row">
               <Field label={t('transfer.asset')}>
@@ -139,7 +150,7 @@ export function TransferPage() {
               <Field
                 label={t('transfer.from')}
                 error={errors.from}
-                hint={balanceOf(form.from) !== undefined ? t('transfer.balance', { amount: formatAmount(locale, balanceOf(form.from)!, asset.decimals) }) : undefined}
+                hint={balanceHint(form.from)}
               >
                 <select disabled={formLocked} value={form.from} onChange={(e) => update({ from: e.target.value })}>
                   {deployment.wallets.map((w) => (
@@ -149,7 +160,7 @@ export function TransferPage() {
                   ))}
                 </select>
               </Field>
-              <Field label={t('transfer.to')} error={errors.to}>
+              <Field label={t('transfer.to')} error={errors.to} hint={balanceHint(form.to)}>
                 <select disabled={formLocked} value={form.to} onChange={(e) => update({ to: e.target.value })}>
                   {deployment.wallets.map((w) => (
                     <option key={w.address} value={w.address}>
