@@ -2,7 +2,7 @@
 
 Proof of concept for the Colosseum hackathon (Superteam BR): one synthetic SAS (Solana Attestation Service) attestation reused across two Token-2022 tokens, each with its own policy, enforced on-chain by a Transfer Hook. A Desk shows eligibility incidents and tracks their remediation.
 
-> Synthetic proofs; devnet demo; no real KYC.
+> Synthetic proofs; verified devnet program deployment; public Desk acceptance pending; no real KYC.
 
 Plans: [`docs/plano-execucao.md`](docs/plano-execucao.md) (full) and [`docs/algoritmo-execucao.md`](docs/algoritmo-execucao.md) (simplified version).
 Contract between teams: [`docs/interface-v2.md`](docs/interface-v2.md).
@@ -19,7 +19,13 @@ Contract between teams: [`docs/interface-v2.md`](docs/interface-v2.md).
 | `app/` | The Desk. Diagnosis, plan and verification run in the browser, on top of the RPC |
 | `config/programs.json` | Fixed IDs for the hook, SAS and Token-2022. Demo mints come from `pnpm fixtures`, not from an invented manifest |
 
-The program is **not deployed on devnet**. The ID `ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33` is fixed in `declare_id!` and in `Anchor.toml`. The matching keypair is not in Git. Do not run `anchor keys sync`, because it would change the ID. The local demo loads the compiled `.so` at that address.
+The program is **deployed on devnet** at `28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS`.
+The deployment is finalized and its on-chain binary matches the reviewed SBF
+artifact. See [deployment evidence and public-release gates](docs/public-demo-release.md).
+Default builds and localnet retain `ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33`;
+the `devnet` Cargo feature selects the dedicated devnet identity. Deployment
+keypairs are not stored in Git. Do not run `anchor keys sync`. Fixture,
+real-wallet and public-demo acceptance remain separate gates.
 
 ### Compute units (localnet, Oct 2, 2026)
 
@@ -85,7 +91,10 @@ pnpm scan:once          # incidents in app/.dev/incidents.sqlite
 
 `pnpm build:program` (Linux/macOS, with the toolchain installed) uses `cargo build-sbf --tools-version v1.53` instead of `anchor build`, because the compiler bundled with Solana CLI 2.3.0 does not understand recent dependencies (edition 2024). On Windows, the equivalent is `pnpm --filter @aveo/app solana:build`.
 
-Do not run `anchor keys sync`. The program ID is already in the code. The deploy keypair is not versioned, so there is no deploy to that address on devnet without it.
+Do not run `anchor keys sync`. Use the reviewed `devnet` feature and dedicated
+identity when compiling a devnet artifact; default builds target localnet.
+Deployment keys remain private and outside Git. Follow the public-release runbook
+rather than pointing local fixture commands at devnet.
 
 ## Structure
 

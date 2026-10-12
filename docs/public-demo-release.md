@@ -404,3 +404,17 @@ Final workspace verification for this increment passed 2,647 app/script tests,
 SQLite experimental and Zod/Rollup warnings remain unchanged. Real devnet
 fixture completion/publication evidence is recorded separately from these
 offline regression results.
+
+The reviewed runtime also bounds classified retries for an explicit allowlist of
+RPC reads used by rent queries, account resolution and final accounting. Request
+abort signals are combined with the transport deadline. `sendTransaction`,
+`requestAirdrop` and unknown methods are never retried by this transport. Tests
+exercise actual mocked HTTP requests and assert one request for each mutating
+method even when the endpoint returns its nonstandard 429 response.
+
+The sixth scenario confirmed 30 operations, including issuance, mint/policy setup,
+bindings and the first Alfa transfer, before an account-resolution read prevented
+the next transfer from being prepared. No pending transfer was submitted at that
+point, and no manifest was published. A later read-only Beta instruction preparation
+passed with 15 accounts and zero signing/broadcast calls. This is evidence of a
+partial scenario, not final accounting acceptance.
