@@ -282,8 +282,18 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         operation.phase = 'checking-network'; persist()
         await pin()
         operation.phase = 'submitting'; persist()
-        const returned = await bounded((signal) => rpc.sendTransaction(wire,
-          { encoding: 'base64', preflightCommitment: 'confirmed', skipPreflight: false, maxRetries: 0n }).send({ abortSignal: signal }), 15_000)
+        const returned = await bounded(async (signal) => {
+          try {
+            return await rpc.sendTransaction(wire,
+              { encoding: 'base64', preflightCommitment: 'confirmed', minContextSlot: latest.context.slot, skipPreflight: false, maxRetries: 0n }).send({ abortSignal: signal })
+          } catch (error) {
+            if (!signal.aborted && isSolanaError(error)) {
+              operation.submissionRpcCode = Number(error.context.__code)
+              if (isSolanaError(error, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR)) operation.submissionHttpStatus = error.context.statusCode
+            }
+            throw error
+          }
+        }, 15_000)
         check(returned === signature)
         acknowledged = { signature, fingerprint }
         operation.phase = 'submitted'; persist()

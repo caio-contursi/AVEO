@@ -177,6 +177,8 @@ describe('dedicated synthetic devnet runtime', () => {
     await expect(runtime.send(signer, [instruction])).rejects.toThrow()
     expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
     expect(f.journal()).toMatchObject({ status: 'stopped', operations: [{ phase: 'unknown', signature: expect.any(String) }] })
+    expect(f.journal().operations[0].submissionHttpStatus).toBe(429)
+    expect(f.journal().operations[0].submissionRpcCode).toBe(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR)
   })
   it('normalizes JSON-RPC 429 before the SDK error formatter without leaking server text', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 429, message: 'private server detail' } }), { status: 200 })))
@@ -381,7 +383,7 @@ describe('dedicated synthetic devnet runtime', () => {
     const signature = await runtime.send(signer, [instruction])
     expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
     expect(f.api.sendTransaction).toHaveBeenCalledWith(expect.any(String),
-      { encoding: 'base64', preflightCommitment: 'confirmed', skipPreflight: false, maxRetries: 0n })
+      { encoding: 'base64', preflightCommitment: 'confirmed', minContextSlot: 42n, skipPreflight: false, maxRetries: 0n })
     expect(f.journal().operations[0]).toMatchObject({ phase: 'confirmed', signature, slot: 42 })
   })
 
