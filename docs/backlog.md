@@ -1,5 +1,10 @@
 # Delivery backlog
 
+## Delivery documentation proposals
+
+- **DOCS-01:** Generate a compact evidence index from release reports and image/source hashes, reducing manual contradictions between README, demo and submission claims.
+- **DOCS-02:** Add an independently observed first-use checklist to the delivery packet after a real participant completes the supported workflow, without inventing usability or adoption evidence.
+
 ## RPC operations proposals
 
 - **RPC-01:** Add quota-aware telemetry with no addresses or credentials in logs, so operators can detect exhaustion before a public demonstration fails.

@@ -1,5 +1,9 @@
 # Public devnet demonstration release
 
+> Current reader-facing status: [current-status.md](current-status.md). Deployment,
+> genuine fixtures and public Helius hosting are now available. Earlier prerequisite
+> statements below are retained historical observations, not today's blockers.
+
 ## Scope and ownership
 
 Priority 1 is a public, reproducible demonstration, not a production audit.

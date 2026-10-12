@@ -1,5 +1,9 @@
 # Security matrix progress
 
+> See [current release status](current-status.md) for deployment and public-browser
+> progress. This record retains historical local-ledger evidence; it does not close
+> the remaining full-security or extension-wallet acceptance gates.
+
 ## Acceptance policy
 
 Passing a runner is not passing every security case. Live ledger results,
