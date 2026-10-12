@@ -206,3 +206,41 @@ acceptance or hosting publication occurred in this increment. Passing bootstrap
 tests does not complete the full adversarial security matrix or establish
 independent audit, MPL-3643 integration or production readiness. The current
 localnet viewer was not switched or reset.
+
+## Consolidation into AVEO, 2026-10-12
+
+The owner authorized consolidation and supplied repository-local commit
+authorship. Readiness documentation and recovery/devnet changes were recorded
+in focused commits and integrated into `/home/bruno/projetos/AVEO`, branch
+`bruno`. This is now the active implementation directory; no additional
+worktree was created. The existing readiness/recovery directories remain for
+reference, not parallel implementation. No branch was pushed and no remote
+GitHub or running public site was changed.
+
+The five existing VPS hosting files were preserved byte-for-byte and recorded
+in commit `fd9e9a4`. This preserves configuration; it does not approve it for
+the public release. `Dockerfile.web` still runs the ordinary build and needs a
+reviewed public-manifest/build configuration before publication. Compose syntax
+validation passed, but no hosting image rebuild or container replacement ran.
+Commit `df03e99` extends Git exclusions to deployment keypairs and private devnet
+JSONL journals; actual `git check-ignore` checks passed.
+
+After integration, `pnpm install --frozen-lockfile --offline` and `pnpm verify`
+passed in AVEO: 2,616 app/script tests, 41 backend tests, type checks, lint and
+ordinary production build. Existing SQLite experimental and Zod/Rollup annotation
+warnings remain; there were no new warnings. No Rust source changed since the
+previous successful default/devnet suites and SBF build; they were not rerun
+in this consolidation increment.
+
+The owner requested 5 devnet SOL through the faucet. Repeated read-only balance
+checks still returned zero; at `2026-10-12T14:52:20.356Z`, confirmed slot 510299896,
+the dedicated payer had zero lamports. A faucet request is not funding evidence.
+If it supplied a signature, inspect that public transaction; otherwise obtain
+its success/error message before assuming a pending transfer. No new airdrop,
+deployment or fixture submission occurred during consolidation.
+
+Reviewer objections remain: funding, real deployment/fixture readback, reviewed
+public hosting configuration and real-wallet/six-scene acceptance are pending.
+Consolidation is not devnet or public-demo sign-off. Suggested release-provenance
+and interrupted-journal improvements remain in `docs/backlog.md` as RELEASE-01
+and DEVNET-01; no new feature scope was added.
