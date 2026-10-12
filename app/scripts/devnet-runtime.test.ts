@@ -42,6 +42,23 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('retries only classified transport failures for allowlisted resolver reads', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 429, message: 'Rate limit' } }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: DEVNET_GENESIS_HASH }), { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    await expect(createDevnetRpc('https://api.devnet.solana.com', true).getGenesisHash().send()).resolves.toBe(DEVNET_GENESIS_HASH)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['sendTransaction', 'requestAirdrop'])('never retries %s in the transport', async (method) => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 429, message: 'Rate limit' } }), { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    const rpc = createDevnetRpc('https://api.devnet.solana.com', true)
+    const sent = method === 'sendTransaction' ? rpc.sendTransaction('AA==' as never, { encoding: 'base64' }).send() : rpc.requestAirdrop(addr(1), 1n as never).send()
+    await expect(sent).rejects.toMatchObject({ context: { statusCode: 429 } })
+    expect(fetch).toHaveBeenCalledOnce()
+  })
   it.each(['during-final-pin', 'after-completion'])('ignores timed-out lookup metadata %s', async (timing) => {
     const f = fixture(), runtime = await f.create()
     const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')

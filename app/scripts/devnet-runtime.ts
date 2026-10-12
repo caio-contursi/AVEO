@@ -44,10 +44,10 @@ async function readWithRetry<T>(read: (signal: AbortSignal) => Promise<T>, timeo
 }
 
 /** Normalize only the public endpoint's nonstandard rate-limit code before SDK decoding. */
-export function createDevnetRpc(url: string): Rpc<SolanaRpcApi> {
+export function createDevnetRpc(url: string, retryReads = false): Rpc<SolanaRpcApi> {
   validateDevnetEndpoints(url, 'wss://api.devnet.solana.com')
   const transport = createDefaultRpcTransport({ url })
-  return createSolanaRpcFromTransport(async <TResponse>(config: Parameters<typeof transport>[0]) => {
+  const normalize = async <TResponse>(config: Parameters<typeof transport>[0]): Promise<TResponse> => {
     const response = await transport<TResponse>(config)
     if (response && typeof response === 'object' && 'error' in response) {
       const error = response.error
@@ -58,6 +58,20 @@ export function createDevnetRpc(url: string): Rpc<SolanaRpcApi> {
       }
     }
     return response
+  }
+  const reads = new Set(['getGenesisHash', 'getAccountInfo', 'getMultipleAccounts', 'getBalance',
+    'getLatestBlockhash', 'getSignatureStatuses', 'getTransaction', 'getMinimumBalanceForRentExemption',
+    'getSlot', 'getBlockHeight', 'simulateTransaction'])
+  return createSolanaRpcFromTransport(async <TResponse>(config: Parameters<typeof transport>[0]): Promise<TResponse> => {
+    const payload = config.payload
+    const method = payload && typeof payload === 'object' && 'method' in payload ? payload.method : undefined
+    if (!retryReads || typeof method !== 'string' || !reads.has(method)) return normalize<TResponse>(config)
+    return readWithRetry(async (signal) => {
+      const combined = config.signal ? AbortSignal.any([signal, config.signal]) : signal
+      const response = await normalize<TResponse>({ ...config, signal: combined })
+      check(!combined.aborted)
+      return response
+    })
   })
 }
 
@@ -143,7 +157,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     validateDevnetEndpoints(options.rpcUrl, options.wsUrl)
     check(options.externalIssuerFunding === undefined || typeof options.externalIssuerFunding === 'boolean')
     const directory = validateDevnetDirectory(options.directory)
-    const rpc = dependencies?.rpc ?? createDevnetRpc(options.rpcUrl)
+    const rpc = dependencies?.rpc ?? createDevnetRpc(options.rpcUrl, true)
     // Fail before any private artifact, key generation, faucet request or signature.
     await verifyDevnetRuntimePrograms(rpc)
     const journal: { scope: string; status: string; operations: Record<string, unknown>[] } =
