@@ -39,6 +39,9 @@ vi.mock('./desk', () => ({ useDesk: () => ({
 vi.mock('../wallet/WalletMenu', () => ({
   WalletMenu: () => createElement('button', { type: 'button' }, 'Wallet control'),
 }))
+vi.mock('../features/operations/PendingSubmission', () => ({
+  PendingSubmission: () => createElement('section', null, 'Global pending recovery'),
+}))
 
 function render(path = '/carteiras', language: Language = 'en') {
   const value: I18nValue = {
@@ -67,6 +70,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('accessible desk shell', () => {
+  it.each(['/demonstracao', '/carteiras', '/transferencia', '/incidentes', '/recibos', '/rede'])(
+    'keeps global recovery before route content at %s', (path) => {
+      const html = render(path)
+      expect(html).toContain('Global pending recovery')
+      expect(html.indexOf('Global pending recovery')).toBeLessThan(html.indexOf('Route content'))
+    },
+  )
   it.each(['en', 'pt'] as const)('places the demonstration first and uses its hero (%s)', (language) => {
     const html = render('/demonstracao', language)
     expect(html.indexOf('href="/demonstracao"')).toBeLessThan(html.indexOf('href="/carteiras"'))

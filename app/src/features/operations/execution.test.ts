@@ -9,6 +9,17 @@ import { labelFor } from './labels'
 vi.mock('../../api/transactions', async (original) => ({
   ...await original<typeof import('../../api/transactions')>(), signAndSend: vi.fn(),
 }))
+// Legacy lifecycle tests isolate the durable store; execution-intent tests exercise real storage.
+vi.mock('./submission-intent', () => ({
+  getSubmissionIntentStore: () => ({
+    // No durable attempt is created in these session-only lifecycle tests.
+    // Real attempt identity and proof binding are covered by execution-intent tests.
+    reserve: async () => ({}),
+    startWallet: async () => {}, assertOwned: async () => {},
+    attachSignature: async () => {}, cancelBeforeWallet: async () => {},
+    refreshFromStorage: () => {}, getSnapshot: () => ({}), settle: async () => {},
+  }),
+}))
 
 const signature = 'original-signature' as Signature
 const ctx = {
@@ -41,6 +52,11 @@ beforeEach(() => {
 })
 
 describe('runPlan and retained recheck', () => {
+  it.each([undefined, 'another-signature'])('does not relabel terminal evidence for a missing or different signature as the original operation', async (observedSignature) => {
+    const backend = { verifyOutcome: vi.fn().mockResolvedValue({ status: 'confirmed', signature: observedSignature, slot: 42, logs: [] }) }
+    const result = await runPlan(ctx, backend, signer, plan)
+    expect(result).toMatchObject({ signature, evidence: { status: 'unknown', signature, error: { code: 'ConfirmationUnknown' } } })
+  })
   it('records the returned signature once before verification', async () => {
     const record = vi.fn(() => expect(backend.verifyOutcome).not.toHaveBeenCalled())
     const execution = new PlanExecution(vi.fn(), record)
@@ -93,7 +109,7 @@ describe('runPlan and retained recheck', () => {
       expect(input.plan).toBe(plan)
     }
     expect(replacement.verifyOutcome).not.toHaveBeenCalled()
-    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function))
+    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function), expect.any(Function), expect.any(Function))
     expect(await execution.recheck(ctx)).toBeUndefined()
     expect(backend.verifyOutcome).toHaveBeenCalledTimes(2)
   })
@@ -125,7 +141,7 @@ describe('runPlan and retained recheck', () => {
     expect(JSON.stringify(result)).not.toContain('private callback details')
     expect(onSent).toHaveBeenCalledExactlyOnceWith(signature)
     expect(backend.verifyOutcome).toHaveBeenCalledExactlyOnceWith({ cluster: ctx.cluster, plan, signature, balancesBefore: undefined })
-    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function))
+    expect(signAndSend).toHaveBeenCalledExactlyOnceWith(ctx, plan.request, signer, 42, expect.any(Function), expect.any(Function), expect.any(Function))
   })
 
   it('does not verify a prebuild failure and allows a deliberate retry after reset', async () => {
@@ -285,7 +301,7 @@ describe('execution guards and context transitions', () => {
     const verification = deferred<DeskEvidence>()
     backend.verifyOutcome.mockReturnValueOnce(verification.promise)
     const first = stage === 'initial' ? execution.execute(ctx, backend, signer, plan) : execution.recheck(ctx)
-    await Promise.resolve()
+    await vi.waitFor(() => expect(backend.verifyOutcome).toHaveBeenCalledTimes(stage === 'initial' ? 1 : 2))
     execution.setContext({ ...ctx, cluster: 'devnet' })
     execution.setContext(ctx)
     const calls = publish.mock.calls.length

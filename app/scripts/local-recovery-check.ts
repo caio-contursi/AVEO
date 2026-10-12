@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import {
-  appendTransactionMessageInstructions, createTransactionMessage,
+  appendTransactionMessageInstructions, compileTransaction, createTransactionMessage,
   getBase64EncodedWireTransaction, getSignatureFromTransaction,
   setTransactionMessageFeePayerSigner, setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners, type Address, type KeyPairSigner, type Signature,
@@ -18,6 +18,10 @@ import { createApiContext, type ApiContext } from '../src/api/context'
 import { decodeTokenBalance } from '../src/api/token-balance'
 import { buildInstructions, confirmSignature, simulate, tokenAccountsFor } from '../src/api/transactions'
 import { parseDeployment, type Deployment } from '../src/config/deployment'
+import { messageFingerprint } from '../src/api/submission-proof'
+import { SubmissionIntentStore, type SubmissionIntentStorage } from '../src/features/operations/submission-intent'
+import { recoverPendingSubmission } from '../src/features/operations/submission-recovery'
+import { createLocalIntentStorage, openLocalIntentStorage } from './local-intent-storage'
 
 export class RecoveryCheckError extends Error {
   constructor() { super('Local recovery acceptance failed; check local validator, fresh synthetic fixtures and prerequisites.') }
@@ -104,6 +108,7 @@ export interface RecoveryEvidence {
   source: Address
   destination: Address
   amount: '1'
+  // Runner signing stages; the encoded transaction's signatures are checked separately.
   signatures: number
   submissions: number
   confirmationReadFaults: number
@@ -122,7 +127,29 @@ async function freshBalances(ctx: ApiContext, mint: Address, owners: Address[], 
     decodeTokenBalance(account, { address: addresses[index]!, mint, owner: owners[index]! })) }
 }
 
-async function signOnce(ctx: ApiContext, plan: DeskPlan, signer: KeyPairSigner, signal: AbortSignal) {
+export interface RecoverySigningCallbacks {
+  beforeWallet: (fingerprint: string) => Promise<void>
+  persistSignature: (signature: Signature) => Promise<void>
+}
+
+/** Private, single-run storage shared by fresh store instances; not restart persistence. */
+export function createRecoveryIntentStoreFactory(storage?: SubmissionIntentStorage | (() => SubmissionIntentStorage)): () => SubmissionIntentStore {
+  const records = new Map<string, string>()
+  const privateStorage = storage ?? {
+    getItem: (key: string) => records.get(key) ?? null,
+    setItem: (key: string, value: string) => { records.set(key, value) },
+  }
+  // Serialize only this process's private one-writer rehearsal; not multi-client proof.
+  let tail = Promise.resolve()
+  const coordinate = async (operation: () => Promise<void>) => {
+    const pending = tail.then(operation)
+    tail = pending.catch(() => {})
+    await pending
+  }
+  return () => new SubmissionIntentStore(typeof privateStorage === 'function' ? privateStorage() : privateStorage, coordinate)
+}
+
+async function signOnce(ctx: ApiContext, plan: DeskPlan, signer: KeyPairSigner, signal: AbortSignal, callbacks: RecoverySigningCallbacks) {
   const instructions = await buildInstructions({ ...ctx, readAbortSignal: signal }, plan.request, signer)
   const approved = await simulate({ ...ctx, readAbortSignal: signal }, instructions, signer.address)
   requireCheck(approved.ok)
@@ -131,10 +158,16 @@ async function signOnce(ctx: ApiContext, plan: DeskPlan, signer: KeyPairSigner, 
   const units = Math.min(1_400_000, Math.ceil((approved.unitsConsumed ?? 400_000) * 1.3))
   let message = setTransactionMessageFeePayerSigner(signer, createTransactionMessage({ version: 0 }))
   message = setTransactionMessageLifetimeUsingBlockhash(blockhash, message)
-  const signed = await signTransactionMessageWithSigners(appendTransactionMessageInstructions([
+  const ready = appendTransactionMessageInstructions([
     getSetComputeUnitLimitInstruction({ units }), ...instructions,
-  ], message))
-  return { signature: getSignatureFromTransaction(signed), wire: getBase64EncodedWireTransaction(signed) }
+  ], message)
+  await callbacks.beforeWallet(await messageFingerprint(compileTransaction(ready).messageBytes))
+  requireCheck(!signal.aborted)
+  const signed = await signTransactionMessageWithSigners(ready)
+  requireCheck(Object.keys(signed.signatures).length === 1 && signed.signatures[signer.address])
+  const signature = getSignatureFromTransaction(signed)
+  await callbacks.persistSignature(signature)
+  return { signature, wire: getBase64EncodedWireTransaction(signed) }
 }
 
 export const recoveryDependencies = {
@@ -152,12 +185,14 @@ export async function runLocalRecoveryCheck(input: {
   verifyLocalValidator: () => Promise<void>
   persist: (evidence: RecoveryEvidence) => void
   dependencies?: typeof recoveryDependencies
+  createIntentStore?: () => SubmissionIntentStore
   faultMode?: 'unavailable' | 'hanging'
   faultTimeoutMs?: number
   recoveryTimeoutMs?: number
 }): Promise<RecoveryEvidence> {
   try {
-    const { ctx, generatedX, persist } = input
+    const { generatedX, persist } = input
+    const ctx = { ...input.ctx, deployment: structuredClone(input.ctx.deployment) }
     const faultMs = input.faultTimeoutMs ?? 75
     const recoveryMs = input.recoveryTimeoutMs ?? 15_000
     requireCheck(Number.isSafeInteger(faultMs) && faultMs > 0 && faultMs <= 1000 &&
@@ -186,7 +221,23 @@ export async function runLocalRecoveryCheck(input: {
     requireCheck(before.slot >= floor && before.balances.length === 2 && before.balances[0]! >= 1n)
     // Capture and persist the SDK signature before the sole raw submission.
     await bounded(() => input.verifyLocalValidator(), 10_000)
-    const signed = await bounded((signal) => deps.sign(ctx, plan, generatedX, signal), 15_000)
+    const createStore = input.createIntentStore ?? createRecoveryIntentStoreFactory()
+    const store = createStore()
+    const reservation = await store.reserve(ctx, generatedX.address, 'transfer')
+    const signed = await bounded((signal) => deps.sign(ctx, plan, generatedX, signal, {
+      beforeWallet: async (fingerprint) => {
+        requireCheck(!signal.aborted)
+        await store.startWallet(reservation, fingerprint, () => !signal.aborted)
+        requireCheck(!signal.aborted)
+      },
+      persistSignature: (signature) => {
+        requireCheck(!signal.aborted)
+        return store.attachSignature(reservation, signature, () => !signal.aborted)
+      },
+    }), 15_000)
+    // Do not trust injected signers to have honored the persistence callback.
+    await store.assertOwned(reservation)
+    requireCheck(store.getSnapshot().intent?.phase === 'wallet-invoked' && store.getSnapshot().intent?.signature === signed.signature)
     const evidence: RecoveryEvidence = { version: 1, scope: 'localnet-synthetic', status: 'pending',
       signature: signed.signature, mint: asset.mint, source: x.address, destination: treasury.address,
       amount: '1', signatures: 1, submissions: 0, confirmationReadFaults: 0, before: before.balances.map(String) }
@@ -204,6 +255,20 @@ export async function runLocalRecoveryCheck(input: {
     evidence.status = 'unknown'
     evidence.confirmationReadFaults = fault.counters.statuses + fault.counters.transactions
     persist({ ...evidence })
+    const reloadedStore = createStore()
+    requireCheck(reloadedStore !== store && reloadedStore.getSnapshot().intent?.signature === signed.signature)
+    const recovered = await bounded(async (signal) => {
+      while (!signal.aborted) {
+        const result = await recoverPendingSubmission(ctx, {
+          store: reloadedStore, isCurrent: () => !signal.aborted,
+        })
+        requireCheck(!signal.aborted)
+        if (result.status !== 'unknown') return result
+        await new Promise((resolve) => setTimeout(resolve, 125))
+      }
+      throw new RecoveryCheckError()
+    }, recoveryMs)
+    requireCheck(recovered.status === 'confirmed' && recovered.signature === signed.signature && !reloadedStore.getSnapshot().intent)
     const confirmed = await bounded(() => confirmSignature(ctx, signed.signature, recoveryMs), recoveryMs + 100)
     const hookSuccess = `Program ${ctx.programId} success`
     requireCheck(confirmed.status === 'confirmed' && Number.isSafeInteger(confirmed.slot) && confirmed.slot! > 0 && confirmed.logs.includes(hookSuccess))
@@ -251,9 +316,12 @@ export async function main(): Promise<void> {
   requireCheck(generatedX?.record.role === 'investor' && generatedX.signer.address === x.address)
   const ctx = createApiContext({ cluster: 'localnet', rpcUrl, commitment: 'confirmed', programId: deployment.programs.aveoHook, deployment })
   const report = path.join(directory, `local-recovery-${randomUUID()}.json`)
+  const privateIntent = createLocalIntentStorage(directory)
+  const createIntentStore = createRecoveryIntentStoreFactory(() => openLocalIntentStorage(privateIntent.file))
   // Create exclusively; an existing file or symlink must never be overwritten.
   writeFileSync(report, '{}\n', { flag: 'wx', mode: 0o600 })
   const result = await runLocalRecoveryCheck({ ctx, wsUrl, generatedX: generatedX.signer,
+    createIntentStore,
     verifyLocalValidator: () => lib.verifyLocalValidator(),
     persist: (evidence) => writeFileSync(report, JSON.stringify(evidence, null, 2) + '\n', { mode: 0o600 }) })
   console.log(`PASS local-recovery-check: ${result.signature}`)

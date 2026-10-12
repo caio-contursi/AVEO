@@ -35,6 +35,7 @@ import { reason, type DiagnosticReason } from './diagnostics'
 import { failureReason } from './errors'
 import { getSetBindingInstruction, getUpdatePolicyInstruction } from './instructions'
 import { decodeTokenBalance } from './token-balance'
+import { messageFingerprint } from './submission-proof'
 
 /** Limite usado só na simulação; a transação real usa o consumo medido com folga. */
 const SIMULATION_CU_LIMIT = 1_400_000
@@ -237,6 +238,8 @@ export async function signAndSend(
   signer: TransactionSigner,
   unitsConsumed?: number,
   onSent?: (signature: Signature) => void,
+  beforeWallet?: (messageFingerprint: string) => Promise<void>,
+  persistSignature?: (signature: Signature) => Promise<void>,
 ): Promise<Signature> {
   if (signer.address !== requiredSignerOf(request)) throw new Error('connected wallet is not the required signer')
   const instructions = await buildInstructions(ctx, request, signer)
@@ -252,21 +255,28 @@ export async function signAndSend(
     try { onSent?.(signature) } catch { /* Receipt callbacks must not interrupt submission. */ }
   }
   if (isTransactionSendingSigner(signer)) {
+    // Persist and validate the operation before a wallet can broadcast it.
+    if (beforeWallet) await beforeWallet(await messageFingerprint(compileTransaction(message).messageBytes))
+    let signature: Signature | undefined
     try {
       const bytes = await signAndSendTransactionMessageWithSigners(message)
-      const signature = getBase58Decoder().decode(bytes) as Signature
+      signature = getBase58Decoder().decode(bytes) as Signature
       notify(signature)
+      if (persistSignature) await persistSignature(signature)
       return signature
     } catch (error) {
       // Wallet error messages cannot establish that no broadcast occurred.
-      throw new SubmissionUnknownError(error)
+      throw new SubmissionUnknownError(error, signature)
     }
   }
+  if (beforeWallet) await beforeWallet(await messageFingerprint(compileTransaction(message).messageBytes))
   const signed = await signTransactionMessageWithSigners(message)
   let signature: Signature | undefined
   try {
     signature = getSignatureFromTransaction(signed)
     notify(signature)
+    // Unlike optional receipt callbacks, the safety journal must finish before RPC broadcast.
+    if (persistSignature) await persistSignature(signature)
     const wire = getBase64EncodedWireTransaction(signed)
     await rpcCall(() => ctx.rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: ctx.commitment }).send())
     return signature

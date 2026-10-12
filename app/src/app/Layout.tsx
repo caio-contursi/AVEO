@@ -5,6 +5,7 @@ import { formatSlot } from '../components/format'
 import { useI18n } from '../i18n/context'
 import type { MessageKey } from '../i18n/messages'
 import { WalletMenu } from '../wallet/WalletMenu'
+import { PendingSubmission } from '../features/operations/PendingSubmission'
 import { useDesk } from './desk'
 
 const NAV: { to: string; label: MessageKey }[] = [
@@ -98,6 +99,7 @@ export function Layout() {
           <h1>{t(hero.title)}</h1>
           <p className="page-description">{t(hero.description)}</p>
         </div>
+        <PendingSubmission />
         <Outlet />
       </main>
     </div>

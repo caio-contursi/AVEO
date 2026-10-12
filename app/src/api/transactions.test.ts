@@ -116,6 +116,62 @@ describe('signAndSend submission boundaries', () => {
     expect(signing.send).not.toHaveBeenCalled()
   })
 
+  it.each(['local', 'sending'] as const)('blocks %s wallet invocation when the durable reservation fails', async (kind) => {
+    const rpc = setup()
+    const failure = new Error('Durable reservation unavailable')
+    const beforeWallet = vi.fn().mockRejectedValue(failure)
+    await expect(signAndSend(rpc.ctx, request, kind === 'local' ? localSigner : sendingSigner, undefined, undefined, beforeWallet)).rejects.toBe(failure)
+    expect(beforeWallet).toHaveBeenCalledTimes(1)
+    expect(signing.sign).not.toHaveBeenCalled()
+    expect(signing.send).not.toHaveBeenCalled()
+    expect(rpc.sendTransaction).not.toHaveBeenCalled()
+  })
+
+  it.each(['local', 'sending'] as const)('waits for durable reservation before invoking the %s wallet', async (kind) => {
+    const rpc = setup()
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => { release = resolve })
+    const beforeWallet = vi.fn(() => pending)
+    const outcome = signAndSend(rpc.ctx, request, kind === 'local' ? localSigner : sendingSigner, undefined, undefined, beforeWallet)
+    await vi.waitFor(() => expect(beforeWallet).toHaveBeenCalledTimes(1))
+    expect(signing.sign).not.toHaveBeenCalled()
+    expect(signing.send).not.toHaveBeenCalled()
+    release()
+    expect(await outcome).toBe(exactSignature)
+    expect(kind === 'local' ? signing.sign : signing.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cross the wallet boundary when instruction preparation fails', async () => {
+    const rpc = setup()
+    signing.binding.mockRejectedValueOnce(new Error('Invalid instructions'))
+    const beforeWallet = vi.fn()
+    await expect(signAndSend(rpc.ctx, request, sendingSigner, undefined, undefined, beforeWallet)).rejects.toThrow('Invalid instructions')
+    expect(beforeWallet).not.toHaveBeenCalled()
+    expect(signing.send).not.toHaveBeenCalled()
+  })
+
+  it('awaits durable signature recording before local RPC broadcast', async () => {
+    const rpc = setup()
+    let release!: () => void
+    const persist = vi.fn(() => new Promise<void>((resolve) => { release = resolve }))
+    const outcome = signAndSend(rpc.ctx, request, localSigner, undefined, undefined, undefined, persist)
+    await vi.waitFor(() => expect(persist).toHaveBeenCalledExactlyOnceWith(exactSignature))
+    expect(rpc.sendTransaction).not.toHaveBeenCalled()
+    release()
+    expect(await outcome).toBe(exactSignature)
+    expect(rpc.send).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['local', 'sending'] as const)('retains the signature on %s persistence failure without a Desk broadcast', async (kind) => {
+    const rpc = setup()
+    const persist = vi.fn().mockRejectedValue(new Error('Storage unavailable'))
+    await expect(signAndSend(rpc.ctx, request, kind === 'local' ? localSigner : sendingSigner, undefined, undefined, undefined, persist)).rejects.toMatchObject({
+      name: 'SubmissionUnknownError', signature: exactSignature,
+    })
+    expect(persist).toHaveBeenCalledExactlyOnceWith(exactSignature)
+    expect(rpc.sendTransaction).not.toHaveBeenCalled()
+  })
+
   it.each(['local', 'sending'] as const)('ignores a throwing receipt callback without preventing %s submission or fabricating an error', async (kind) => {
     const rpc = setup()
     const onSent = vi.fn(() => { throw new Error('Receipt unavailable') })
