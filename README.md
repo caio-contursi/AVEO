@@ -2,7 +2,7 @@
 
 Prova de conceito para o hackathon Colosseum (Superteam BR): uma atestação SAS sintética reutilizada em dois tokens Token-2022, cada um com sua política, aplicada on-chain por um Transfer Hook. Um Desk mostra os incidentes de elegibilidade e acompanha a correção.
 
-> Provas sintéticas; demo devnet; sem KYC real.
+> Synthetic proofs; verified devnet program deployment; public Desk acceptance pending; no real KYC.
 
 Planos: [`docs/plano-execucao.md`](docs/plano-execucao.md) (completo) e [`docs/algoritmo-execucao.md`](docs/algoritmo-execucao.md) (versão simplificada).
 Contrato entre equipes: [`docs/interface-v2.md`](docs/interface-v2.md).
@@ -19,7 +19,13 @@ Contrato entre equipes: [`docs/interface-v2.md`](docs/interface-v2.md).
 | `app/` | Desk. O diagnóstico, o plano e a verificação rodam no navegador, sobre o RPC |
 | `config/programs.json` | IDs fixos do hook, do SAS e do Token-2022. Mints da demo saem do `pnpm fixtures`, não de um manifest inventado |
 
-O programa **não está implantado em devnet**. O ID `ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33` está fixado no `declare_id!` e no `Anchor.toml`. A keypair correspondente não está no Git. Não rode `anchor keys sync`: isso trocaria o ID. A demo local carrega o `.so` compilado nesse endereço.
+The program is **deployed on devnet** at `28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS`.
+The deployment transaction is finalized, and the on-chain binary matches the
+reviewed SBF artifact. [Deployment evidence and public-release gates](docs/public-demo-release.md).
+Default builds and localnet retain `ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33`;
+the `devnet` Cargo feature selects the dedicated devnet identity. No deployment
+keypair is stored in Git. Do not run `anchor keys sync`. Deployment alone does
+not complete fixture, real-wallet or public-demo acceptance.
 
 ### Compute units (localnet, 02/10/2026)
 

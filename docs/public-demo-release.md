@@ -271,8 +271,8 @@ After funding, deployment, fixture readback and public-manifest validation:
 ```sh
 export AVEO_PUBLIC_MANIFEST=/absolute/path/public-deployment.json
 pnpm devnet:preflight --manifest "$AVEO_PUBLIC_MANIFEST" --rpc https://api.devnet.solana.com
-docker compose -f compose.web.yaml config --quiet
-docker compose -f compose.web.yaml build aveo-web
+docker compose -p aveo-bruno -f compose.web.yaml config --quiet
+docker compose -p aveo-bruno -f compose.web.yaml build aveo-web
 ```
 
 Review the resulting image and release evidence before replacing the running
@@ -363,3 +363,44 @@ The existing Compose project is `aveo-bruno`. Publication must explicitly use
 `docker compose -p aveo-bruno -f compose.web.yaml`; the folder-name default would
 create another project and collide with the current listener rather than update
 the intended service. Preserve the old image for rollback before replacement.
+
+### Nonstandard RPC rate-limit normalization
+
+The official RPC was observed returning JSON-RPC error code 429. The installed
+SDK's error formatter throws a TypeError for this unrecognized code in development
+mode; an offline reproduction demonstrated that behavior. A narrow transport
+wrapper now converts only numeric 429/429n responses into the SDK's supported
+HTTP-rate-limit error before decoding, without retaining arbitrary server text.
+Successful responses and semantic errors are passed through unchanged. Endpoint
+pinning remains exact; no SDK upgrade or alternative provider was introduced.
+Genesis reads now use the same classified, bounded read retry, but the returned
+genesis must still match devnet exactly. Tests cover actual mocked HTTP response
+decoding, success, semantic errors and a transient genesis failure followed by
+correct identity verification. Four interrupted fixture directories remain
+private and unaccepted; no public manifest was emitted from them.
+
+An additional run stopped after RPC acknowledgement while the status query was
+unavailable. Read-only inspection subsequently found that exact original
+signature finalized without error; the signature was not resent. The runtime
+now has a bounded, read-only reconciliation path only after matching submission
+acknowledgement. It requires the original signature, exact message fingerprint,
+successful transaction metadata and a fresh matching genesis. Observed on-chain
+failure or wrong genesis permanently prevents that reconciliation. Missing
+acknowledgement still stops; neither a balance nor a new unrelated signature
+can clear the gate. Interrupted directories remain retained, not restarted.
+
+The review also identified processed-status errors and unsupported transaction
+metadata errors being lost before reconciliation, then a late-response observer
+race. These were corrected: all observed status errors latch a stop; unsupported
+metadata errors conservatively block continuation; individual request aborts and
+an observer-closed flag prevent stale responses mutating settled records. Both
+success paths recheck failure/network latches after the final genesis read.
+Regressions include late lookup responses during final pin and after completion.
+The scoped reviewer reported no remaining critical/high finding after these
+fixes. This agent review is not an independent audit.
+
+Final workspace verification for this increment passed 2,647 app/script tests,
+41 backend tests, type checks, lint and ordinary production build. Existing
+SQLite experimental and Zod/Rollup warnings remain unchanged. Real devnet
+fixture completion/publication evidence is recorded separately from these
+offline regression results.
