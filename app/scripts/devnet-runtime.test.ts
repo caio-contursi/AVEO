@@ -41,6 +41,15 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('retries delayed transaction indexing read-only without a second submission', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getTransaction.mockResolvedValueOnce(null as never)
+    await runtime.send(signer, [instruction])
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.methods.getTransaction).toHaveBeenCalledTimes(2)
+    expect(f.journal().operations[0].phase).toBe('confirmed')
+  })
   it('observes externally funded issuer without a faucet or funding signature', async () => {
     const f = fixture()
     const notify = vi.fn()

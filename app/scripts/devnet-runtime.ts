@@ -135,7 +135,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
           check(status.err === null && Number.isSafeInteger(Number(status.slot)) && Number(status.slot) > 0)
           return status.slot
         }
-        await new Promise<void>((resolve) => { setTimeout(resolve, 250) })
+        await new Promise<void>((resolve) => { setTimeout(resolve, 1000) })
       }
       throw fail()
     }, 30_000)
@@ -168,8 +168,16 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         check(returned === signature)
         operation.phase = 'submitted'; persist()
         await confirmed(signature)
-        const proof = await verifySubmissionMessage({ commitment: 'confirmed', rpc } as ApiContext, signature, fingerprint)
-        check(proof?.status === 'confirmed')
+        operation.phase = 'verifying'; persist()
+        // RPC transaction indexing can lag confirmation. Retry reads, never the submission.
+        const proof = await bounded(async (signal) => {
+          while (!signal.aborted) {
+            const observed = await verifySubmissionMessage({ commitment: 'confirmed', rpc } as ApiContext, signature, fingerprint)
+            if (observed) { check(!signal.aborted && observed.status === 'confirmed'); return observed }
+            await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+          }
+          throw fail()
+        }, 30_000)
         await pin()
         operation.phase = 'confirmed'; operation.slot = proof.slot; persist()
         return signature
