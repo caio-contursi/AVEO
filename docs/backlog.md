@@ -296,3 +296,6 @@ transactions, outreach or real pilot occurred in this increment.
 - **RELEASE-02 (proposed):** bind the published container digest to the release
   commit and manifest hash, then test deep links, JSON content type and RPC access
   from the actual hosted origin before approving the public demonstration.
+- **DEVNET-02 (proposed):** expose the public funding destination and bounded
+  wait state in a bootstrap progress receipt, distinguishing observed funding
+  from a faucet request and avoiding publication of private wallet journals.

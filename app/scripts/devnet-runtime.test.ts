@@ -41,6 +41,46 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('observes externally funded issuer without a faucet or funding signature', async () => {
+    const f = fixture()
+    const notify = vi.fn()
+    f.methods.getBalance.mockResolvedValue({ context: { slot: 42n }, value: 1_000_000_000n })
+    const runtime = await createDevnetRuntime({ ...f.options, externalIssuerFunding: true }, { rpc: f.api as unknown as Rpc<SolanaRpcApi>, onExternalFundingRequired: notify })
+    const issuer = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    await runtime.fund(issuer.signer.address, 1_000_000_000n)
+    expect(notify).toHaveBeenCalledWith(issuer.signer.address)
+    expect(f.methods.requestAirdrop).not.toHaveBeenCalled()
+    expect(f.methods.sendTransaction).not.toHaveBeenCalled()
+    expect(f.journal().operations[0]).toMatchObject({ kind: 'external-funding-observation', phase: 'confirmed', slot: 42 })
+    expect(f.journal().operations[0].signature).toBeUndefined()
+    const investor = await runtime.newWallet('X', 'Investor', 'investor')
+    await runtime.fund(investor.signer.address, 50_000_000n)
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+  })
+
+  it('stops external funding on network change without falling back to a faucet', async () => {
+    const f = fixture()
+    const runtime = await createDevnetRuntime({ ...f.options, externalIssuerFunding: true }, { rpc: f.api as unknown as Rpc<SolanaRpcApi>, onExternalFundingRequired: vi.fn() })
+    const issuer = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getBalance.mockImplementation(async () => {
+      f.methods.getGenesisHash.mockResolvedValue('wrong-network')
+      return { context: { slot: 42n }, value: 1_000_000_000n }
+    })
+    await expect(runtime.fund(issuer.signer.address, 1_000_000_000n)).rejects.toThrow()
+    expect(f.journal().status).toBe('stopped')
+    expect(f.methods.requestAirdrop).not.toHaveBeenCalled()
+    expect(f.methods.sendTransaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale external funding reads and permanently blocks later operations', async () => {
+    const f = fixture()
+    f.methods.getBalance.mockResolvedValueOnce({ context: { slot: 42n }, value: 0n }).mockResolvedValue({ context: { slot: 41n }, value: 1_000_000_000n })
+    const runtime = await createDevnetRuntime({ ...f.options, externalIssuerFunding: true }, { rpc: f.api as unknown as Rpc<SolanaRpcApi>, onExternalFundingRequired: vi.fn() })
+    const issuer = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    await expect(runtime.fund(issuer.signer.address, 1_000_000_000n)).rejects.toThrow()
+    await expect(runtime.newWallet('X', 'Investor', 'investor')).rejects.toThrow()
+    expect(f.methods.requestAirdrop).not.toHaveBeenCalled()
+  })
   it.each(['https://api.mainnet-beta.solana.com', 'http://127.0.0.1:8899', 'https://api.devnet.solana.com/proxy',
     'https://secret@api.devnet.solana.com', 'https://api.devnet.solana.com?key=secret'])('rejects endpoint %s before RPC or private artifacts', async (rpcUrl) => {
     const f = fixture(); f.options.rpcUrl = rpcUrl

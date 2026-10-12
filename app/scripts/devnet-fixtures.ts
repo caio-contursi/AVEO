@@ -31,6 +31,7 @@ export interface DevnetFixtureOptions {
   rpcUrl: string
   wsUrl: string
   ttl: number
+  externalIssuerFunding?: boolean
 }
 
 function requireTtl(ttl: number): void {
@@ -43,8 +44,14 @@ function requireTtl(ttl: number): void {
 export function parseDevnetFixtureArgs(args: string[]): DevnetFixtureOptions {
   const values = new Map<string, string>()
   let execute = false
+  let externalIssuerFunding = false
   for (let i = 0; i < args.length; i++) {
     const flag = args[i]
+    if (flag === '--external-issuer-funding') {
+      if (externalIssuerFunding) throw new Error('Duplicate funding flag')
+      externalIssuerFunding = true
+      continue
+    }
     if (flag === '--execute-synthetic-devnet') {
       if (execute) throw new Error('Duplicate execution flag')
       execute = true
@@ -73,7 +80,7 @@ export function parseDevnetFixtureArgs(args: string[]): DevnetFixtureOptions {
   if (rawTtl !== undefined && !/^\d+$/.test(rawTtl)) throw new Error('TTL must contain integer seconds')
   const ttl = rawTtl === undefined ? 1200 : Number(rawTtl)
   requireTtl(ttl)
-  return { directory, rpcUrl, wsUrl, ttl }
+  return { directory, rpcUrl, wsUrl, ttl, ...(externalIssuerFunding ? { externalIssuerFunding: true } : {}) }
 }
 
 const asInstruction = (instruction: unknown): Instruction => instruction as Instruction

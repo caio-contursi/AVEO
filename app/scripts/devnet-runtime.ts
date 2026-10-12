@@ -96,10 +96,11 @@ export async function verifyDevnetRuntimePrograms(rpc: Rpc<SolanaRpcApi>): Promi
 }
 
 /** Injected RPC supports offline tests; CLI never exposes this injection. */
-export async function createDevnetRuntime(options: { directory: string; rpcUrl: string; wsUrl: string },
-  dependencies?: { rpc: Rpc<SolanaRpcApi> }): Promise<DevnetRuntime> {
+export async function createDevnetRuntime(options: { directory: string; rpcUrl: string; wsUrl: string; externalIssuerFunding?: boolean },
+  dependencies?: { rpc: Rpc<SolanaRpcApi>; onExternalFundingRequired?: (wallet: Address) => void }): Promise<DevnetRuntime> {
   try {
     validateDevnetEndpoints(options.rpcUrl, options.wsUrl)
+    check(options.externalIssuerFunding === undefined || typeof options.externalIssuerFunding === 'boolean')
     const directory = validateDevnetDirectory(options.directory)
     const rpc = dependencies?.rpc ?? createSolanaRpc(options.rpcUrl)
     // Fail before any private artifact, key generation, faucet request or signature.
@@ -194,6 +195,26 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         check(wallets.get('issuer') === recipient)
         await pin()
         const before = await bounded((signal) => rpc.getBalance(wallet, { commitment: 'confirmed' }).send({ abortSignal: signal }), 10_000)
+        if (options.externalIssuerFunding) {
+          const operation: Record<string, unknown> = { kind: 'external-funding-observation', phase: 'waiting', recipient: wallet, lamports: String(amount) }
+          journal.operations.push(operation); persist()
+          // Only the newly generated issuer's public address is exposed; no external key is loaded.
+          const notify = dependencies?.onExternalFundingRequired ?? ((address: Address) => console.log(`Awaiting synthetic devnet issuer funding: ${address}`))
+          notify(wallet)
+          const observed = await bounded(async (signal) => {
+            while (!signal.aborted) {
+              const balance = await rpc.getBalance(wallet, { commitment: 'confirmed', minContextSlot: before.context.slot }).send({ abortSignal: signal })
+              check(balance.context.slot >= before.context.slot)
+              if (balance.value >= amount) return balance
+              await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+            }
+            throw fail()
+          }, 60_000)
+          await pin()
+          operation.phase = 'confirmed'; operation.slot = Number(observed.context.slot); persist()
+          funder = recipient
+          return
+        }
         const operation: Record<string, unknown> = { kind: 'airdrop', phase: 'requesting', recipient: wallet, lamports: String(amount) }
         journal.operations.push(operation); persist()
         try {

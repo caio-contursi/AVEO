@@ -39,6 +39,16 @@ const addr = (id: number): Address => getAddressDecoder().decode(new Uint8Array(
 const signature = (id: number) => `mock-signature-${id}` as Signature
 const cli = ['--execute-synthetic-devnet', '--directory', '/tmp/aveo-devnet-synthetic', '--rpc', 'https://api.devnet.solana.com', '--ws', 'wss://api.devnet.solana.com']
 
+describe('external devnet issuer funding arguments', () => {
+  it('requires an explicit external funding flag and preserves the faucet default', () => {
+    expect(parseDevnetFixtureArgs(cli).externalIssuerFunding).toBeUndefined()
+    expect(parseDevnetFixtureArgs([...cli, '--external-issuer-funding']).externalIssuerFunding).toBe(true)
+  })
+  it('rejects duplicate external funding flags', () => {
+    expect(() => parseDevnetFixtureArgs([...cli, '--external-issuer-funding', '--external-issuer-funding'])).toThrow()
+  })
+})
+
 function mockRuntime() {
   const signers = new Map<string, KeyPairSigner>()
   const events: string[] = []
