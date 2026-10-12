@@ -7,7 +7,7 @@ import { blockhash, getAddressDecoder, getBase64Encoder, getSignatureFromTransac
   type Instruction, type Rpc, type SolanaRpcApi } from '@solana/kit'
 import { AVEO_DEVNET_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
 import { DEVNET_GENESIS_HASH } from './devnet-preflight'
-import { createDevnetRpc, createDevnetRuntime, validateDevnetDirectory, validateDevnetEndpoints } from './devnet-runtime'
+import { createDevnetRpc, createDevnetRuntime, createSerialMutationPacer, validateDevnetDirectory, validateDevnetEndpoints } from './devnet-runtime'
 
 const dirs: string[] = []
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
@@ -42,6 +42,25 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('paces serial mutation starts without delaying an already elapsed interval', async () => {
+    vi.useFakeTimers()
+    const pace = createSerialMutationPacer(5000)
+    await pace()
+    let released = false
+    const pending = pace().then(() => { released = true })
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(released).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(released).toBe(true)
+    await vi.advanceTimersByTimeAsync(6000)
+    await pace()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([-1, 10_001, NaN, 1.5])('rejects invalid mutation pacing %s', (interval) => {
+    expect(() => createSerialMutationPacer(interval)).toThrow()
+  })
   it('retries only classified transport failures for allowlisted resolver reads', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 429, message: 'Rate limit' } }), { status: 200 }))

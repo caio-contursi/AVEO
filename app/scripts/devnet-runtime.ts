@@ -23,6 +23,17 @@ import { parsePublicManifest } from './public-manifest'
 const fail = () => new Error('Synthetic devnet bootstrap stopped. Check program deployment, test funding and private run evidence; do not blindly rerun or resend.')
 function check(value: unknown): asserts value { if (!value) throw fail() }
 
+/** Call inside the exclusive runtime gate; a monotonic clock avoids wall-clock adjustments. */
+export function createSerialMutationPacer(intervalMs: number): () => Promise<void> {
+  check(Number.isSafeInteger(intervalMs) && intervalMs >= 0 && intervalMs <= 10_000)
+  let next = 0
+  return async () => {
+    const delay = Math.max(0, next - performance.now())
+    if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay))
+    next = performance.now() + intervalMs
+  }
+}
+
 /** Transport retries apply only to reads; signed transaction broadcasts never use this helper. */
 async function readWithRetry<T>(read: (signal: AbortSignal) => Promise<T>, timeout = 20_000): Promise<T> {
   return bounded(async (signal) => {
@@ -166,6 +177,8 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     const records: DevnetWalletRecord[] = []
     const writeWallets = privateJson(path.join(directory, 'devnet-wallets.jsonl'), { scope: 'devnet-synthetic-only', wallets: records })
     const wallets = new Map<string, KeyPairSigner>()
+    // Real bootstrap mutations are paced; injected offline RPC never incurs real waits.
+    const paceMutation = createSerialMutationPacer(dependencies?.rpc ? 0 : 5000)
     let funder: KeyPairSigner | undefined
     let readFloor = 0n
     let networkMismatchObserved = false
@@ -206,6 +219,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         if (account.role === 2 || account.role === 3) check([...wallets.values()].some((wallet) => wallet.address === account.address))
         if ('signer' in account) check([...wallets.values()].includes(account.signer as KeyPairSigner))
       }
+      await paceMutation()
       await pin()
       const operation: Record<string, unknown> = { kind: 'transaction', phase: 'preparing', payer: payer.address }
       journal.operations.push(operation); persist()
