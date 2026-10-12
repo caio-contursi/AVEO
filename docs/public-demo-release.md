@@ -418,3 +418,13 @@ the next transfer from being prepared. No pending transfer was submitted at that
 point, and no manifest was published. A later read-only Beta instruction preparation
 passed with 15 accounts and zero signing/broadcast calls. This is evidence of a
 partial scenario, not final accounting acceptance.
+
+The next run stopped at a mutating RPC request without a matching acknowledgement.
+It was retained without retransmission and did not emit a manifest. To reduce
+burst pressure, real CLI mutation starts now have a minimum five-second interval,
+inside the exclusive runtime gate and measured by a monotonic clock. Injected
+offline RPC tests bypass real-time waits; separate fake-clock tests cover the
+pacer. This changes request pacing, not transaction retry or network identity.
+If the public RPC remains insufficient, a dedicated devnet endpoint needs an
+explicitly configured and reviewed signer path; private provider credentials
+must not be placed in frontend environment variables.
