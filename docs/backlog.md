@@ -53,6 +53,71 @@ retain the proposal here instead of presenting unfinished work as a differentiat
   and integration examples, reducing duplicate screens while retaining origin,
   observation time and unresolved-state warnings.
 
+## MPL-01 — Official integration feasibility and bounded adapter
+
+**Status (2026-10-10):** user approved pursuing a real integration if feasible;
+read-only feasibility started. Gate A remains blocked on official artifacts and
+an approved synthetic test environment. No MPL operation has been implemented or
+validated. The public SAS/Token-2022 release remains the critical path.
+
+**Observed access evidence:** the official [overview](https://www.metaplex.com/docs/smart-contracts/mpl-3643)
+and [getting-started guide](https://www.metaplex.com/docs/smart-contracts/mpl-3643/getting-started)
+describe early-access, pre-audit mainnet availability. A public npm metadata query
+for `@metaplex-foundation/mpl-permission` returned E404; a fetch of
+`https://github.com/metaplex-foundation/mpl-permission` returned 404. Those checks
+do not establish whether private artifacts or a partner devnet deployment exist.
+Do not infer codecs, instruction discriminators, program IDs or package versions
+from the narrative documentation.
+
+**Owners and sequence:**
+
+1. Bruno coordinates official access with Metaplex: obtain license, pinned SDK
+   or generated clients, program IDs, source/binary provenance, supported test
+   network, issuer grant and trusted synthetic attestor. A human submits the
+   access request; this entry does not send one or authorize mainnet transactions.
+2. Integration specialist and Caio review an isolated adapter in
+   `packages/backend-mpl/src/index.ts` behind `EligibilityBackend`. Prove fresh
+   identity/compliance inspection, then prepare/transfer/finalize as applicable,
+   and verify the original transaction plus fresh account state. Report only
+   supported capabilities. Inspecting alone does not establish transfer support.
+   Review the existing contract before coding: `refreeze` has no typed operation,
+   `UnsignedPlan` represents one transaction, and the Desk still uses concrete
+   Aveo backend/plan types. An isolated package adapter is not automatically a
+   working UI integration. Confirm the official lifecycle fits or propose the
+   smallest cross-owner contract change, including signature-to-operation checks.
+3. Security specialist and Bruno review Token ACL, Gate and claims against the
+   supplied version. Use separate synthetic mints with the required frozen-account
+   configuration; do not initialize Aveo policy on an MPL mint or promise migration
+   of the existing Alfa/Beta mints. Model re-freeze explicitly: proof expiry alone
+   must not be presented as universal immediate per-transfer blocking.
+4. Reviewer requires reproducible synthetic onboarding, an allowed external
+   transfer, a rejected transfer with the expected enforcement and unchanged
+   balances, proof invalidation followed by official re-freeze and confirmed
+   frozen state, then recovery and a confirmed allowed transfer. Record commit,
+   SDK/program versions, network, signatures and observation slots. Unit mocks do
+   not satisfy this acceptance; capabilities remain disabled until it passes.
+
+**Change boundary:** no official SDK or Token ACL dependency is installed by this
+proposal. Present the exact dependency/version/license and cross-owner interface
+changes for human approval before installing or modifying the fixed stack.
+The spec's gate A still applies; the current user request permits investigation,
+not a silent mainnet fallback or a replacement of the verified release.
+
+**Stop rule:** if artifacts, test-network permission or acceptance cannot be
+obtained within the release reserve, ship the existing backend and label MPL
+integration pending. Do not manufacture an adapter from guessed account layouts.
+
+**Review verification:** this documentation-only increment passed `pnpm verify`
+(2230 application/script tests, 41 backend tests, types, lint and frontend build)
+and `git diff --check`. Existing SQLite and Zod/Rollup warnings remain. These
+checks do not establish MPL execution, access or public deployment; those gates
+remain unverified.
+
+**Ideator proposals:** MPL-02 would keep a version-pinned conformance fixture for
+each actually supported backend; MPL-03 would show a compact capability/scope
+summary so users can distinguish hook enforcement from freeze-based enforcement.
+Neither proposal is implemented or part of the current release.
+
 ## INT-01 — Minimal independently usable integration
 
 **Owner:** integration specialist; Caio reviews the backend/application boundary.
