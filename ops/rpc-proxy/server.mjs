@@ -67,11 +67,38 @@ export class ClientFrames extends Transform {
 }
 
 export function createProxy({ key, fetchImpl = fetch, origins = DEFAULT_ORIGINS, now = Date.now,
-  maxRequests = 240, maxConcurrent = 8, maxSockets = 8, timeoutMs = 15_000,
+  maxRequests = 240, maxConcurrent = 32, maxResponses = 8, requestIntervalMs = 150, maxSockets = 8, timeoutMs = 15_000,
+  programScanIntervalMs = 250, sendIntervalMs = 1100,
   handshakeTimeoutMs = 10_000, socketLifetimeMs = 5 * 60_000, upstreamRequest = https.request } = {}) {
   if (!key || !/^[A-Za-z0-9_-]{16,256}$/.test(key)) throw new Error('Invalid RPC credential')
   const endpoint = `https://devnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}`
   let started = now(); let requests = 0; let active = 0; let sockets = 0
+  let responseSlots = 0; let nextRequestAt = 0; let pumpTimer
+  const methodNext = { getProgramAccounts: 0, sendTransaction: 0 }
+  const queue = []
+  const pump = () => {
+    clearTimeout(pumpTimer)
+    if (!queue.length || responseSlots >= maxResponses) return
+    const wait = Math.max(0, nextRequestAt - now(), (methodNext[queue[0].method] ?? 0) - now())
+    if (wait) { pumpTimer = setTimeout(pump, wait); return }
+    const job = queue.shift()
+    if (job.signal.aborted) { job.reject(new Error('RPC deadline')); pump(); return }
+    responseSlots++; nextRequestAt = now() + requestIntervalMs
+    if (job.method === 'getProgramAccounts') methodNext.getProgramAccounts = now() + programScanIntervalMs
+    if (job.method === 'sendTransaction') methodNext.sendTransaction = now() + sendIntervalMs
+    job.signal.removeEventListener('abort', job.abort)
+    job.resolve(); pump()
+  }
+  const acquire = (signal, method) => new Promise((resolve, reject) => {
+    const job = { signal, method, resolve, reject, abort: undefined }
+    job.abort = () => {
+      const index = queue.indexOf(job)
+      if (index >= 0) queue.splice(index, 1)
+      reject(new Error('RPC deadline')); pump()
+    }
+    if (signal.aborted) { reject(new Error('RPC deadline')); return }
+    signal.addEventListener('abort', job.abort, { once: true }); queue.push(job); pump()
+  })
   const allowedOrigin = (req) => !req.headers.origin || origins.includes(req.headers.origin)
   const admit = () => {
     if (now() - started >= 60_000) { started = now(); requests = 0 }
@@ -93,8 +120,13 @@ export function createProxy({ key, fetchImpl = fetch, origins = DEFAULT_ORIGINS,
     if (!admit() || active >= maxConcurrent) return reply(res, 429, 'RPC capacity reached')
     active++
     const controller = new AbortController()
-    let released = false
-    const release = () => { if (!released) { released = true; active--; clearTimeout(timer) } }
+    let released = false; let holdsResponseSlot = false
+    const release = () => {
+      if (!released) {
+        released = true; active--; clearTimeout(timer)
+        if (holdsResponseSlot) { holdsResponseSlot = false; responseSlots--; pump() }
+      }
+    }
     const timer = setTimeout(() => { controller.abort(); req.destroy(); res.destroy(); release() }, timeoutMs)
     res.once('finish', release); res.once('close', release)
     const aborted = () => controller.abort()
@@ -110,6 +142,9 @@ export function createProxy({ key, fetchImpl = fetch, origins = DEFAULT_ORIGINS,
       let body
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { return reply(res, 400, 'Invalid JSON') }
       if (!validateRequest(body)) return reply(res, 400, 'RPC method or envelope denied')
+      await acquire(controller.signal, body.method)
+      holdsResponseSlot = true
+      if (released || controller.signal.aborted) { responseSlots--; holdsResponseSlot = false; pump(); return }
       // Deliberately one attempt, including sendTransaction: an ambiguous send must never be repeated here.
       const upstream = await fetchImpl(endpoint, { method: 'POST', redirect: 'error',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal })

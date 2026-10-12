@@ -7,7 +7,7 @@ const key = 'synthetic_test_key_not_a_real_key'
 const request = { jsonrpc: '2.0', id: 1, method: 'getSlot', params: [] }
 async function fixture(options = {}) {
   const calls = []
-  const server = createProxy({ key, fetchImpl: async (url, init) => {
+  const server = createProxy({ key, requestIntervalMs: 0, fetchImpl: async (url, init) => {
     calls.push({ url, init })
     return Response.json({ jsonrpc: '2.0', id: 1, result: 123 })
   }, ...options })
@@ -18,6 +18,39 @@ async function fixture(options = {}) {
 }
 const post = (url, body = request, headers = {}) => fetch(url + '/rpc', {
   method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
+})
+test('paces concurrent reads without retrying any request', async () => {
+  const starts = []
+  const f = await fixture({ requestIntervalMs: 40, fetchImpl: async (_url, init) => {
+    starts.push(Date.now())
+    return Response.json({ jsonrpc: '2.0', id: JSON.parse(init.body).id, result: 1 })
+  } })
+  try {
+    const responses = await Promise.all([post(f.url), post(f.url), post(f.url)])
+    assert.ok(responses.every(r => r.status === 200)); assert.equal(starts.length, 3)
+    assert.ok(starts[1] - starts[0] >= 35); assert.ok(starts[2] - starts[1] >= 35)
+  } finally { await f.close() }
+})
+test('an expired queued request is never forwarded', async () => {
+  let forwarded = 0
+  const f = await fixture({ maxResponses: 0, timeoutMs: 50, fetchImpl: async () => {
+    forwarded++; return Response.json({ jsonrpc: '2.0', id: 1, result: 1 })
+  } })
+  try {
+    await assert.rejects(post(f.url)); assert.equal(forwarded, 0)
+  } finally { await f.close() }
+})
+test('transaction pacing does not add submission retries', async () => {
+  const starts = []
+  const f = await fixture({ sendIntervalMs: 50, fetchImpl: async (_url, init) => {
+    starts.push(Date.now()); return Response.json({ jsonrpc: '2.0', id: JSON.parse(init.body).id, result: 'synthetic' })
+  } })
+  try {
+    const body = { ...request, method: 'sendTransaction', params: ['synthetic'] }
+    const responses = await Promise.all([post(f.url, body), post(f.url, body)])
+    assert.ok(responses.every(r => r.status === 200)); assert.equal(starts.length, 2)
+    assert.ok(starts[1] - starts[0] >= 45)
+  } finally { await f.close() }
 })
 test('validates envelopes, denies batches, faucet and arbitrary methods', () => {
   assert.equal(validateRequest(request), true)

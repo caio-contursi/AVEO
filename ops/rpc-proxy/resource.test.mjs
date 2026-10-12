@@ -13,7 +13,7 @@ async function fixture(t, options = {}) {
   const calls = []
   const responses = []
   const connections = new Set()
-  const server = createProxy({ key, maxConcurrent: 1, timeoutMs: 100,
+  const server = createProxy({ key, requestIntervalMs: 0, maxConcurrent: 1, timeoutMs: 100,
     fetchImpl: async (_url, init) => {
       calls.push(init)
       const body = JSON.parse(init.body)
