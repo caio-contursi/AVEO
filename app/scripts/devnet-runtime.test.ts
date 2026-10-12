@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { blockhash, getAddressDecoder, getBase64Encoder, getSignatureFromTransaction, getTransactionDecoder,
+  SolanaError, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR,
   type Instruction, type Rpc, type SolanaRpcApi } from '@solana/kit'
 import { AVEO_DEVNET_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
 import { DEVNET_GENESIS_HASH } from './devnet-preflight'
@@ -19,7 +20,7 @@ function fixture() {
     getGenesisHash: vi.fn(async () => DEVNET_GENESIS_HASH),
     getMultipleAccounts: vi.fn(async () => ({ context: { slot: 42n }, value: [1, 2, 3].map(() =>
       ({ executable: true, owner: 'BPFLoaderUpgradeab1e11111111111111111111111' })) })),
-    getLatestBlockhash: vi.fn(async () => ({ value: { blockhash: blockhash(addr(9)), lastValidBlockHeight: 999n } })),
+    getLatestBlockhash: vi.fn(async () => ({ context: { slot: 42n }, value: { blockhash: blockhash(addr(9)), lastValidBlockHeight: 999n } })),
     simulateTransaction: vi.fn(async () => ({ value: { err: null as unknown } })),
     sendTransaction: vi.fn(async (value: string) => {
       wire = value
@@ -41,10 +42,46 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('pins subsequent reads after faucet funding as well as external funding', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    await runtime.fund(signer.address, 1_000_000_000n)
+    await runtime.send(signer, [instruction])
+    expect(f.api.getLatestBlockhash).toHaveBeenCalledWith({ commitment: 'confirmed', minContextSlot: 42n })
+  })
+
+  it('retries a rate-limited blockhash read without signing or sending twice', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getLatestBlockhash.mockRejectedValueOnce(new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { statusCode: 429, message: 'Too Many Requests', headers: new Headers() }))
+    await runtime.send(signer, [instruction])
+    expect(f.methods.getLatestBlockhash).toHaveBeenCalledTimes(2)
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+  })
+  it('does not retry a definitive RPC rejection even if a later read would succeed', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.simulateTransaction.mockRejectedValueOnce(new Error('semantic simulation rejection'))
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.simulateTransaction).toHaveBeenCalledOnce()
+    expect(f.methods.sendTransaction).not.toHaveBeenCalled()
+    expect(f.journal().status).toBe('stopped')
+  })
+
+  it('pins blockhash and simulation reads at the latest observed funding slot', async () => {
+    const f = fixture()
+    f.methods.getBalance.mockResolvedValue({ context: { slot: 42n }, value: 1_000_000_000n })
+    const runtime = await createDevnetRuntime({ ...f.options, externalIssuerFunding: true }, { rpc: f.api as unknown as Rpc<SolanaRpcApi>, onExternalFundingRequired: vi.fn() })
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    await runtime.fund(signer.address, 1_000_000_000n)
+    await runtime.send(signer, [instruction])
+    expect(f.api.getLatestBlockhash).toHaveBeenCalledWith({ commitment: 'confirmed', minContextSlot: 42n })
+    expect(f.api.simulateTransaction).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ minContextSlot: 42n }))
+  })
   it('retries transient simulation transport failures but broadcasts once', async () => {
     const f = fixture(), runtime = await f.create()
     const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
-    f.methods.simulateTransaction.mockRejectedValueOnce(new Error('temporary read transport failure'))
+    f.methods.simulateTransaction.mockRejectedValueOnce(new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { statusCode: 429, message: 'Too Many Requests', headers: new Headers() }))
     await runtime.send(signer, [instruction])
     expect(f.methods.simulateTransaction).toHaveBeenCalledTimes(2)
     expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
@@ -54,7 +91,7 @@ describe('dedicated synthetic devnet runtime', () => {
   it('retries transient status reads without resending the original transaction', async () => {
     const f = fixture(), runtime = await f.create()
     const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
-    f.methods.getSignatureStatuses.mockRejectedValueOnce(new Error('temporary read transport failure'))
+    f.methods.getSignatureStatuses.mockRejectedValueOnce(new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { statusCode: 503, message: 'Unavailable', headers: new Headers() }))
     await runtime.send(signer, [instruction])
     expect(f.methods.getSignatureStatuses).toHaveBeenCalledTimes(2)
     expect(f.methods.sendTransaction).toHaveBeenCalledOnce()

@@ -7,6 +7,8 @@ import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budge
 import { appendTransactionMessageInstructions, compileTransaction, createKeyPairSignerFromPrivateKeyBytes,
   createSolanaRpc, createTransactionMessage, getAddressEncoder, getBase64EncodedWireTransaction,
   getSignatureFromTransaction, isSignature, setTransactionMessageFeePayerSigner,
+  isSolanaError, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR,
+  SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED,
   setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners,
   type Address, type Instruction, type KeyPairSigner, type Rpc, type Signature, type SolanaRpcApi } from '@solana/kit'
 import { AVEO_DEVNET_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
@@ -28,7 +30,12 @@ async function readWithRetry<T>(read: (signal: AbortSignal) => Promise<T>, timeo
         const result = await read(signal)
         check(!signal.aborted)
         return result
-      } catch { if (signal.aborted) throw fail() }
+      } catch (error) {
+        const transient = isSolanaError(error, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR)
+          ? [429, 502, 503, 504].includes(error.context.statusCode)
+          : isSolanaError(error, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED)
+        if (signal.aborted || !transient) throw fail()
+      }
       await new Promise<void>((resolve) => setTimeout(resolve, 1000))
     }
     throw fail()
@@ -127,6 +134,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     const writeWallets = privateJson(path.join(directory, 'devnet-wallets.jsonl'), { scope: 'devnet-synthetic-only', wallets: records })
     const wallets = new Map<string, KeyPairSigner>()
     let funder: KeyPairSigner | undefined
+    let readFloor = 0n
     let blocked = false, busy = false
     const persist = () => writeJournal(journal)
     const pin = async () => {
@@ -165,7 +173,9 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
       const operation: Record<string, unknown> = { kind: 'transaction', phase: 'preparing', payer: payer.address }
       journal.operations.push(operation); persist()
       try {
-        const { value: blockhash } = await readWithRetry((signal) => rpc.getLatestBlockhash({ commitment: 'confirmed' }).send({ abortSignal: signal }))
+        const latest = await readWithRetry((signal) => rpc.getLatestBlockhash({ commitment: 'confirmed', minContextSlot: readFloor }).send({ abortSignal: signal }))
+        check(latest.context.slot >= readFloor)
+        const blockhash = latest.value
         const message = appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units }), ...instructions],
           setTransactionMessageLifetimeUsingBlockhash(blockhash, setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }))))
         const fingerprint = await messageFingerprint(compileTransaction(message).messageBytes)
@@ -176,7 +186,13 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         const wire = getBase64EncodedWireTransaction(signed)
         operation.phase = 'simulating'; persist()
         const simulation = await readWithRetry((signal) => rpc.simulateTransaction(wire,
-          { encoding: 'base64', commitment: 'confirmed', sigVerify: true }).send({ abortSignal: signal }))
+          { encoding: 'base64', commitment: 'confirmed', sigVerify: true, minContextSlot: latest.context.slot }).send({ abortSignal: signal }))
+        if (simulation.value.err !== null) {
+          operation.simulationVerdict = typeof simulation.value.err === 'string' &&
+            ['BlockhashNotFound', 'AccountNotFound', 'InsufficientFundsForFee'].includes(simulation.value.err)
+            ? simulation.value.err : 'Rejected'
+          persist()
+        }
         check(simulation.value.err === null)
         await pin()
         operation.phase = 'submitting'; persist()
@@ -196,6 +212,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
           throw fail()
         }, 30_000)
         await pin()
+        readFloor = BigInt(proof.slot) > readFloor ? BigInt(proof.slot) : readFloor
         operation.phase = 'confirmed'; operation.slot = proof.slot; persist()
         return signature
       } catch { operation.phase = 'unknown'; persist(); throw fail() }
@@ -237,6 +254,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
           }, 60_000)
           await pin()
           operation.phase = 'confirmed'; operation.slot = Number(observed.context.slot); persist()
+          readFloor = observed.context.slot
           funder = recipient
           return
         }
@@ -251,8 +269,10 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
           const slot = await confirmed(signature)
           const after = await bounded((signal) => rpc.getBalance(wallet, { commitment: 'confirmed', minContextSlot: slot }).send({ abortSignal: signal }), 10_000)
           check(after.value >= before.value + amount)
+          check(after.context.slot >= slot)
           await pin()
           operation.phase = 'confirmed'; operation.slot = Number(slot); persist()
+          readFloor = after.context.slot
           funder = recipient
         } catch { operation.phase = 'unknown'; persist(); throw fail() }
       }),
