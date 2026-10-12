@@ -28,6 +28,9 @@ use anchor_spl::token_interface::Mint;
 use spl_discriminator::SplDiscriminate;
 use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
+#[cfg(feature = "devnet")]
+declare_id!("28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS");
+#[cfg(not(feature = "devnet"))]
 declare_id!("ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33");
 
 #[program]
@@ -303,3 +306,18 @@ pub struct Execute<'info> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod identity_tests {
+    #[test]
+    fn selected_program_id_matches_feature() {
+        let expected = if cfg!(feature = "devnet") {
+            "28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS"
+        } else {
+            "ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33"
+        };
+
+        assert_eq!(crate::ID.to_string(), expected);
+        assert_eq!(crate::id(), crate::ID);
+    }
+}

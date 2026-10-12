@@ -8,6 +8,9 @@ skip-lint = false
 [programs.localnet]
 aveo_hook = "ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33"
 
+[programs.devnet]
+aveo_hook = "28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS"
+
 [registry]
 url = "https://api.apr.dev"
 
