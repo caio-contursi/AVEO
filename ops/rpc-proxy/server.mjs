@@ -67,7 +67,8 @@ export class ClientFrames extends Transform {
 }
 
 export function createProxy({ key, fetchImpl = fetch, origins = DEFAULT_ORIGINS, now = Date.now,
-  maxRequests = 240, maxConcurrent = 8, maxSockets = 8, timeoutMs = 15_000, upstreamRequest = https.request } = {}) {
+  maxRequests = 240, maxConcurrent = 8, maxSockets = 8, timeoutMs = 15_000,
+  handshakeTimeoutMs = 10_000, socketLifetimeMs = 5 * 60_000, upstreamRequest = https.request } = {}) {
   if (!key || !/^[A-Za-z0-9_-]{16,256}$/.test(key)) throw new Error('Invalid RPC credential')
   const endpoint = `https://devnet.helius-rpc.com/?api-key=${encodeURIComponent(key)}`
   let started = now(); let requests = 0; let active = 0; let sockets = 0
@@ -145,8 +146,8 @@ export function createProxy({ key, fetchImpl = fetch, origins = DEFAULT_ORIGINS,
       Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13',
       'Sec-WebSocket-Key': req.headers['sec-websocket-key'],
     } })
-    const lifetime = setTimeout(() => close(), 5 * 60_000)
-    const handshake = setTimeout(() => close(), 10_000)
+    const lifetime = setTimeout(() => close(), socketLifetimeMs)
+    const handshake = setTimeout(() => close(), handshakeTimeoutMs)
     const close = () => {
       if (closed) return; closed = true; sockets--; clearTimeout(lifetime); clearTimeout(handshake)
       upstream.destroy(); upstreamSocket?.destroy(); guard.destroy(); socket.destroy()

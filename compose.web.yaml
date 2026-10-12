@@ -8,6 +8,7 @@ services:
         - aveo_public_manifest
     # Host networking avoids the VPS bridge egress failure; nginx binds loopback only.
     network_mode: host
+    entrypoint: ["nginx", "-g", "daemon off;"]
     depends_on:
       aveo-rpc:
         condition: service_healthy
