@@ -38,7 +38,7 @@ AVEO_PUBLIC_MANIFEST=/absolute/path/public-deployment.json \
 VITE_CLUSTER=devnet \
 VITE_RPC_URL=https://api.devnet.solana.com \
 VITE_COMMITMENT=confirmed \
-VITE_AVEO_PROGRAM_ID=ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33 \
+VITE_AVEO_PROGRAM_ID=28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS \
 VITE_BACKEND=aveo-sas-hook \
 VITE_ENABLE_DEV_WALLETS=false \
 VITE_DEPLOYMENT_URL=/deployment.json \
@@ -80,15 +80,14 @@ this real-network acceptance.
 
 ## Current external prerequisites
 
-The configured program ID already exists in source. Public release still needs
-secure access to the deployment key for that exact ID and an approved hosting
-destination. The owner has authorized synthetic devnet deployment and test
+The owner approved a dedicated devnet identity on October 11. Its program key
+exists outside the repository; the original localnet identity stays unchanged.
+Public release still needs test funding, deployment, devnet fixtures and hosted
+browser acceptance. The owner has authorized synthetic devnet deployment and test
 transactions; use dedicated test wallets, not the local fixture wallets or any
-personal wallet. Authorization does not establish that the required keys exist
-or that an external service has been configured. If the original deployment key is unavailable,
-the team must approve an identity/configuration change; do not silently invent
-a new ID. Existing local fixture scripts are localnet tooling and must not be
-pointed at devnet as an unreviewed shortcut.
+personal wallet. The intended public domain is `aveoprotocol.io`; publication
+still needs the hosting configuration and a reviewed release artifact.
+Existing local fixture scripts must not be pointed at devnet as a shortcut.
 
 ## Proposed follow-up issues
 
@@ -126,3 +125,84 @@ Aveo program ID. This artifact is not a deployment key for the configured ID.
 No private key was printed, exported or committed. No program identity changed.
 The owner must supply secure access to the matching program key, or explicitly
 approve a new identity and coordinated configuration update.
+
+## Approved devnet identity and bootstrap, 2026-10-11
+
+This update supersedes the earlier deployment-key prerequisite. The owner
+explicitly approved `28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS` as the
+exclusive devnet program identity. The `devnet` Cargo feature selects that ID
+at compile time; a default build retains the original localnet ID. Account
+layouts and instruction interfaces are unchanged. New devnet accounts must be
+derived from the new identity, never copied or relabeled from localnet.
+
+The new `devnet:fixtures` command has a dedicated runtime. It verifies devnet's
+genesis and the executable Aveo, SAS and Token-2022 accounts before creating
+keys, requesting test funding or signing. Its first reviewed transport accepts
+only the official devnet HTTP/WebSocket endpoints. It creates synthetic wallets
+and accounts, simulates before sending, records the original signature durably,
+does not automatically retry submissions and stops on ambiguous outcomes.
+Private wallet/run snapshots are append-only JSONL files with restrictive
+permissions and synchronized writes. These are not a supported crash-resume
+interface: preserve an interrupted directory for inspection, do not rerun it.
+
+The fixture generator creates two Token-2022 assets, distinct policies and
+shared SAS proofs/bindings, initializes balances and checks fresh on-chain
+accounting before writing a public `deployment.json`. Its 20-minute default
+short-lived proof is intended for a rehearsed expiry scene, not a permanent
+public scenario. Test funding for the fixture issuer is separate from program
+deployment funding; its one-shot faucet request can also fail.
+
+After deployment and readback, run from `app` with a newly created private
+directory, outside the repository:
+
+```sh
+AVEO_DEVNET_FIXTURE_DIR=$(mktemp -d /tmp/aveo-devnet-fixtures-XXXXXX)
+pnpm devnet:fixtures --execute-synthetic-devnet \
+  --directory "$AVEO_DEVNET_FIXTURE_DIR" \
+  --rpc https://api.devnet.solana.com \
+  --ws wss://api.devnet.solana.com
+```
+
+Publish only the validated public manifest. Never publish `devnet-wallets.jsonl`,
+`devnet-run.jsonl` or deployment keypairs. The public release commands above
+remain a later step, not proof that the fixture command was executed.
+
+### Build and network evidence
+
+- `pnpm verify`: 2,616 app/script tests and 41 backend tests passed, plus type
+  checks, lint and the ordinary production build. The new devnet modules account
+  for 99 tests; their network scenarios use injected RPC, not a real deployment.
+- Rust library suites: 26 tests passed with the default identity and 26 with
+  `devnet`, using the cached offline toolchain. No new compiler warnings.
+- Fresh SBF build used `cargo build-sbf --tools-version v1.53 --sbf-out-dir
+  /opt/candidate/out -- --locked --offline --features devnet` in a network-disabled
+  container. Artifact: `/tmp/aveo-devnet-build-hDcvXX/out/aveo_hook.so`, 357,872 bytes,
+  SHA-256 `45986a72db443a84d03ce0fa6f6b86ecf2680f924c6983cc85b7686ad52e5aec`.
+  The copied program source matches this working tree; there is no new release
+  commit yet. Preserve the artifact and record its eventual deployment.
+- Confirmed devnet observation at slot 510039489: the new Aveo program account
+  was absent; SAS and Token-2022 were executable. This is a dated observation.
+- Dedicated synthetic deployment payer:
+  `Bn9NpxkkHi9x9VNBaMXhHc5CgeKZrktsWPxKxXAt4R8Y`.
+  One 2-SOL faucet request returned no usable confirmation; no retry was made.
+  A read at `2026-10-11T21:40:16.801Z`, slot 510040781, found balance zero and
+  no recent signatures. Private funding evidence remains outside the repository.
+- Rent estimates in lamports: program data 1,818,868,600; temporary buffer
+  1,818,827,960; program account 833,120. Approximately 3.64 devnet SOL plus
+  fees is needed at peak; 5 devnet SOL provides a preparation margin. These
+  are test funds, not a request for mainnet SOL or a purchase.
+
+### Reviewer objections and next actions
+
+Funding is the current external blocker. After test funding, deploy this exact
+binary with the approved program key, verify executable ownership and program
+identity, then create fixtures and perform the six scenes. Do not use the
+different keypair automatically generated in the fresh SBF output directory.
+The approved program key and dedicated payer are private external artifacts;
+their secure retention and upgrade-authority custody need a human owner.
+
+No program deployment, real devnet fixture execution, extension-wallet browser
+acceptance or hosting publication occurred in this increment. Passing bootstrap
+tests does not complete the full adversarial security matrix or establish
+independent audit, MPL-3643 integration or production readiness. The current
+localnet viewer was not switched or reset.

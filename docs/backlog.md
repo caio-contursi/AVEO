@@ -163,6 +163,9 @@ transactions, outreach or real pilot occurred in this increment.
 - **SEC-10:** reconcile a signatureless pending intent with a wallet-history
   signature only after transaction-to-intent validation; an unrelated confirmed
   signature must never unlock another submission.
+  Controller and global UI implemented in the uncommitted recovery branch:
+  candidate signature/message/context are checked before attachment and release.
+  Controlled unit/browser tests pass; real extension/ledger acceptance remains open.
 - **SEC-11:** consolidate the source/destination raw-ledger rejection validators
   after their independent acceptance is stable, reducing duplicate checks without
   merging resolver, Token-2022 and Aveo rejection layers.
@@ -187,3 +190,41 @@ transactions, outreach or real pilot occurred in this increment.
   report compatibility silently.
 - **UX-01:** expose the holdings observation slot and shorten the partial-balance
   banner while retaining the distinction between unavailable and zero amounts.
+
+- **SEC-12 (proposed):** persist a verified cross-tab settlement certificate so
+  observing tabs can release their conservative blocker without requiring reload;
+  an absent storage record alone must never count as settlement evidence.
+- **UX-02 (proposed):** expose durable pending submissions on first render and
+  connect read-only history reconciliation to exact-message verification. Keep
+  signatureless recovery blocked until SEC-10 establishes the original transaction.
+  Implemented as a separate global pending panel, not by trusting public receipts.
+  Explicit original-message recovery supports known and wallet-history candidate
+  signatures; public receipt confirmation remains observational only.
+- **UX-03 (proposed):** rehearse recovery with a screen reader and a first-time
+  operator, verifying that pending, unknown and resolved announcements explain
+  what happened without suggesting a duplicate send.
+- **SEC-13 (proposed):** define safe operational triage for reloaded pre-wallet
+  reservations without a message fingerprint; do not use elapsed time or a wallet
+  error as evidence that a broadcast never occurred.
+- **LOCAL-07 (proposed):** expose a supported read-only CLI command for reopening
+  an existing private intent file with a pinned deployment/genesis, replacing
+  manual recovery diagnostics after process interruption without submitting again.
+  Observational inspection is implemented as `local:intent:inspect`, including
+  actual child-process command tests and a read-only historical-localnet rehearsal.
+  It reports exact-message evidence but does not attach signatures or clear gates;
+  supported cross-process settlement remains a separate authorization/design task.
+- **SEC-14 (proposed):** extend coordinated reservation/ownership deadlines with
+  stale-write guards and instrument signing calls separately from version-1 stage
+  counters; test queued operations and delayed completions without relaxing gates.
+- **LOCAL-08 (proposed):** bind future synthetic intent artifacts to the original
+  approved genesis with versioned provenance, so operators do not have to rely on
+  an externally supplied historical pin during inspection.
+- **SEC-15 (proposed):** reuse the bounded read-only transport across existing
+  local receipt diagnostics, preserving their current evidence contracts while
+  rejecting oversized or stalled RPC bodies consistently.
+- **RELEASE-01 (proposed):** add a versioned binary-identity/hash gate linking the
+  compiled devnet artifact, deployed program and public manifest, preventing a
+  successful deployment at the wrong identity from being presented as acceptance.
+- **DEVNET-01 (proposed):** provide a supported read-only inspector for interrupted
+  append-only bootstrap journals, preserving original signatures and incomplete
+  key snapshots without creating an automatic resend or restart path.

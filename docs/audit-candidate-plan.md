@@ -33,7 +33,7 @@ criteria to obtain a desired score.
 | Current evidence | Verify final source commit; fresh app and Rust tests, build and blockchain acceptance; identify binary and fixture provenance | Orchestrator integrates final changes and reruns; historical reports are not final-release evidence |
 | Complete mandatory security | All T04/T05/T10/T17 subcases plus regression and recovery; rejected token transfers preserve balances; identify whether rejection occurs in resolver, Token-2022 or Aveo | Security specialists implement missing adversarial cases; Bruno reviews enforcement |
 | Complete browser flow | Actual preparation, simulation, wallet signing, submission, confirmation and fresh readback; explicit wallet refusal | QA plus an approved extension test wallet; synthetic/read-only browser evidence is insufficient |
-| Interrupted-operation recovery | Preserve original signature where available; no success invented from a send error; no automatic or manual duplicate submission while outcome is unresolved; test reload | Backend/QA specialist; wallet sign-and-send response loss without a signature requires a separate persistent safety design |
+| Interrupted-operation recovery | Preserve original signature where available; no success invented from a send error; no automatic or manual duplicate submission while outcome is unresolved; test reload | Durable guard and explicit original-message recovery implemented; real extension/ledger interruption acceptance remains open |
 | Public demonstration | Exact program deployed on devnet; genuine fixtures; public HTTPS Desk; external evaluator repeats all six scenes | Bruno supplies secure program key; deployment/integration specialist creates test fixtures; hosting owner selects destination |
 | Clear delivery packet | Clean-clone reproduction, authority inventory, honest limits, license, English presentation/video/links and a first-use rehearsal | Release specialist and consenting first-time evaluator; no fictional audit or pilot evidence |
 
@@ -43,6 +43,216 @@ to falsify each acceptance claim, including lost wallet responses, absent
 bindings, stale state, mismatched network/binary and missing transaction history.
 
 ## Starting evidence, not an audit verdict
+
+### Durable submission increment — 2026-10-11
+
+Implemented in an isolated worktree on branch `codex/durable-recovery-20261011`,
+based on `2ee6c86`. These changes are uncommitted; they are not evidence of the
+public site's deployed revision. Existing hosting files and readiness backlog
+changes were preserved. This application/backend boundary requires Caio's review;
+no on-chain interface, account, protocol, or dependency was changed.
+The worktree is retained at `/home/bruno/projetos/AVEO-recovery`, separately from
+the original checkout and `AVEO-readiness`.
+
+- `app/src/features/operations/submission-intent.ts` provides a bounded,
+  versioned durable reservation under origin-wide Web Locks. The central
+  `runPlan` path reserves before wallet access, including incident renewals.
+  Missing coordination, malformed storage and persistence failure block sending.
+- `app/src/api/transactions.ts` awaits reservation before signing and durable
+  signature recording before Desk RPC broadcast. Sending extensions may broadcast
+  before returning a signature; losing that response retains the blocker.
+- `app/src/api/submission-proof.ts` reads the original wire transaction and
+  compares its signature and SHA-256 message fingerprint. Only matched terminal
+  evidence at confirmed/finalized commitment releases the reservation. Receipt
+  removal, a successful signature status or eligibility readback cannot release it.
+- Controlled tests cover unavailable storage, wrong signatures/messages,
+  failed writes, pre-wallet cancellation, immutable signatures and release after
+  matching transaction evidence. These are not real extension or ledger evidence.
+- Real headless Chromium verified secure-context Web Locks, a second-tab block
+  and a block after reload. POST requests were disabled: no wallet, RPC mutation
+  or blockchain transaction was used in this browser check.
+- Final `pnpm verify` passed in the retained worktree: 2,279 app/script tests
+  across 84 files, 41 backend tests, application/test typechecks, lint and the
+  production build. This is 49 additional app/script tests over the starting
+  baseline. Results describe this uncommitted increment, not a published commit.
+
+At the end of this increment, reviewer objections were: the first-render pending-operation UI and
+history recovery are not connected yet; signatureless reconciliation remains
+SEC-10. Another tab's verified settlement conservatively requires an observing
+tab to reload. Clearing browser storage, using another origin/device, compromised
+same-origin code and untrusted RPC are outside this client-side guard's guarantee.
+The complete extension/ledger recovery acceptance and public devnet release
+remain open. Build retains the existing Zod/Rollup annotation warnings; a passing
+suite must not be described as warning-free or an independent audit.
+
+### Explicit recovery UI increment — 2026-10-11
+
+This subsequent uncommitted increment uses the same isolated worktree and branch.
+The owner confirmed continuing without commits for this round; Git identity was
+not configured and no push, deployment, personal wallet, or ledger mutation ran.
+This status supersedes the earlier missing-UI/signatureless-controller objections,
+not the remaining public-network acceptance requirements.
+
+- `PendingSubmission.tsx` is mounted in `Layout.tsx` across all routes. It reads
+  the durable snapshot on first render and warns about unavailable safety storage.
+  PT/EN controls support explicit read-only checking, bounded candidate input and
+  keyboard access. There is no reset, deletion, resend or automatic recovery.
+- `submission-recovery.ts` verifies the original context before RPC, captures
+  immutable deployment data and compares the exact transaction signature/message.
+  A signature from wallet history is attached only after matched terminal proof.
+  Recovery retries the same retained signature after a failed durable attachment.
+  A successful chain read without successful durable settlement is not recovery.
+- `execution.ts` now uses the originating store throughout initial verification;
+  an active attempt missing its record cannot accept terminal backend evidence.
+  Context/signature mismatches are rejected before original-message RPC lookup.
+- Persistence checks freshness before its final expected-record comparison, then
+  writes and reads back without subscriber callbacks. Notifications follow the
+  guarded write. Adversarial tests preserve replacement records introduced by
+  freshness callbacks or view subscribers rather than silently overwriting them.
+- Real headless Chromium checked pending state after reload, keyboard recovery,
+  rejection of an unrelated candidate without attachment, valid candidate recovery,
+  and a 390px mobile viewport without horizontal overflow. No page errors or RPC
+  mutations were observed. RPC results and wire transactions were controlled
+  fixtures, not evidence of real wallet signing or on-chain execution.
+  Desktop/mobile captures are retained separately at
+  `/home/bruno/projetos/AVEO-recovery-evidence-20261011`.
+- Final `pnpm verify` passed: 2,347 app/script tests across 86 files, 41 backend
+  tests, app/test typechecks, lint and production build. This round adds 68 tests
+  over the 2,279-test durable-guard increment. Existing dependency warnings remain.
+
+Remaining objections: extension/local-ledger interruption acceptance, public
+devnet delivery and independent first-use/accessibility testing remain open.
+Reloaded pre-wallet reservations without an expected message remain blocked and
+need an explicitly safe operational resolution; recovery cannot invent a signature
+or prove non-broadcast from a wallet error. Concurrent tabs retain conservative
+blockers until reload after another tab settles. Native synchronous storage,
+cooperating Web Locks and a trusted original RPC remain assumptions; clearing
+storage, another origin/device or compromised same-origin code bypass this
+client-side guard. No production-audit or protocol-compatibility claim is added.
+
+### Real localnet durable-recovery rehearsal — 2026-10-11
+
+The latest uncommitted increment connects `local-recovery-check.ts` to the same
+intent store and exact-message recovery controller used by the Desk. The CLI
+persists its message fingerprint before signing and its signature before sending;
+it reopens private disk storage in a new store instance after confirmation faults.
+Only unknown recovery reads are polled, at 125ms intervals within a bounded stage.
+Late signing/proof completion cannot mutate or release through an expired guard.
+
+`local-intent-storage.ts` provides bounded, fsynced metadata in exclusive 0600
+files inside a private external temporary directory. Open adapters reject symlinks,
+hardlinks, changed inodes and permissive files. A real child-process unit test
+verified that a signatureless pending blocker survives reopening without sending.
+CLI coordination covers its single private process, not browser Web Locks or
+multiple OS writers. Reopening a file establishes a new inode baseline rather
+than proving continuity with an earlier adapter.
+
+The existing isolated validator was reused without reset; confirmed slots advanced
+and genesis was pinned to `9TsPJrMdoJAFz45vk1wjoDu7pKPmBB1BzDJzCzfodBNP`.
+Fresh fixtures were generated in `/tmp/aveo-intent-ledger-Im33Ih`, with dedicated
+synthetic wallets, test SOL and Token-2022 assets. No personal wallet, real asset,
+devnet/mainnet transaction, public hosting change or new program deployment ran.
+
+- The first rehearsal exposed an early `getTransaction` lookup: its original
+  receipt remained `unknown` and its durable blocker remained present. A separate
+  process later recovered the same original signature without signing or sending;
+  historical verification confirmed hook execution and balances 50/910 to 49/911.
+  The failed receipt was not rewritten as a passing run.
+- After adding bounded read-only polling, a distinct rehearsal passed with signature
+  `22y1FJTRrbwrttU5DPjNLyEkmH8mHabTv1NBZrLSgaXAJ6ZmFGtueXBad1u8CXT7m9fQkpkTK5HEPhrC9SXi1xDC`,
+  confirmation/balance slot 194112, and balances 49/911 to 48/912. Its receipt is
+  `local-recovery-c58954ac-f925-4aba-b7dc-3ee66bdc3118.json` in that private directory.
+  Thus two distinct one-unit rehearsal transfers ran; the first was not resent.
+- `local:recovery:resume` independently passed in a new process against each
+  historical transaction. The final verification file is
+  `local-recovery-resumed-9efcf089-c095-4cfa-9d54-82cdef65362c.json`. It verifies raw
+  transfer instructions, the expected sole signature, hook invocation and actual
+  historical balance deltas; it never loads keys or submits.
+
+Reviewer limits: public receipt v1 counts signing stages/submission call sites,
+not instrumented wallet metrics. `reserve`/`assertOwned` lack their own deadline;
+the private cooperating coordination and outer acceptance-stage deadline remain
+assumptions. The loaded program binary was reused, not rebuilt/audited this round.
+This is real CLI/local-ledger recovery evidence, not extension-wallet browser
+acceptance, a validator-restart rehearsal, complete security-matrix acceptance,
+final-release binary provenance or public devnet demonstration.
+
+Final verification of this increment: `pnpm verify` passed with 2,366 app/script
+tests across 87 files and 41 backend tests, plus typechecks, lint and production
+build. This round adds 19 tests over the explicit-recovery UI increment. Existing
+SQLite and Zod/Rollup dependency warnings remain; no new dependency was added.
+
+### Observational intent inspection — 2026-10-11
+
+`pnpm --filter @aveo/app local:intent:inspect <absolute-intent-file> [candidate-signature]`
+reopens a private isolated intent and verifies exact-message evidence without
+loading wallets, signing, sending, attaching a candidate signature or clearing
+the persistent gate. This completes the observational part of LOCAL-07, not a
+multi-process settlement protocol. The CLI needs only `deployment.json` beside
+the intent; `wallets.json` is deliberately unnecessary.
+
+Run with the original literal-loopback endpoint and the expected genesis from
+the approved isolated run, for example:
+
+```sh
+AVEO_CLUSTER=localnet \
+AVEO_RPC_URL=http://127.0.0.1:19899 \
+AVEO_WS_URL=ws://127.0.0.1:19900 \
+AVEO_LOCAL_GENESIS_HASH=9TsPJrMdoJAFz45vk1wjoDu7pKPmBB1BzDJzCzfodBNP \
+pnpm --filter @aveo/app local:intent:inspect \
+  /tmp/aveo-intent-ledger-Im33Ih/local-intent-47101203-2f29-4be7-b5c1-fc6aa7ee5c6d.json
+```
+
+The concrete file above is a **reconstructed synthetic inspection fixture** for
+the previous transfer, not the original interrupted-operation record. It was
+created from public deployment metadata and the historical transaction's message
+hash/signature, without keys, signing or new transactions. The final command
+observed `confirmed`, slot 194112, for the same
+`22y1FJTRrbwrttU5DPjNLyEkmH8mHabTv1NBZrLSgaXAJ6ZmFGtueXBad1u8CXT7m9fQkpkTK5HEPhrC9SXi1xDC`
+signature. The old receipts and settled intent files were not rewritten.
+
+Interpret the JSON and exit status together:
+
+- `confirmed`: exit 0, matching original message/signature observed on the pinned
+  local ledger. `evidenceOnly=true` and `gateReleased=false` remain explicit.
+- `failed`: exit 1, a supported instruction-error shape was observed; this is not
+  a successful transfer. Unsupported failure metadata stays `unknown`.
+- `unknown`, `blocked`, `empty`, `context-mismatch`, `invalid-signature`: exit 2.
+  None means the operation was never broadcast or that another send is safe.
+
+The transport allows only genesis/transaction reads, rejects redirects, limits
+response bodies to 32 KiB and gives each full fetch/body read a 10-second deadline.
+The inspection has a 35-second outer deadline. Context mismatch prevents transaction
+reads; genesis is checked before and after the lookup. A final storage refresh must
+still match the observed intent. The private gate is never mutated by this command,
+so no cross-process writer lock is promised or needed for observation.
+
+Reviewer limits: the legacy record does not contain its original genesis; the
+caller must supply a trustworthy pin rather than adopting the current RPC value.
+Byte/message equality proves a transaction observation, not an authenticated
+deployment history, browser-wallet behavior, recovery after validator restart or
+public devnet acceptance. A compromised local RPC and unobserved storage changes
+are outside this observation's guarantees. Shared exact-message verification now
+rejects coercible/nonpositive slots and malformed error metadata; unsupported
+transaction-error variants conservatively retain the blocker.
+
+Four tests run the actual package command in separate processes against controlled
+loopback RPC, with no wallet file, covering confirmed, failed, unknown and wrong
+genesis. A new late-signer regression proves an expired callback cannot attach,
+broadcast or settle. No dependency, on-chain interface, public hosting or deployment
+was changed; Caio reviews the application/script boundary.
+
+Final frozen-code verification: `pnpm verify` passed 2,517 app/script tests across
+89 files and 41 backend tests, workspace/test typechecks, ESLint and production
+build. This increment adds 151 tests over the preceding 2,366-test baseline,
+including 66 shared-verifier metadata regressions. Existing SQLite experimental
+and two Zod/Rollup annotation warnings remain; no new build warning was observed.
+The targeted real-localnet inspection was repeated after the centralized fix and
+again returned confirmed slot 194112 with zero signing/submission calls. The
+temporary loopback proxy was stopped; the existing isolated validator was retained.
+Changes remain uncommitted in the authorized isolated recovery worktree; no public
+release commit, Rust rebuild, full security-matrix rerun or extension-wallet browser
+acceptance is claimed by these results.
 
 ### Reconciled implementation baseline — 2026-10-10
 
@@ -272,6 +482,30 @@ If public deployment prerequisites remain unavailable, ship verifiable local evi
 state that limitation rather than pretending it is a public on-chain product.
 
 ## Completion rule
+
+### Devnet critical-path increment, 2026-10-11
+
+The owner approved a separate devnet program ID and synthetic devnet signing.
+The reviewed identity split, dedicated signer runtime and fixture generator are
+implemented without new dependencies or changes to the localnet identity.
+See [public-demo-release.md](public-demo-release.md) for the exact identity,
+commands, SBF hash, funding estimates and dated network observations.
+
+Current verification: 2,616 app/script tests, 41 backend tests, type checks,
+lint and ordinary production build passed; Rust library suites passed 26 tests
+each with default and devnet identities. A fresh offline SBF devnet build passed.
+The bootstrap contributes 99 regression tests using controlled RPC, not a live
+devnet acceptance. Two review findings were corrected: genesis is rechecked
+immediately before a faucet request, and private key/signature evidence is
+append-only rather than truncated on update.
+
+The new program was absent at the observed devnet slot. One test-funding request
+was attempted for a new dedicated payer, without a usable confirmation; its
+subsequent observed balance was zero. No deployment or fixture transaction was
+submitted. Funding is therefore the immediate external prerequisite, not missing
+authorization or an unavailable program key. Real-network fixture execution,
+the full security acceptance matrix, extension-wallet recovery and public hosted
+acceptance remain open. No independent audit or release sign-off is implied.
 
 The orchestrator reviews evidence and objections, not a target score. A candidate
 passes only the gates it demonstrably satisfies. Jury scoring, market adoption
