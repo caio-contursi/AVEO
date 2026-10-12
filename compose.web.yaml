@@ -1,0 +1,16 @@
+services:
+  aveo-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      network: host
+    ports:
+      - "127.0.0.1:8090:80"
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

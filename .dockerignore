@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/dist
+**/.dev
+**/.env*
+**/*.key
+**/*keypair*.json
+**/wallets.json
+target
