@@ -292,3 +292,49 @@ Existing SQLite and Zod/Rollup warnings remain unchanged. At confirmed slot
 Real public-image construction, hosted-origin RPC/CORS, wallet interaction and
 the six scenes remain unverified. RELEASE-02 proposes container/manifest
 provenance and hosted-origin smoke checks; it is backlog, not release evidence.
+
+## Real devnet deployment, 2026-10-12
+
+The dedicated payer received 20 devnet SOL through the external faucet. Funding
+was verified on-chain, not inferred from the website's success message.
+
+The approved program is deployed at
+`28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS`, deployment slot 510305702.
+Deployment signature:
+`3KujHsrovdjqqgXKWadF3DZi7DQNuQpWGuWPFMeKzjjxfdevHqpFQ6ytS8Ui2YU3b7JHsacNSUeKQuKH7sTiPWAo`.
+It was finalized with no transaction error. At observation slot 510305877, the
+program was executable under the upgradeable loader and its ProgramData account
+was `BbKJMwXkLa3VDxS2sEHRNmLQ5tHY24yViaAAv1d8FZ5F`. The full 357,872-byte
+on-chain ELF matched the approved binary exactly, SHA-256
+`45986a72db443a84d03ce0fa6f6b86ecf2680f924c6983cc85b7686ad52e5aec`.
+Upgrade authority is the dedicated synthetic payer
+`Bn9NpxkkHi9x9VNBaMXhHc5CgeKZrktsWPxKxXAt4R8Y`, not a revoked authority or
+production governance mechanism. Secure long-term custody remains a human task.
+
+RPC-based writes first failed after partially filling the explicit temporary
+buffer. Read-only inspection verified its loader owner, authority and incomplete
+bytes before resuming. RPC rate limiting also occurred. The successful resume
+used Solana CLI's existing QUIC transport, the same devnet network, binary,
+program identity and buffer. No alternate RPC provider, dependency or token
+standard was introduced. Buffer recovery artifacts remain private outside Git.
+
+Commit `c199d57` adds explicit `--external-issuer-funding`: the generator creates
+a fresh synthetic issuer, exposes only its public address and waits at most
+60 seconds for a fresh confirmed balance of at least 1 devnet SOL. Funding is
+performed separately from the dedicated deployment payer. This mode requests
+no faucet and loads no external/private payer key into the runtime. The default
+faucet mode is unchanged. The observation proves available balance, not the
+identity of a donor or a fabricated transfer signature.
+
+The first private fixture run stopped after a submitted funding transfer could
+not immediately be verified. Its original signature
+`85mSe2RC8DNYENd6rxeocv2U7ZJ55JEd3QfxTtBCu1TwiwdgBtauFNBy9ftMjQcjnmkM6jCGkMutomWnMCKeXRR`
+was later verified read-only at slot 510306052 against exact message fingerprint
+`ae21fba386c79c87db13b6d25ef848b21b877c53ec340ce6639826a9a4c75b66`, with no resend.
+That stopped directory is retained and is not a public manifest or accepted
+scenario. The runtime now retries only bounded exact-message verification reads
+when transaction data is unavailable; it still broadcasts once and stops if
+verification cannot be established. A new regression covers delayed indexing.
+
+Deployment is now verified. Fixture completion, public image publication,
+extension-wallet acceptance and the six-scene walkthrough remain separate gates.
