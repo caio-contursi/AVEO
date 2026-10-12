@@ -299,3 +299,6 @@ transactions, outreach or real pilot occurred in this increment.
 - **DEVNET-02 (proposed):** expose the public funding destination and bounded
   wait state in a bootstrap progress receipt, distinguishing observed funding
   from a faucet request and avoiding publication of private wallet journals.
+- **DEVNET-03 (proposed):** add explicit external-funding and indexing timeout/
+  late-response regressions, proving that expired read deadlines cannot release
+  a stopped bootstrap or trigger another transaction submission.

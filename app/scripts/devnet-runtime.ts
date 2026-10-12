@@ -20,6 +20,21 @@ import { parsePublicManifest } from './public-manifest'
 const fail = () => new Error('Synthetic devnet bootstrap stopped. Check program deployment, test funding and private run evidence; do not blindly rerun or resend.')
 function check(value: unknown): asserts value { if (!value) throw fail() }
 
+/** Transport retries apply only to reads; signed transaction broadcasts never use this helper. */
+async function readWithRetry<T>(read: (signal: AbortSignal) => Promise<T>, timeout = 20_000): Promise<T> {
+  return bounded(async (signal) => {
+    while (!signal.aborted) {
+      try {
+        const result = await read(signal)
+        check(!signal.aborted)
+        return result
+      } catch { if (signal.aborted) throw fail() }
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+    }
+    throw fail()
+  }, timeout)
+}
+
 export interface DevnetWalletRecord {
   id: string
   label: string
@@ -129,7 +144,8 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     }
     const confirmed = async (signature: Signature) => bounded(async (signal) => {
       while (!signal.aborted) {
-        const { value } = await rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send({ abortSignal: signal })
+        const { value } = await readWithRetry((readSignal) => rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send({ abortSignal: readSignal }), 10_000)
+        check(!signal.aborted)
         const status = value[0]
         if (status && ['confirmed', 'finalized'].includes(status.confirmationStatus ?? '')) {
           check(status.err === null && Number.isSafeInteger(Number(status.slot)) && Number(status.slot) > 0)
@@ -149,7 +165,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
       const operation: Record<string, unknown> = { kind: 'transaction', phase: 'preparing', payer: payer.address }
       journal.operations.push(operation); persist()
       try {
-        const { value: blockhash } = await bounded((signal) => rpc.getLatestBlockhash({ commitment: 'confirmed' }).send({ abortSignal: signal }), 10_000)
+        const { value: blockhash } = await readWithRetry((signal) => rpc.getLatestBlockhash({ commitment: 'confirmed' }).send({ abortSignal: signal }))
         const message = appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units }), ...instructions],
           setTransactionMessageLifetimeUsingBlockhash(blockhash, setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }))))
         const fingerprint = await messageFingerprint(compileTransaction(message).messageBytes)
@@ -158,8 +174,9 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         const signature = getSignatureFromTransaction(signed)
         operation.signature = signature; operation.phase = 'signed'; persist()
         const wire = getBase64EncodedWireTransaction(signed)
-        const simulation = await bounded((signal) => rpc.simulateTransaction(wire,
-          { encoding: 'base64', commitment: 'confirmed', sigVerify: true }).send({ abortSignal: signal }), 10_000)
+        operation.phase = 'simulating'; persist()
+        const simulation = await readWithRetry((signal) => rpc.simulateTransaction(wire,
+          { encoding: 'base64', commitment: 'confirmed', sigVerify: true }).send({ abortSignal: signal }))
         check(simulation.value.err === null)
         await pin()
         operation.phase = 'submitting'; persist()

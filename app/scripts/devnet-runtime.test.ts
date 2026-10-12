@@ -41,6 +41,24 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it('retries transient simulation transport failures but broadcasts once', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.simulateTransaction.mockRejectedValueOnce(new Error('temporary read transport failure'))
+    await runtime.send(signer, [instruction])
+    expect(f.methods.simulateTransaction).toHaveBeenCalledTimes(2)
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.journal().operations[0].phase).toBe('confirmed')
+  })
+
+  it('retries transient status reads without resending the original transaction', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getSignatureStatuses.mockRejectedValueOnce(new Error('temporary read transport failure'))
+    await runtime.send(signer, [instruction])
+    expect(f.methods.getSignatureStatuses).toHaveBeenCalledTimes(2)
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+  })
   it('retries delayed transaction indexing read-only without a second submission', async () => {
     const f = fixture(), runtime = await f.create()
     const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
