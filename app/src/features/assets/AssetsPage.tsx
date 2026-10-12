@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import type { DeskSnapshot } from '../../api/diagnostics'
 import { useReadyDesk } from '../../app/desk'
 import { formatAmount } from '../../components/format'
 import { describeReason } from '../../components/describeReason'
+import { MatrixScrollRegion } from '../../components/MatrixScrollRegion'
 import { Card, ErrorState, LoadingState, VerdictBadge } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 import { labelFor } from '../operations/labels'
@@ -17,35 +19,46 @@ function Matrix() {
   const { deployment } = useReadyDesk()
   const [selected, setSelected] = useState<{ mint: string; wallet: string } | null>(null)
   const holdings = useHoldingsQuery()
+  const currentHoldings = holdings.error || holdings.isFetching ? undefined : holdings.data?.holdings
+  const partialHoldings = currentHoldings?.some((row) => row.amount === undefined)
   const pairs = deployment.wallets.flatMap((w) => deployment.assets.map((a) => ({ mint: a.mint, wallet: w.address })))
   const results = useInspectQueries(pairs)
-  const snapshotOf = (mint: string, wallet: string): DeskSnapshot | undefined =>
-    results[pairs.findIndex((p) => p.mint === mint && p.wallet === wallet)]?.data
+  const snapshotOf = (mint: string, wallet: string): DeskSnapshot | undefined => {
+    const query = results[pairs.findIndex((p) => p.mint === mint && p.wallet === wallet)]
+    return query?.error || query?.isFetching ? undefined : query?.data
+  }
   const selectedSnapshot = selected ? snapshotOf(selected.mint, selected.wallet) : undefined
 
   return (
     <>
-      <div className="table-wrap">
+      {results.some((query) => query.error) && <ErrorState title={t('ux.inspectUnavailable')} onRetry={() => {
+        for (const query of results) if (query.error) void query.refetch()
+      }} />}
+      {holdings.error && <ErrorState title={t('ux.balancesUnavailable')} onRetry={() => void holdings.refetch()} />}
+      {partialHoldings && <ErrorState title={t('ux.balancesPartial')} onRetry={() => void holdings.refetch()} />}
+      <MatrixScrollRegion>
         <table className="matrix">
+          <caption className="sr-only">{t('assets.matrix')}</caption>
           <thead>
             <tr>
-              <th>{t('assets.wallet')}</th>
+              <th scope="col">{t('assets.wallet')}</th>
               {deployment.assets.map((a) => (
-                <th key={a.mint}>{a.label}</th>
+                <th key={a.mint} scope="col">{a.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {deployment.wallets.map((w) => (
               <tr key={w.address}>
-                <td>
+                <th scope="row">
                   <strong>{w.label}</strong>
-                </td>
+                </th>
                 {deployment.assets.map((a) => {
                   const index = pairs.findIndex((p) => p.mint === a.mint && p.wallet === w.address)
                   const query = results[index]
-                  const snapshot = query?.data
-                  const amount = holdings.data?.holdings.find((h) => h.mint === a.mint && h.wallet === w.address)?.amount
+                  const snapshot = query?.error || query?.isFetching ? undefined : query?.data
+                  const holding = currentHoldings?.find((h) => h.mint === a.mint && h.wallet === w.address)
+                  const amount = holding?.amount
                   const isSelected = selected?.mint === a.mint && selected.wallet === w.address
                   const primary = snapshot?.reasons.find((r) => !r.hint)
                   return (
@@ -53,13 +66,15 @@ function Matrix() {
                       <button
                         type="button"
                         className={`cell ${isSelected ? 'selected' : ''}`}
+                        disabled={!snapshot}
                         aria-pressed={isSelected}
+                        aria-label={t('ux.inspectCell', { wallet: w.label, asset: a.label, verdict: snapshot ? t(`verdict.${snapshot.verdict}`) : query?.isFetching && !query.error ? t('state.loading') : t('verdict.unknown') })}
                         onClick={() => setSelected(isSelected ? null : { mint: a.mint, wallet: w.address })}
                       >
                         <span className="cell-top">
-                          {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.error ? <VerdictBadge verdict="unknown" /> : <span className="muted small">…</span>}
+                          {snapshot ? <VerdictBadge verdict={snapshot.verdict} /> : query?.isFetching && !query.error ? <span className="muted small">{t('state.loading')}</span> : <VerdictBadge verdict="unknown" />}
                           <span className="muted small">
-                            {amount !== undefined ? `${formatAmount(locale, amount, a.decimals)} ${a.symbol}` : ''}
+                            {amount !== undefined ? `${formatAmount(locale, amount, a.decimals)} ${a.symbol}` : holding ? t('ux.balanceUnavailable') : ''}
                           </span>
                         </span>
                         <span className="small muted">
@@ -77,7 +92,7 @@ function Matrix() {
             ))}
           </tbody>
         </table>
-      </div>
+      </MatrixScrollRegion>
       {selectedSnapshot && <SnapshotDetail snapshot={selectedSnapshot} onClose={() => setSelected(null)} />}
     </>
   )
@@ -88,23 +103,33 @@ export function AssetsPage() {
   const assets = useAssetsQuery()
   return (
     <div className="stack">
-      <Card title={t('assets.policies')} aside={<span className="muted small">{t('assets.policiesHint')}</span>}>
-        {assets.isLoading && <LoadingState />}
-        {assets.error && <ErrorState error={assets.error} onRetry={() => void assets.refetch()} />}
-        {assets.data && (
-          <div className="policy-grid">
-            {assets.data.assets.map((state) => (
-              <PolicyCard key={state.asset.mint} state={state} />
-            ))}
-          </div>
-        )}
-      </Card>
-      <Card title={t('assets.proofs')} aside={<span className="muted small">{t('assets.proofsHint')}</span>}>
-        <ProofsTable />
-      </Card>
       <Card title={t('assets.matrix')} aside={<span className="muted small">{t('assets.matrixHint')}</span>}>
+        <p className="section-kicker">{t('ux.inspectFirst')}</p>
         <Matrix />
+        <div className="decision-actions">
+          <Link className="section-link" to="/transferencia">{t('ux.continueTransfer')} <span aria-hidden="true">→</span></Link>
+          <Link className="section-link" to="/incidentes">{t('ux.continueIncidents')}</Link>
+        </div>
       </Card>
+      <details className="technical-details">
+        <summary>{t('ux.configureDetails')}</summary>
+        <div className="stack">
+          <Card title={t('assets.policies')} aside={<span className="muted small">{t('assets.policiesHint')}</span>}>
+            {assets.isLoading && <LoadingState />}
+            {assets.error && <ErrorState error={assets.error} onRetry={() => void assets.refetch()} />}
+            {assets.data && !assets.error && (
+              <div className="policy-grid">
+                {assets.data.assets.map((state) => (
+                  <PolicyCard key={state.asset.mint} state={state} />
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card title={t('assets.proofs')} aside={<span className="muted small">{t('assets.proofsHint')}</span>}>
+            <ProofsTable />
+          </Card>
+        </div>
+      </details>
     </div>
   )
 }

@@ -3,22 +3,37 @@ import { useDesk } from '../../app/desk'
 import { Address } from '../../components/Address'
 import { formatAmount, formatSlot } from '../../components/format'
 import { ReasonList } from '../../components/reasons'
-import { Badge, VerdictBadge } from '../../components/ui'
+import { Badge, Spinner, VerdictBadge } from '../../components/ui'
 import { useI18n } from '../../i18n/context'
 
 const TONE = { confirmed: 'ok', failed: 'bad', unknown: 'unknown' } as const
 
-/** Evidência da operação: status da assinatura, readback das partes e logs. Sem link inventado. */
-export function EvidenceView({ evidence, decimals = 0, labelOf }: { evidence: DeskEvidence; decimals?: number; labelOf: (address: string) => string }) {
+/** Transaction status, readback and logs, with optional read-only confirmation recheck. */
+export function EvidenceView({ evidence, decimals = 0, labelOf, onRecheck, rechecking = false, contextMatches = true, persistenceWarning = false }: {
+  evidence: DeskEvidence
+  decimals?: number
+  labelOf: (address: string) => string
+  onRecheck?: () => void
+  rechecking?: boolean
+  contextMatches?: boolean
+  persistenceWarning?: boolean
+}) {
   const { t, locale } = useI18n()
   const desk = useDesk()
-  const explorer = evidence.signature ? desk.explorerUrl(evidence.signature) : null
+  const explorer = evidence.signature && contextMatches ? desk.explorerUrl(evidence.signature) : null
   return (
-    <div className="box">
-      <div className="actions" style={{ marginTop: 0 }}>
-        <Badge tone={TONE[evidence.status]}>{t(`evidence.${evidence.status}`)}</Badge>
+    <div className="box decision-panel">
+      <div className="actions evidence-summary" role="status">
+        <Badge tone={contextMatches ? TONE[evidence.status] : 'unknown'}>{t(`evidence.${contextMatches ? evidence.status : 'unknown'}`)}</Badge>
         {evidence.slot !== undefined && <span className="small muted">{t('evidence.slot', { slot: formatSlot(locale, evidence.slot) })}</span>}
       </div>
+      <p className="small muted quiet-note">{t('ux.confirmationNote')}</p>
+      {!contextMatches && (
+        <>
+          <p className="small warn-text" role="alert">{t('evidence.contextChanged')}</p>
+          <p className="small muted quiet-note">{t('ux.retainedEvidence')}: {t(`evidence.${evidence.status}`)}</p>
+        </>
+      )}
       {evidence.signature && (
         <p className="small">
           {t('evidence.signature')}: <Address value={evidence.signature} short />{' '}
@@ -27,11 +42,22 @@ export function EvidenceView({ evidence, decimals = 0, labelOf }: { evidence: De
               {t('evidence.explorer')}
             </a>
           ) : (
-            <span className="muted">({t('evidence.noExplorer')})</span>
+            contextMatches && <span className="muted">({t('evidence.noExplorer')})</span>
           )}
         </p>
       )}
       {evidence.error && <ReasonList reasons={[evidence.error]} showDetail />}
+      {persistenceWarning && <p className="warn-text" role="alert">{t('receipts.storage-unavailable')}</p>}
+      {evidence.status === 'unknown' && evidence.signature && onRecheck && (
+        <div>
+          <div className="actions">
+            <button type="button" onClick={onRecheck} disabled={rechecking || !contextMatches}>
+              {rechecking && <Spinner />} {t(rechecking ? 'evidence.rechecking' : 'evidence.recheck')}
+            </button>
+          </div>
+          <p className="small muted" role="status">{t('evidence.recheckNote')}</p>
+        </div>
+      )}
       {evidence.balances && evidence.balances.length > 0 && (
         <>
           <h3>{t('evidence.balances')}</h3>
@@ -62,8 +88,11 @@ export function EvidenceView({ evidence, decimals = 0, labelOf }: { evidence: De
             {evidence.readback.map((snapshot) => (
               <li key={`${snapshot.mint}-${snapshot.wallet}`}>
                 <span>
-                  <VerdictBadge verdict={snapshot.verdict} /> {labelOf(snapshot.wallet)} · {labelOf(snapshot.mint)}
+                  <VerdictBadge verdict={contextMatches ? snapshot.verdict : 'unknown'} /> {labelOf(snapshot.wallet)} · {labelOf(snapshot.mint)}
                 </span>
+                {!contextMatches && <span className="small muted">
+                  {t('ux.retainedReadback', { verdict: t(`verdict.${snapshot.verdict}`) })}
+                </span>}
                 <ReasonList reasons={snapshot.reasons.filter((r) => !r.hint)} />
               </li>
             ))}
@@ -71,7 +100,7 @@ export function EvidenceView({ evidence, decimals = 0, labelOf }: { evidence: De
         </>
       )}
       {evidence.logs.length > 0 && (
-        <details>
+        <details className="technical-details">
           <summary>{t('evidence.logs')}</summary>
           <pre className="logs">{evidence.logs.join('\n')}</pre>
         </details>

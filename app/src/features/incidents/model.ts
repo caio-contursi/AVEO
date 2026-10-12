@@ -4,7 +4,7 @@ import type { Incident, IncidentType } from '@aveo/contracts'
 import type { DeskEvidence } from '../../api/backend'
 import type { DeskSnapshot, DiagnosticReason, ReasonCode } from '../../api/diagnostics'
 
-export type EventKind = 'detected' | 'prepared' | 'signed' | 'sendFailed' | 'resolved' | 'stillBlocked' | 'unknown'
+export type EventKind = 'detected' | 'prepared' | 'signed' | 'sendFailed' | 'resolved' | 'stillBlocked' | 'unknown' | 'submissionUnknown' | 'rechecked'
 
 export interface IncidentEvent {
   at: string
@@ -145,11 +145,18 @@ export function applyScan(data: IncidentStoreData, snapshots: DeskSnapshot[], sl
 }
 
 export function markPrepared(incident: DeskIncident, plans: number, now: string): DeskIncident {
-  if (incident.state === 'resolved') return incident
+  if (incident.state === 'resolved' || incident.state === 'awaiting-confirmation' ||
+    incident.evidence.some((item) => item.status === 'unknown')) return incident
   return { ...incident, state: 'action-prepared', events: [...incident.events, { at: now, kind: 'prepared', params: { n: String(plans) } }] }
 }
 
-export type SendOutcome = { evidence: DeskEvidence } | { error: DiagnosticReason }
+export type SendOutcome = { evidence: DeskEvidence } | { error: DiagnosticReason; sendBlocked?: boolean }
+
+export function isAmbiguousSend(outcome: SendOutcome): boolean {
+  return 'error' in outcome
+    ? outcome.sendBlocked === true || outcome.error.code === 'ConfirmationUnknown'
+    : outcome.evidence.status === 'unknown'
+}
 
 /**
  * Registra os envios do novo vínculo. Recusa ou erro devolve ao estado aberto.
@@ -161,6 +168,14 @@ export function applySends(incident: DeskIncident, outcomes: SendOutcome[], now:
   let sent = false
   for (const outcome of outcomes) {
     if ('error' in outcome) {
+      if (isAmbiguousSend(outcome)) {
+        evidence.push({ status: 'unknown', logs: [], error: {
+          code: 'ConfirmationUnknown', message: 'Submission outcome is unknown',
+        } })
+        events.push({ at: now, kind: 'submissionUnknown' })
+        sent = true
+        continue
+      }
       events.push({ at: now, kind: 'sendFailed', params: { code: outcome.error.code } })
       continue
     }
@@ -170,15 +185,25 @@ export function applySends(incident: DeskIncident, outcomes: SendOutcome[], now:
       events.push({ at: now, kind: 'sendFailed', params: { code: outcome.evidence.error?.code ?? 'SimulationFailed' } })
       continue
     }
-    events.push({ at: now, kind: 'signed', params: { signature } })
-    if (outcome.evidence.status === 'unknown') events.push({ at: now, kind: 'unknown' })
+    const previous = incident.evidence.find((item) => signature !== '' && item.signature === signature)
+    if (signature && !previous) events.push({ at: now, kind: 'signed', params: { signature } })
+    if (outcome.evidence.status === 'unknown' && previous?.status !== 'unknown') {
+      events.push({ at: now, kind: signature ? 'unknown' : 'submissionUnknown' })
+    }
     sent = true
   }
+  const nextEvidence = [...incident.evidence.filter((previous) =>
+    !previous.signature || !evidence.some((next) => next.signature === previous.signature)), ...evidence]
+  const signaturelessUnknown = nextEvidence.some((item) => item.status === 'unknown' && !item.signature)
   return {
     ...incident,
-    state: sent ? 'awaiting-confirmation' : 'open',
+    state: signaturelessUnknown ? 'awaiting-confirmation' : incident.state === 'resolved' ? 'resolved'
+      : sent || nextEvidence.some((item) => item.status === 'unknown') ? 'awaiting-confirmation' : 'open',
+    ...(signaturelessUnknown ? { resolvedSlot: undefined } : {}),
     events: [...incident.events, ...events],
-    evidence: [...incident.evidence, ...evidence],
+    // Replace provisional same-signature evidence with its later verification.
+    // Unrelated submissions and readbacks remain available.
+    evidence: nextEvidence,
   }
 }
 
@@ -187,9 +212,32 @@ export function applySends(incident: DeskIncident, outcomes: SendOutcome[], now:
  * Leitura desconhecida nunca resolve nem reabre: o operador consulta de novo.
  */
 export function applyVerification(incident: DeskIncident, snapshots: DeskSnapshot[], now: string): DeskIncident {
+  // Eligibility cannot identify or settle a submission with no recoverable signature.
+  if (incident.evidence.some((item) => item.status === 'unknown' && !item.signature)) {
+    return { ...incident, state: 'awaiting-confirmation', resolvedSlot: undefined,
+      events: [...incident.events, { at: now, kind: 'submissionUnknown' }] }
+  }
   if (incident.state === 'resolved') return incident
   const slot = Math.max(0, ...snapshots.map((s) => s.read.slot))
-  if (snapshots.length === 0 || snapshots.some((s) => s.verdict === 'unknown')) {
+  const first = snapshots[0]
+  const minimumSlot = Math.max(incident.detectedSlot, ...incident.evidence.map((evidence) => evidence.slot ?? 0))
+  // A partial, stale or unrelated readback cannot close the affected assets.
+  const completeReadback =
+    first !== undefined &&
+    incident.affectedMints.length > 0 &&
+    snapshots.length === incident.affectedMints.length &&
+    new Set(snapshots.map((snapshot) => snapshot.mint)).size === incident.affectedMints.length &&
+    snapshots.every(
+      (snapshot) =>
+        snapshot.wallet === incident.wallet &&
+        incident.affectedMints.includes(snapshot.mint) &&
+        snapshot.backend === first.backend &&
+        snapshot.read.cluster === first.read.cluster &&
+        snapshot.read.rpcUrl === first.read.rpcUrl &&
+        snapshot.read.commitment === first.read.commitment &&
+        snapshot.read.slot >= minimumSlot,
+    )
+  if (!completeReadback || snapshots.some((s) => s.verdict === 'unknown')) {
     return { ...incident, events: [...incident.events, { at: now, kind: 'unknown' }] }
   }
   if (snapshots.every((s) => s.verdict === 'eligible')) {

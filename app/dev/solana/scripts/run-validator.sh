@@ -25,9 +25,11 @@ for pair in "sas:$SAS_ID" "token2022:$TOKEN_2022_ID"; do
   fi
 done
 
+# Retain historical transactions throughout the expanded acceptance/recovery cycle.
 exec solana-test-validator \
   --reset \
   --ledger "$DEV_HOME/ledger" \
+  --limit-ledger-size 1000000 \
   --bind-address 0.0.0.0 \
   --rpc-port 8899 \
   --bpf-program "$AVEO_HOOK_ID" "$out/aveo_hook.so" \

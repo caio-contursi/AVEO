@@ -9,6 +9,7 @@ name = "aveo_hook"
 
 [features]
 default = []
+devnet = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

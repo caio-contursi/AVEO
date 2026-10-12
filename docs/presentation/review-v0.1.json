@@ -1,0 +1,30 @@
+{
+  "version": "0.1",
+  "date": "2026-10-10",
+  "scope": "Portuguese working narrative, not final English submission or commercial validation",
+  "checks": {
+    "presentationTests": "4 PASS; dated sources, safe snapshot names, six pages, limitations and source/PDF receipt hashes",
+    "workspace": "pnpm verify PASS: 2163 app/script tests, 41 backend tests, types, lint and frontend build",
+    "pdf": "Chromium generated six PDF page objects; source/PDF SHA-256 hashes recorded in receipt-v0.1.json",
+    "layout": "Six HTML page layouts pass content/footer and horizontal-overflow checks; source previews visually inspected",
+    "networkDuringRendering": "Blocked; no source fetch, wallet request or blockchain transaction"
+  },
+  "failedAttempts": [
+    "Two earlier workspace verification attempts ended with SIGTERM during TypeScript checks; not counted as PASS. The final sequential run passed; signal origin was not established.",
+    "Initial long-document preview captures showed clipping artifacts. Single-page preview isolation was added; visual previews do not substitute for an independent PDF-reader inspection."
+  ],
+  "resolvedObjections": [
+    "Closure/grouping/renewal and later expiry evidence are explicitly separate, not one invented sequence.",
+    "Projection, cumulative issuance and current market size are not conflated or summed.",
+    "Tokenized asset value is not Aveo software revenue or proven addressable market.",
+    "No claimed MPL-3643 integration, legal-compliance guarantee, customer adoption, time savings, independent audit or production readiness."
+  ],
+  "remainingObjections": [
+    "No consenting first-time reader or independent operator has validated the explanation or commercial hypothesis.",
+    "English submission version, timed rehearsal and public demonstration remain pending.",
+    "PDF byte-level/page-count/hash checks and HTML visual previews passed; no separate PDF-viewer rasterization was performed.",
+    "Existing SQLite experimental and Zod/Rollup annotation warnings remain."
+  ],
+  "backlog": ["PITCH-01", "PITCH-02"],
+  "dependencyPolicy": "Uses the previously approved isolated Playwright/Chromium installation; adds no workspace dependency."
+}

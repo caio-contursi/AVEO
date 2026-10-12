@@ -1,5 +1,12 @@
 # Aveo Compliance Desk — Plano de Execução
 
+> Current security/release execution is governed by
+> [the audit-candidate plan](audit-candidate-plan.md). The schedule below is the
+> original hackathon baseline, not evidence that its gates passed. Independent
+> audit and production remain separately gated; current signing authorization is
+> synthetic isolated localnet only. Competition dates below must be checked by
+> the submission owner against the current official rules before relying on them.
+
 **Hackathon:** Colosseum / Superteam BR
 **Prazo oficial:** 12/10/2026, 23h59 PT (= 13/10, 03h59 em São Paulo)
 **Meta interna de envio:** 11/10/2026

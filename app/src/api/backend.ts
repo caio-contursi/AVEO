@@ -15,6 +15,7 @@ import type {
 } from '@aveo/contracts'
 import { address, type Address, type Signature } from '@solana/kit'
 import { readAccount } from './accounts'
+import { throwIfReadAborted, withReadAbort } from './cancellation'
 import { decodeSasAttestation, type PolicyArgs } from './codecs'
 import type { ApiContext } from './context'
 import type { DeskSnapshot, DiagnosticReason } from './diagnostics'
@@ -61,16 +62,22 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
     return AVEO_BACKEND_CAPABILITIES
   }
 
-  inspect(input: InspectInput): Promise<DeskSnapshot> {
-    return inspectEligibility(this.ctx, address(input.mint), address(input.wallet))
+  inspect(input: InspectInput, readAbortSignal?: AbortSignal): Promise<DeskSnapshot> {
+    const ctx = this.readContext(readAbortSignal)
+    return withReadAbort(readAbortSignal, () => inspectEligibility(ctx, address(input.mint), address(input.wallet)))
   }
 
-  private async plan(request: PlanRequest, diagnostics: DeskPlan['diagnostics'], summary: string[]): Promise<DeskPlan> {
+  private readContext(readAbortSignal?: AbortSignal): ApiContext {
+    return readAbortSignal ? { ...this.ctx, readAbortSignal } : this.ctx
+  }
+
+  private async plan(request: PlanRequest, diagnostics: DeskPlan['diagnostics'], summary: string[], ctx = this.ctx): Promise<DeskPlan> {
     const base = { backend: this.id, requiredSigners: [requiredSignerOf(request)], summary, diagnostics, request }
     try {
-      const { simulation, transaction } = await planRequest(this.ctx, request)
+      const { simulation, transaction } = await withReadAbort(ctx.readAbortSignal, () => planRequest(ctx, request))
       return { ...base, transaction, simulation: { ...simulation, error: withDiagnosticParams(simulation.error, base) } }
     } catch (error) {
+      throwIfReadAborted(ctx.readAbortSignal)
       if (error instanceof PlanBlockedError) {
         return { ...base, transaction: '', simulation: { ok: false, logs: [], error: error.reason }, blocked: error.reason }
       }
@@ -78,31 +85,39 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
     }
   }
 
-  async planTransfer(input: TransferInput): Promise<DeskPlan> {
+  async planTransfer(input: TransferInput, readAbortSignal?: AbortSignal): Promise<DeskPlan> {
+    throwIfReadAborted(readAbortSignal)
+    const ctx = this.readContext(readAbortSignal)
     const mint = address(input.mint)
     const sourceOwner = address(input.sourceOwner)
     const destinationOwner = address(input.destinationOwner)
     const asset = this.ctx.deployment.assets.find((a) => a.mint === mint)
-    const [source, destination] = await Promise.all([
-      inspectEligibility(this.ctx, mint, sourceOwner),
-      inspectEligibility(this.ctx, mint, destinationOwner),
-    ])
+    const [source, destination] = await withReadAbort(readAbortSignal, () => Promise.all([
+      inspectEligibility(ctx, mint, sourceOwner),
+      inspectEligibility(ctx, mint, destinationOwner),
+    ]))
+    throwIfReadAborted(readAbortSignal)
     return this.plan(
       { kind: 'transfer', mint, sourceOwner, destinationOwner, amount: input.amount, decimals: asset?.decimals ?? 0 },
       { source, destination },
       [`transfer ${input.amount} of ${mint} from ${sourceOwner} to ${destinationOwner}`],
+      ctx,
     )
   }
 
-  async planRenewBinding(input: RenewBindingInput): Promise<DeskPlan> {
+  async planRenewBinding(input: RenewBindingInput, readAbortSignal?: AbortSignal): Promise<DeskPlan> {
+    throwIfReadAborted(readAbortSignal)
+    const ctx = this.readContext(readAbortSignal)
     const mints = renewalMints(input).map((mint) => address(mint))
     const wallet = address(input.wallet)
     const attestationAddress = address(input.attestation)
-    const { account } = await readAccount(this.ctx, attestationAddress)
+    const { account } = await withReadAbort(readAbortSignal, () => readAccount(ctx, attestationAddress))
+    throwIfReadAborted(readAbortSignal)
     if (!account) throw new PlanBlockedError({ code: 'AttestationMissingOrClosed', message: 'attestation not found' })
     if (mints.length === 0) throw new PlanBlockedError({ code: 'MintMismatch', message: 'no mint to bind' })
     const attestation = decodeSasAttestation(account.data)
-    const snapshots = await Promise.all(mints.map((mint) => inspectEligibility(this.ctx, mint, wallet)))
+    const snapshots = await withReadAbort(readAbortSignal, () => Promise.all(mints.map((mint) => inspectEligibility(ctx, mint, wallet))))
+    throwIfReadAborted(readAbortSignal)
     return this.plan(
       {
         kind: 'set-binding',
@@ -114,16 +129,20 @@ export class AveoSasHookBackend implements EligibilityBackend, RenewBindingCapab
       },
       { source: snapshots[0]!, destination: snapshots[snapshots.length - 1]! },
       mints.map((mint) => `bind ${attestationAddress} to ${wallet} in ${mint}`),
+      ctx,
     )
   }
 
-  async planUpdatePolicy(input: { mint: string; authority: string; args: PolicyArgs }): Promise<DeskPlan> {
+  async planUpdatePolicy(input: { mint: string; authority: string; args: PolicyArgs }, readAbortSignal?: AbortSignal): Promise<DeskPlan> {
+    throwIfReadAborted(readAbortSignal)
+    const ctx = this.readContext(readAbortSignal)
     const mint = address(input.mint)
     const authority = address(input.authority)
-    const snapshot = await inspectEligibility(this.ctx, mint, authority)
+    const snapshot = await withReadAbort(readAbortSignal, () => inspectEligibility(ctx, mint, authority))
+    throwIfReadAborted(readAbortSignal)
     return this.plan({ kind: 'update-policy', mint, authority, args: input.args }, { source: snapshot, destination: snapshot }, [
       `update policy of ${mint}`,
-    ])
+    ], ctx)
   }
 
   /** Verifica com leitura nova: status da assinatura, logs e readback das partes. */

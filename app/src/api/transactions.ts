@@ -4,7 +4,6 @@ import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budge
 import {
   TOKEN_2022_PROGRAM_ADDRESS,
   findAssociatedTokenPda,
-  getTokenDecoder,
   getTransferCheckedInstruction,
   resolveExtraAccountMetasForExecute,
 } from '@solana-program/token-2022'
@@ -29,11 +28,14 @@ import {
   type TransactionSigner,
 } from '@solana/kit'
 import { readAccounts, rpcCall } from './accounts'
+import { throwIfReadAborted, withReadAbort } from './cancellation'
 import type { PolicyArgs } from './codecs'
 import type { ApiContext } from './context'
 import { reason, type DiagnosticReason } from './diagnostics'
 import { failureReason } from './errors'
 import { getSetBindingInstruction, getUpdatePolicyInstruction } from './instructions'
+import { decodeTokenBalance } from './token-balance'
+import { messageFingerprint } from './submission-proof'
 
 /** Limite usado só na simulação; a transação real usa o consumo medido com folga. */
 const SIMULATION_CU_LIMIT = 1_400_000
@@ -92,6 +94,14 @@ export class PlanBlockedError extends Error {
   }
 }
 
+/** A sending wallet or RPC may have broadcast even when its response is lost. */
+export class SubmissionUnknownError extends Error {
+  constructor(cause: unknown, readonly signature?: Signature) {
+    super('Transaction submission is unknown; do not resend.', { cause })
+    this.name = 'SubmissionUnknownError'
+  }
+}
+
 export async function tokenAccountsFor(mint: Address, owners: Address[]): Promise<Address[]> {
   return Promise.all(
     owners.map(async (owner) => (await findAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS }))[0]),
@@ -100,6 +110,7 @@ export async function tokenAccountsFor(mint: Address, owners: Address[]): Promis
 
 /** Monta as instruções de um pedido. `signer` é a carteira real ou um NoopSigner (para simular). */
 export async function buildInstructions(ctx: ApiContext, request: PlanRequest, signer: TransactionSigner): Promise<Instruction[]> {
+  throwIfReadAborted(ctx.readAbortSignal)
   switch (request.kind) {
     case 'set-binding':
       return Promise.all(
@@ -133,9 +144,18 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
       })
       let extra
       try {
+        // The Token-2022 resolver has no signal parameter; adapt only its one read method.
+        const rpc: Pick<ApiContext['rpc'], 'getAccountInfo'> = ctx.readAbortSignal ? {
+          // Preserve SDK overloads: arguments, response and reactive store pass through unchanged.
+          getAccountInfo: ((...args: Parameters<ApiContext['rpc']['getAccountInfo']>) => {
+            const [account, config] = args
+            const pending = ctx.rpc.getAccountInfo(account, config)
+            return { ...pending, send: (options?: Parameters<typeof pending.send>[0]) => withReadAbort(ctx.readAbortSignal, () => pending.send({ ...options, abortSignal: ctx.readAbortSignal })) }
+          }) as ApiContext['rpc']['getAccountInfo'],
+        } : ctx.rpc
         // Resolução oficial a partir da ExtraAccountMetaList do mint (owner → binding → contas SAS).
         extra = await resolveExtraAccountMetasForExecute({
-          rpc: ctx.rpc,
+          rpc,
           transferHookProgramAddress: ctx.programId,
           source: source!,
           mint: request.mint,
@@ -144,6 +164,7 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
           amount: request.amount,
         })
       } catch (error) {
+        throwIfReadAborted(ctx.readAbortSignal)
         throw new PlanBlockedError(
           reason('MissingExtraAccounts', error instanceof Error ? error.message : String(error), { params: { stage: 'resolve' } }),
         )
@@ -157,7 +178,9 @@ export async function buildInstructions(ctx: ApiContext, request: PlanRequest, s
 }
 
 async function latestBlockhash(ctx: ApiContext) {
-  return rpcCall(async () => (await ctx.rpc.getLatestBlockhash({ commitment: ctx.commitment }).send()).value)
+  return withReadAbort(ctx.readAbortSignal, () => rpcCall(async () => (await ctx.rpc.getLatestBlockhash({ commitment: ctx.commitment }).send(
+    ctx.readAbortSignal ? { abortSignal: ctx.readAbortSignal } : undefined,
+  )).value))
 }
 
 /** Simula sem assinatura (sigVerify desligado) e devolve logs, consumo e o erro já traduzido. */
@@ -170,11 +193,11 @@ export async function simulate(ctx: ApiContext, instructions: Instruction[], fee
     (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units: SIMULATION_CU_LIMIT }), ...instructions], m),
   )
   const wire = getBase64EncodedWireTransaction(compileTransaction(message))
-  const { value } = await rpcCall(() =>
+  const { value } = await withReadAbort(ctx.readAbortSignal, () => rpcCall(() =>
     ctx.rpc
       .simulateTransaction(wire, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: ctx.commitment })
-      .send(),
-  )
+      .send(ctx.readAbortSignal ? { abortSignal: ctx.readAbortSignal } : undefined),
+  ))
   const logs = [...(value.logs ?? [])]
   const unitsConsumed = value.unitsConsumed !== undefined && value.unitsConsumed !== null ? Number(value.unitsConsumed) : undefined
   if (value.err) return { ok: false, logs, unitsConsumed, error: failureReason(value.err, logs, ctx.programId) }
@@ -194,9 +217,12 @@ export async function unsignedTransaction(ctx: ApiContext, instructions: Instruc
 }
 
 export async function planRequest(ctx: ApiContext, request: PlanRequest) {
+  throwIfReadAborted(ctx.readAbortSignal)
   const feePayer = requiredSignerOf(request)
   const instructions = await buildInstructions(ctx, request, createNoopSigner(feePayer))
+  throwIfReadAborted(ctx.readAbortSignal)
   const simulation = await simulate(ctx, instructions, feePayer)
+  throwIfReadAborted(ctx.readAbortSignal)
   const transaction = await unsignedTransaction(ctx, instructions, feePayer)
   return { instructions, simulation, transaction }
 }
@@ -204,12 +230,16 @@ export async function planRequest(ctx: ApiContext, request: PlanRequest) {
 /**
  * Monta de novo com a carteira real e um blockhash novo, assina e envia.
  * Carteiras Wallet Standard assinam e enviam; carteiras sintéticas (localnet) só assinam e o Desk envia.
+ * onSent journals the intended submission as soon as its signature is known; it is not proof of broadcast.
  */
 export async function signAndSend(
   ctx: ApiContext,
   request: PlanRequest,
   signer: TransactionSigner,
   unitsConsumed?: number,
+  onSent?: (signature: Signature) => void,
+  beforeWallet?: (messageFingerprint: string) => Promise<void>,
+  persistSignature?: (signature: Signature) => Promise<void>,
 ): Promise<Signature> {
   if (signer.address !== requiredSignerOf(request)) throw new Error('connected wallet is not the required signer')
   const instructions = await buildInstructions(ctx, request, signer)
@@ -221,14 +251,38 @@ export async function signAndSend(
     (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
     (m) => appendTransactionMessageInstructions([getSetComputeUnitLimitInstruction({ units }), ...instructions], m),
   )
-  if (isTransactionSendingSigner(signer)) {
-    const bytes = await signAndSendTransactionMessageWithSigners(message)
-    return getBase58Decoder().decode(bytes) as Signature
+  const notify = (signature: Signature) => {
+    try { onSent?.(signature) } catch { /* Receipt callbacks must not interrupt submission. */ }
   }
+  if (isTransactionSendingSigner(signer)) {
+    // Persist and validate the operation before a wallet can broadcast it.
+    if (beforeWallet) await beforeWallet(await messageFingerprint(compileTransaction(message).messageBytes))
+    let signature: Signature | undefined
+    try {
+      const bytes = await signAndSendTransactionMessageWithSigners(message)
+      signature = getBase58Decoder().decode(bytes) as Signature
+      notify(signature)
+      if (persistSignature) await persistSignature(signature)
+      return signature
+    } catch (error) {
+      // Wallet error messages cannot establish that no broadcast occurred.
+      throw new SubmissionUnknownError(error, signature)
+    }
+  }
+  if (beforeWallet) await beforeWallet(await messageFingerprint(compileTransaction(message).messageBytes))
   const signed = await signTransactionMessageWithSigners(message)
-  const wire = getBase64EncodedWireTransaction(signed)
-  await rpcCall(() => ctx.rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: ctx.commitment }).send())
-  return getSignatureFromTransaction(signed)
+  let signature: Signature | undefined
+  try {
+    signature = getSignatureFromTransaction(signed)
+    notify(signature)
+    // Unlike optional receipt callbacks, the safety journal must finish before RPC broadcast.
+    if (persistSignature) await persistSignature(signature)
+    const wire = getBase64EncodedWireTransaction(signed)
+    await rpcCall(() => ctx.rpc.sendTransaction(wire, { encoding: 'base64', preflightCommitment: ctx.commitment }).send())
+    return signature
+  } catch (error) {
+    throw new SubmissionUnknownError(error, signature)
+  }
 }
 
 export type ConfirmationStatus = 'confirmed' | 'failed' | 'unknown'
@@ -240,52 +294,76 @@ export interface Confirmation {
   error?: DiagnosticReason
 }
 
-/** Consulta a assinatura até confirmar ou esgotar o tempo. Resultado desconhecido não autoriza reenvio. */
+/** Poll until the selected commitment or deadline. An unknown result never authorizes resubmission. */
 export async function confirmSignature(ctx: ApiContext, signature: Signature, timeoutMs = 45_000): Promise<Confirmation> {
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  const timedOut = Symbol('confirmation deadline')
+  // Bound every RPC await, including logs, even if the transport never settles.
+  async function withinDeadline<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T | typeof timedOut> {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        request(controller.signal),
+        new Promise<typeof timedOut>((resolve) => {
+          timer = setTimeout(() => {
+            // Settle the timeout first so an abort rejection cannot win the race.
+            resolve(timedOut)
+            controller.abort()
+          }, Math.max(0, deadline - Date.now()))
+        }),
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  while (Date.now() < deadline) {
     let status
     try {
-      const { value } = await ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()
-      status = value[0]
+      const response = await withinDeadline((signal) =>
+        ctx.rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send({ abortSignal: signal }),
+      )
+      if (response === timedOut) break
+      status = response.value[0]
     } catch {
       status = undefined
     }
-    if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized' || status.err)) {
-      const logs = await transactionLogs(ctx, signature)
+    const reachedCommitment = status && (
+      status.confirmationStatus === 'finalized' ||
+      (ctx.commitment !== 'finalized' && status.confirmationStatus === 'confirmed') ||
+      (ctx.commitment === 'processed' && status.confirmationStatus === 'processed' && !status.err)
+    )
+    // A processed error can disappear with its fork; require at least confirmed failure evidence.
+    if (status && reachedCommitment) {
+      const logs = await withinDeadline((signal) => transactionLogs(ctx, signature, signal))
+      if (logs === timedOut) break
       if (status.err) return { status: 'failed', slot: Number(status.slot), logs, error: failureReason(status.err, logs, ctx.programId) }
       return { status: 'confirmed', slot: Number(status.slot), logs }
     }
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    const remaining = deadline - Date.now()
+    if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(1200, remaining)))
   }
   return { status: 'unknown', logs: [], error: reason('ConfirmationUnknown', 'confirmation timed out') }
 }
 
-async function transactionLogs(ctx: ApiContext, signature: Signature): Promise<string[]> {
+async function transactionLogs(ctx: ApiContext, signature: Signature, signal?: AbortSignal): Promise<string[]> {
   try {
     const tx = await ctx.rpc
-      .getTransaction(signature, { encoding: 'json', maxSupportedTransactionVersion: 0, commitment: 'confirmed' })
-      .send()
+      .getTransaction(signature, { encoding: 'json', maxSupportedTransactionVersion: 0, commitment: ctx.commitment === 'finalized' ? 'finalized' : 'confirmed' })
+      .send({ abortSignal: signal })
     return [...(tx?.meta?.logMessages ?? [])]
   } catch {
     return []
   }
 }
 
-/** Saldos das token accounts (readback). Conta inexistente vale 0. */
+/** Read back observed ATA balances; absent accounts are zero, invalid accounts reject the read. */
 export async function tokenBalances(ctx: ApiContext, mint: Address, owners: Address[]): Promise<{ slot: number; balances: bigint[] }> {
   const accounts = await tokenAccountsFor(mint, owners)
   const { slot, accounts: raw } = await readAccounts(ctx, accounts)
-  const decoder = getTokenDecoder()
   return {
     slot,
-    balances: raw.map((account) => {
-      if (!account) return 0n
-      try {
-        return decoder.decode(account.data).amount
-      } catch {
-        return 0n
-      }
-    }),
+    balances: raw.map((account, i) => decodeTokenBalance(account, { address: accounts[i]!, mint, owner: owners[i]! })),
   }
 }

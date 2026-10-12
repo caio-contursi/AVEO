@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "cluster": "devnet",
+  "generatedAt": "2026-10-12T16:31:53.269Z",
+  "programs": {
+    "aveoHook": "28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS",
+    "sas": "22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG",
+    "token2022": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  },
+  "proofDomain": "4470c3dc95832e7cfb5cbcc33727dda1feb5a4ca8a11aa1370f472171ee13851",
+  "issuer": "GYTZDJNGepegTctByWUNMhr2cvopwNzASbD5TnksaTFP",
+  "verifiers": [
+    {
+      "id": "A",
+      "label": "Verifier A",
+      "authority": "FK3M71uiopS637dskMVvZB88wTNYEgNL3Z7RRTfbb2uP",
+      "credential": "E3h7YFEhUivZuA3WrGn7Jwx5dqY9yC6K8YRKUwKAzvCA",
+      "schema": "CXqjLRTVDN1HJJukZZ6d8zAhTmBwjA6iGAjgUAEzwujy"
+    },
+    {
+      "id": "B",
+      "label": "Verifier B",
+      "authority": "DHogPqwMamD1aqNfiBuV9PQwjerUnbVK5GU3BiZSNSdu",
+      "credential": "Ht8EDNpX88MFTNKHQVnpx1Ftc1WbmWEKVVtsF26zn6C4",
+      "schema": "5fhQDdoYiQd8CAXenShXs3geZA6TLSSwxFj5j3LRrbiR"
+    }
+  ],
+  "assets": [
+    {
+      "id": "alfa",
+      "label": "Asset Alfa",
+      "symbol": "ALFA",
+      "mint": "DwHWPdSqUNH29pyJkoy6C3qp5iLEHnLUC1atWno251ah",
+      "decimals": 0
+    },
+    {
+      "id": "beta",
+      "label": "Asset Beta",
+      "symbol": "BETA",
+      "mint": "6hJ7SmzFxtPmUCBf1mA9r37g9x5hx9WvFrBjLrzLqmNt",
+      "decimals": 0
+    }
+  ],
+  "wallets": [
+    {
+      "id": "treasury",
+      "label": "Treasury",
+      "address": "8Nw1CwEzFARRPyCUANrV9Z3Aizo3tFuwhvuiXcV3K5nz",
+      "role": "treasury"
+    },
+    {
+      "id": "X",
+      "label": "Wallet X",
+      "address": "GjHpT3vLKabBibzTox8esCE4WCZ8GG3gt9XS87SWMke8",
+      "role": "investor"
+    },
+    {
+      "id": "Y",
+      "label": "Wallet Y",
+      "address": "BKJF2g2Trb2zTfkNhhiP3PQi5AMiyji3Suo9c6emRPm7",
+      "role": "investor"
+    },
+    {
+      "id": "Z",
+      "label": "Wallet Z",
+      "address": "489z72Sjoi2VcFQNS7ZDUWbYJSpCSrMVfzYUbUsYQY8y",
+      "role": "investor"
+    }
+  ]
+}

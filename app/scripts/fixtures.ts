@@ -38,7 +38,9 @@ import { encodeEligibilityPayload } from '../src/api/codecs'
 import { AVEO_ELIGIBILITY_V2_LAYOUT, AVEO_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
 import { createApiContext } from '../src/api/context'
 import { getInitExtraMetasInstruction, getInitPolicyInstruction, getSetBindingInstruction } from '../src/api/instructions'
-import { buildInstructions, tokenAccountsFor } from '../src/api/transactions'
+import { buildInstructions, confirmSignature, tokenAccountsFor } from '../src/api/transactions'
+import { readAccounts } from '../src/api/accounts'
+import { requireMissingSourceFixtureAccounting } from './missing-binding-checks'
 import { bytesToHex, type Deployment } from '../src/config/deployment'
 import {
   DEPLOYMENT_FILE,
@@ -50,6 +52,7 @@ import {
   rpc,
   rpcSubscriptions,
   send,
+  verifyLocalValidator,
   writeJson,
   type DevWalletRecord,
 } from './lib'
@@ -75,6 +78,7 @@ async function requirePrograms() {
 
 async function main() {
   const xTtl = argNumber('--x-ttl', 20 * 60)
+  await verifyLocalValidator()
   await requirePrograms()
   log('Programas encontrados', RPC_URL)
 
@@ -92,6 +96,8 @@ async function main() {
   const walletX = await make('X', 'Carteira X', 'investor')
   const walletY = await make('Y', 'Carteira Y', 'investor')
   const walletZ = await make('Z', 'Carteira Z', 'investor')
+  // SEC-09: private synthetic signer, deliberately excluded from proofs and bindings.
+  const missingSource = await make('missing-binding-source', 'SEC-09 unbound source', 'investor')
   writeJson(WALLETS_FILE, { warning: 'Chaves sintéticas de localnet. Nunca use com fundos reais.', wallets: wallets.map((w) => w.record) })
 
   const airdrop = airdropFactory({ rpc, rpcSubscriptions })
@@ -196,22 +202,48 @@ async function main() {
     log(`Mint ${p.symbol}`, `${mint.address}`)
   }
 
+  const deployment: Deployment = {
+    version: 1,
+    cluster: 'localnet',
+    generatedAt: new Date().toISOString(),
+    programs: { aveoHook: AVEO_HOOK_PROGRAM_ID, sas: SAS_PROGRAM_ID, token2022: TOKEN_2022_PROGRAM_ID },
+    proofDomain: bytesToHex(proofDomain),
+    issuer: issuer.address,
+    verifiers: verifiers.map(({ id, label, authority, credential, schema }) => ({ id, label, authority, credential, schema })),
+    assets,
+    wallets: [
+      { id: 'treasury', label: 'Tesouraria', address: treasury.address, role: 'treasury' },
+      { id: 'X', label: 'Carteira X', address: walletX.address, role: 'investor' },
+      { id: 'Y', label: 'Carteira Y', address: walletY.address, role: 'investor' },
+      { id: 'Z', label: 'Carteira Z', address: walletZ.address, role: 'investor' },
+    ],
+  }
+  const ctx = createApiContext({ cluster: 'localnet', rpcUrl: RPC_URL, commitment: 'confirmed', programId: AVEO_HOOK_PROGRAM_ID, deployment })
+
   // Contas de token, emissão na tesouraria e remoção da mint authority (spec 6.6)
   const holders = [treasury, walletX, walletY, walletZ]
   for (const asset of assets) {
-    const atas = await tokenAccountsFor(asset.mint, holders.map((h) => h.address))
+    const tokenOwners = [...holders, missingSource]
+    const atas = await tokenAccountsFor(asset.mint, tokenOwners.map((h) => h.address))
     await send(
       issuer,
-      holders.map((holder, i) =>
+      tokenOwners.map((holder, i) =>
         getCreateAssociatedTokenIdempotentInstruction({ payer: issuer, ata: atas[i]!, owner: holder.address, mint: asset.mint, tokenProgram: TOKEN_2022_PROGRAM_ADDRESS }),
       ),
     )
-    await send(issuer, [
+    const issuance = await send(issuer, [
       getMintToCheckedInstruction({ mint: asset.mint, token: atas[0]!, mintAuthority: issuer, amount: 1000n, decimals: 0 }),
+      // Total supply is 1001; existing holders still receive exactly the original 1000.
+      getMintToCheckedInstruction({ mint: asset.mint, token: atas[holders.length]!, mintAuthority: issuer, amount: 1n, decimals: 0 }),
       getSetAuthorityInstruction({ owned: asset.mint, owner: issuer, authorityType: AuthorityType.MintTokens, newAuthority: null }),
     ])
+    const confirmed = await confirmSignature(ctx, issuance)
+    if (confirmed.status !== 'confirmed' || confirmed.slot === undefined) throw new Error('Fixture issuance/revocation must confirm before accounting')
+    const observed = await readAccounts(ctx, [asset.mint, ...atas], confirmed.slot)
+    requireMissingSourceFixtureAccounting(asset, observed.accounts, tokenOwners.map((h) => h.address), atas)
+    log('Verified fixture accounting', `${asset.symbol}: supply 1001, revoked mint authority, balances 1000/0/0/0/1 at slot ${observed.slot}`)
   }
-  log('Contas de token criadas, 1000 de cada ativo na tesouraria, mint authority removida')
+  log('Token accounts funded', '1000 per treasury + 1 per SEC-09 source; supply 1001 per mint; mint authority revoked')
 
   // Bindings: cada carteira assina o vínculo da própria prova em cada ativo.
   // O set_binding aceita a prova mesmo quando a policy recusa o par ou um fato;
@@ -232,7 +264,7 @@ async function main() {
       ])
       return 'ok'
     } catch (error) {
-      return describeFailure(error, AVEO_HOOK_PROGRAM_ID)
+      throw new Error(`Fixture binding failed: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
     }
   }
   for (const asset of assets) {
@@ -242,26 +274,9 @@ async function main() {
     }
   }
 
-  const deployment: Deployment = {
-    version: 1,
-    cluster: 'localnet',
-    generatedAt: new Date().toISOString(),
-    programs: { aveoHook: AVEO_HOOK_PROGRAM_ID, sas: SAS_PROGRAM_ID, token2022: TOKEN_2022_PROGRAM_ID },
-    proofDomain: bytesToHex(proofDomain),
-    issuer: issuer.address,
-    verifiers: verifiers.map(({ id, label, authority, credential, schema }) => ({ id, label, authority, credential, schema })),
-    assets,
-    wallets: [
-      { id: 'treasury', label: 'Tesouraria', address: treasury.address, role: 'treasury' },
-      { id: 'X', label: 'Carteira X', address: walletX.address, role: 'investor' },
-      { id: 'Y', label: 'Carteira Y', address: walletY.address, role: 'investor' },
-      { id: 'Z', label: 'Carteira Z', address: walletZ.address, role: 'investor' },
-    ],
-  }
   writeJson(DEPLOYMENT_FILE, deployment)
 
   // Transferências iniciais pela tesouraria: passam pelo hook de verdade
-  const ctx = createApiContext({ cluster: 'localnet', rpcUrl: RPC_URL, commitment: 'confirmed', programId: AVEO_HOOK_PROGRAM_ID, deployment })
   const transfers = [
     { asset: assets[0]!, to: walletX, amount: 50n },
     { asset: assets[1]!, to: walletX, amount: 20n },
@@ -274,7 +289,7 @@ async function main() {
       await send(treasury, await buildInstructions(ctx, request, treasury), 1_000_000)
       log(`Transferência ${t.amount} ${t.asset.symbol}`, `tesouraria → ${t.to.address}: ok (hook aprovou)`)
     } catch (error) {
-      log(`Transferência ${t.amount} ${t.asset.symbol}`, `FALHOU: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
+      throw new Error(`Fixture transfer failed: ${describeFailure(error, AVEO_HOOK_PROGRAM_ID)}`)
     }
   }
 

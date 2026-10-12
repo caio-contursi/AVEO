@@ -10,6 +10,8 @@ export interface ApiContext {
   commitment: Commitment
   programId: Address
   deployment: Deployment
+  /** Set only on cloned contexts for cancellable read-only planning. */
+  readAbortSignal?: AbortSignal
 }
 
 export function createApiContext(options: {

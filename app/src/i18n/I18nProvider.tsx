@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { I18nContext, type I18nValue } from './context'
 import { messages, type Language, type MessageKey } from './messages'
 
@@ -9,7 +9,7 @@ function initialLanguage(): Language {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'pt' || stored === 'en') return stored
   } catch {
-    // localStorage indisponível: segue o navegador
+    // Fall back to the browser language when localStorage is unavailable.
   }
   return navigator.language.toLowerCase().startsWith('pt') ? 'pt' : 'en'
 }
@@ -17,14 +17,17 @@ function initialLanguage(): Language {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(initialLanguage)
 
+  useEffect(() => {
+    document.documentElement.lang = language === 'pt' ? 'pt-BR' : 'en'
+  }, [language])
+
   const setLanguage = useCallback((next: Language) => {
     setLanguageState(next)
     try {
       localStorage.setItem(STORAGE_KEY, next)
     } catch {
-      // preferência não persistida
+      // Keep the selected language even when the preference cannot be persisted.
     }
-    document.documentElement.lang = next === 'pt' ? 'pt-BR' : 'en'
   }, [])
 
   const value = useMemo<I18nValue>(() => {

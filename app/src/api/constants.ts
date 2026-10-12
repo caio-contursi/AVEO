@@ -4,6 +4,8 @@ import { address, type Address } from '@solana/kit'
 
 /** declare_id! do aveo-hook. Pode ser trocado por VITE_AVEO_PROGRAM_ID se o time publicar em outro endereço. */
 export const AVEO_HOOK_PROGRAM_ID: Address = address('ExAoxPmugpGbYTVB31oDTqkkG12PM6neFq4vhM6LJd33')
+/** Dedicated devnet identity; built with the program's devnet feature. Localnet stays unchanged. */
+export const AVEO_DEVNET_HOOK_PROGRAM_ID: Address = address('28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS')
 export const SAS_PROGRAM_ID: Address = address('22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG')
 export const TOKEN_2022_PROGRAM_ID: Address = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb')
 export const SYSTEM_PROGRAM_ID: Address = address('11111111111111111111111111111111')

@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/dist
+**/.dev
+**/.env*
+**/*.key
+**/*keypair*.json
+**/wallets.json
+**/devnet-wallets.jsonl
+**/devnet-run.jsonl
+target

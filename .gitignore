@@ -5,5 +5,8 @@ dist/
 test-ledger/
 .env
 *.keypair.json
+*keypair*.json
+devnet-wallets.jsonl
+devnet-run.jsonl
 keys/
 *.sqlite

@@ -4,9 +4,12 @@ import { AssetsPage } from '../features/assets/AssetsPage'
 import { IncidentsPage } from '../features/incidents/IncidentsPage'
 import { StatusPage } from '../features/status/StatusPage'
 import { TransferPage } from '../features/transfer/TransferPage'
+import { SubmissionHistory } from '../features/operations/SubmissionHistory'
+import { DemoPage } from '../features/demo/DemoPage'
 
 /** Telas do Desk. Cada módulo entra aqui no próprio commit. */
 export const routes: RouteObject[] = [
+  { path: 'demonstracao', element: <RequireDeployment><DemoPage /></RequireDeployment> },
   {
     path: 'carteiras',
     element: (
@@ -32,4 +35,5 @@ export const routes: RouteObject[] = [
     ),
   },
   { path: 'rede', element: <StatusPage /> },
+  { path: 'recibos', element: <RequireDeployment><SubmissionHistory /></RequireDeployment> },
 ]

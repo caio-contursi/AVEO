@@ -1,0 +1,36 @@
+{
+  "version": "0.1",
+  "sourceCommit": "5eeea4e",
+  "generatedAt": "2026-10-10T20:24:17.473Z",
+  "browser": "156.0.8078.4",
+  "pages": 6,
+  "sourceSha256": "bfafebf2912ff253afdea16cf168447ad08c53e0f8699a3a115e7e0fa2ce535c",
+  "pdfSha256": "e3453233697113ff06de37ff478979e112f4e0f11542f86f2dcb59b707b4e4a3",
+  "layout": [
+    {
+      "page": "1",
+      "fits": true
+    },
+    {
+      "page": "2",
+      "fits": true
+    },
+    {
+      "page": "3",
+      "fits": true
+    },
+    {
+      "page": "4",
+      "fits": true
+    },
+    {
+      "page": "5",
+      "fits": true
+    },
+    {
+      "page": "6",
+      "fits": true
+    }
+  ],
+  "scope": "Editorial PDF rendering only; no network, wallet or blockchain acceptance."
+}

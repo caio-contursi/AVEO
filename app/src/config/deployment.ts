@@ -1,8 +1,7 @@
-// Manifest de deploy: quais mints, verificadores e carteiras a demo usa.
-// O plano do time prevê config/deployments.devnet.json (F2), que ainda não existe; este é o formato
-// que o front espera. Em localnet, o script de fixtures gera o arquivo.
+// Deployment manifest describing the programs and public accounts used by the Desk.
 import { isAddress, type Address } from '@solana/kit'
 import { z } from 'zod'
+import { SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../api/constants'
 
 const addressSchema = z
   .string()
@@ -15,8 +14,8 @@ export const deploymentSchema = z.object({
   generatedAt: z.string(),
   programs: z.object({
     aveoHook: addressSchema,
-    sas: addressSchema,
-    token2022: addressSchema,
+    sas: addressSchema.refine((value) => value === SAS_PROGRAM_ID, 'SAS program ID does not match the supported program'),
+    token2022: addressSchema.refine((value) => value === TOKEN_2022_PROGRAM_ID, 'Token-2022 program ID does not match the supported program'),
   }),
   /** proof_domain das políticas, em hexadecimal (32 bytes). */
   proofDomain: z.string().regex(/^[0-9a-f]{64}$/, 'proofDomain deve ter 64 caracteres hexadecimais'),
@@ -72,8 +71,30 @@ export class DeploymentError extends Error {
   }
 }
 
-export function parseDeployment(raw: unknown): Deployment {
-  const result = deploymentSchema.safeParse(raw)
+export interface DeploymentTarget {
+  cluster: Deployment['cluster']
+  programId: Address
+}
+
+export function parseDeployment(raw: unknown, target?: DeploymentTarget): Deployment {
+  const schema = deploymentSchema.superRefine((deployment, ctx) => {
+    if (!target) return
+    if (deployment.cluster !== target.cluster) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cluster'],
+        message: `expected ${target.cluster}, received ${deployment.cluster}`,
+      })
+    }
+    if (deployment.programs.aveoHook !== target.programId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['programs', 'aveoHook'],
+        message: `expected ${target.programId}, received ${deployment.programs.aveoHook}`,
+      })
+    }
+  })
+  const result = schema.safeParse(raw)
   if (!result.success) {
     throw new DeploymentError(
       'invalid',
@@ -84,7 +105,7 @@ export function parseDeployment(raw: unknown): Deployment {
   return result.data
 }
 
-export async function fetchDeployment(url: string): Promise<Deployment> {
+export async function fetchDeployment(url: string, target: DeploymentTarget): Promise<Deployment> {
   let response: Response
   try {
     response = await fetch(url, { cache: 'no-store' })
@@ -103,7 +124,7 @@ export async function fetchDeployment(url: string): Promise<Deployment> {
   } catch (error) {
     throw new DeploymentError('invalid', `manifest at ${url} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
   }
-  return parseDeployment(body)
+  return parseDeployment(body, target)
 }
 
 export function hexToBytes(hex: string): Uint8Array {
