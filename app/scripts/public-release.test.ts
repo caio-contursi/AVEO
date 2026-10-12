@@ -65,6 +65,13 @@ describe('public release gates', () => {
     expect(JSON.parse(emit.mock.calls[0]![0].source)).toEqual(manifest())
     expect(readFileSync).toHaveBeenCalledWith('/approved/deployment.json', 'utf8')
   })
+  it('accepts the credential-free same-origin production RPC path', () => {
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(manifest()))
+    const emit = vi.fn()
+    run({ AVEO_PUBLIC_MANIFEST: '/approved/deployment.json', VITE_AVEO_PROGRAM_ID: AVEO_HOOK_PROGRAM_ID,
+      VITE_RPC_URL: 'https://aveoprotocol.io/rpc' }, emit)
+    expect(emit).toHaveBeenCalledTimes(1)
+  })
   it('rejects mismatching program identity without emitting an asset', () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify(manifest()))
     const emit = vi.fn()

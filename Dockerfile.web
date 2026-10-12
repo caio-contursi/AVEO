@@ -4,7 +4,7 @@ RUN npm install -g pnpm@10.33.3
 COPY . .
 RUN pnpm install --frozen-lockfile
 ENV VITE_CLUSTER=devnet \
-    VITE_RPC_URL=https://api.devnet.solana.com \
+    VITE_RPC_URL=https://aveoprotocol.io/rpc \
     VITE_COMMITMENT=confirmed \
     VITE_AVEO_PROGRAM_ID=28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS \
     VITE_BACKEND=aveo-sas-hook \

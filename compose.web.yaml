@@ -6,11 +6,67 @@ services:
       network: host
       secrets:
         - aveo_public_manifest
-    ports:
-      - "127.0.0.1:8090:80"
+    # Host networking avoids the VPS bridge egress failure; nginx binds loopback only.
+    network_mode: host
+    depends_on:
+      aveo-rpc:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=1m
+      - /tmp:size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/deployment.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     mem_limit: 256m
     cpus: 0.5
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  aveo-rpc:
+    build:
+      context: .
+      dockerfile: ops/rpc-proxy/Dockerfile
+    network_mode: host
+    environment:
+      RPC_BIND_HOST: 127.0.0.1
+      RPC_PORT: "8787"
+    # Local Compose secrets retain host permissions; match the key owner's UID/GID.
+    user: "${AVEO_RPC_UID:-1002}:${AVEO_RPC_GID:-1002}"
+    secrets:
+      - helius_devnet_key
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    init: true
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "node", "--input-type=module", "-e", "const r = await fetch('http://127.0.0.1:8787/healthz', { signal: AbortSignal.timeout(3000) }); if (!r.ok) process.exit(1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:
@@ -19,3 +75,5 @@ services:
 secrets:
   aveo_public_manifest:
     file: ${AVEO_PUBLIC_MANIFEST:?Set AVEO_PUBLIC_MANIFEST to a validated public devnet manifest}
+  helius_devnet_key:
+    file: ${HELIUS_DEVNET_KEY_FILE:-/home/bruno/.config/aveo/helius-devnet.key}
