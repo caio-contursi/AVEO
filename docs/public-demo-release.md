@@ -244,3 +244,51 @@ public hosting configuration and real-wallet/six-scene acceptance are pending.
 Consolidation is not devnet or public-demo sign-off. Suggested release-provenance
 and interrupted-journal improvements remain in `docs/backlog.md` as RELEASE-01
 and DEVNET-01; no new feature scope was added.
+
+## VPS public-release preparation, 2026-10-12
+
+The hosting configuration now requires an explicitly selected public manifest
+and runs `pnpm build:public`, replacing the ordinary-build gap above. Compose
+passes the manifest as a required BuildKit build-only secret mount; this does
+not mean its contents are private. The validated public JSON is intentionally
+emitted into the frontend, while wallet keys and private run journals must never
+be selected. The final image receives only the generated application and Nginx
+configuration, not the manifest mount or source directory.
+
+The Docker build pins the approved devnet program ID, official HTTPS devnet RPC,
+confirmed commitment, implemented backend and disabled synthetic browser wallets.
+It fails without the manifest and rejects malformed or mismatching manifests
+through the existing public-release gate. A passed build is not proof that the
+program or accounts exist; run the real-network preflight first.
+
+Nginx now supports application deep links while `/deployment.json` remains an
+exact JSON route with no-store caching and a 404 when absent, never an HTML
+fallback. Private devnet wallet/run JSONL files are excluded from the Docker
+context as well as Git.
+
+After funding, deployment, fixture readback and public-manifest validation:
+
+```sh
+export AVEO_PUBLIC_MANIFEST=/absolute/path/public-deployment.json
+pnpm devnet:preflight --manifest "$AVEO_PUBLIC_MANIFEST" --rpc https://api.devnet.solana.com
+docker compose -f compose.web.yaml config --quiet
+docker compose -f compose.web.yaml build aveo-web
+```
+
+Review the resulting image and release evidence before replacing the running
+container. The build command does not publish it. Container replacement and
+browser acceptance remain later steps; no running public service was changed.
+
+Compose rejects a missing manifest variable and passes syntax validation with an
+explicit path. This syntax check alone does not validate the file's contents.
+`nginx -t` passed in an isolated network-disabled container using the existing
+image and the revised configuration. The image was not rebuilt with a real
+devnet manifest, because deployment and fixtures are still unavailable.
+
+`pnpm verify` passed after this change: 2,622 app/script tests (including six new
+hosting-contract checks), 41 backend tests, type checks, lint and ordinary build.
+Existing SQLite and Zod/Rollup warnings remain unchanged. At confirmed slot
+510300979 (`2026-10-12T14:56:39.537Z`), the deployment payer still had zero lamports.
+Real public-image construction, hosted-origin RPC/CORS, wallet interaction and
+the six scenes remain unverified. RELEASE-02 proposes container/manifest
+provenance and hosted-origin smoke checks; it is backlog, not release evidence.

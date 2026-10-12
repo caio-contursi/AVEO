@@ -5,9 +5,13 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 ENV VITE_CLUSTER=devnet \
     VITE_RPC_URL=https://api.devnet.solana.com \
+    VITE_COMMITMENT=confirmed \
+    VITE_AVEO_PROGRAM_ID=28DDiRDHkqaYYYaZvoFDDpwxUfuZcaehjJpiZfKwzuKS \
+    VITE_BACKEND=aveo-sas-hook \
     VITE_DEPLOYMENT_URL=/deployment.json \
     VITE_ENABLE_DEV_WALLETS=false
-RUN pnpm --filter @aveo/app build
+RUN --mount=type=secret,id=aveo_public_manifest,required=true \
+    AVEO_PUBLIC_MANIFEST=/run/secrets/aveo_public_manifest pnpm build:public
 FROM nginx:stable-alpine
 COPY nginx.web.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/app/dist /usr/share/nginx/html

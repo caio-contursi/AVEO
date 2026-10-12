@@ -293,3 +293,6 @@ transactions, outreach or real pilot occurred in this increment.
 - **DEVNET-01 (proposed):** provide a supported read-only inspector for interrupted
   append-only bootstrap journals, preserving original signatures and incomplete
   key snapshots without creating an automatic resend or restart path.
+- **RELEASE-02 (proposed):** bind the published container digest to the release
+  commit and manifest hash, then test deep links, JSON content type and RPC access
+  from the actual hosted origin before approving the public demonstration.

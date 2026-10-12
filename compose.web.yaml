@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile.web
       network: host
+      secrets:
+        - aveo_public_manifest
     ports:
       - "127.0.0.1:8090:80"
     restart: unless-stopped
@@ -14,3 +16,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+secrets:
+  aveo_public_manifest:
+    file: ${AVEO_PUBLIC_MANIFEST:?Set AVEO_PUBLIC_MANIFEST to a validated public devnet manifest}
