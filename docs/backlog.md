@@ -1,5 +1,10 @@
 # Delivery backlog
 
+## RPC operations proposals
+
+- **RPC-01:** Add quota-aware telemetry with no addresses or credentials in logs, so operators can detect exhaustion before a public demonstration fails.
+- **RPC-02:** Evaluate authenticated per-operator budgets if the shared public demo becomes a production service; Origin checks alone are not authorization.
+
 These are repository-local proposed issues, not tickets created in an external tracker.
 Public devnet deployment and the six-scene demonstration remain the critical path
 described in [public-demo-release.md](public-demo-release.md). Parallel work below

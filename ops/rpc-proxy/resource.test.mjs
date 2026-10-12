@@ -202,6 +202,31 @@ test('upstream upgrade head counts toward the cumulative outgoing session budget
   assert.equal(remote.destroyed, true)
 })
 
+test('canceling the queue head allows its successor exactly once', { timeout: 5000 }, async t => {
+  const forwarded = []; let releaseFirst
+  const f = await fixture(t, { maxConcurrent: 3, maxResponses: 1, timeoutMs: 2000,
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body); forwarded.push(body.id)
+      if (body.id === 1) await new Promise(resolve => { releaseFirst = resolve })
+      return Response.json({ jsonrpc: '2.0', id: body.id, result: 1 })
+    },
+  })
+  const first = post(f)
+  await until(() => releaseFirst !== undefined)
+  const controller = new AbortController()
+  const canceled = fetch(`http://127.0.0.1:${f.port}/rpc`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...read, id: 2 }), signal: controller.signal,
+  }).catch(() => undefined)
+  await until(() => f.responses.length === 2)
+  const successor = post(f, { ...read, id: 3 })
+  await until(() => f.responses.length === 3)
+  controller.abort(); await until(() => f.responses[1].destroyed)
+  releaseFirst()
+  assert.equal((await first).status, 200); assert.equal((await successor).status, 200)
+  await canceled; assert.deepEqual(forwarded, [1, 3])
+})
+
 test('successful handshake clears its deadline but session lifetime still closes the tunnel', { timeout: 5000 }, async t => {
   const f = websocketFixture(t)
   const client = f.upgrade()
