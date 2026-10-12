@@ -9,6 +9,7 @@ const rootPackage = JSON.parse(
 ) as { packageManager: string; engines: { node: string }; scripts: Record<string, string> }
 
 const stages = [
+  'test:rpc',
   'typecheck',
   '--filter @aveo/app typecheck:tests',
   '--filter @aveo/app lint',
@@ -18,7 +19,7 @@ const stages = [
 const verifyScript = stages.map((stage) => `pnpm ${stage}`).join(' && ')
 
 function runVerify(failStage = '') {
-  // Validate before execution, so only the five expected pnpm commands can run.
+  // Validate before execution, so only the six expected pnpm commands can run.
   expect(rootPackage.scripts.verify).toBe(verifyScript)
   const fixture = mkdtempSync(join(tmpdir(), 'aveo-verification-gate-'))
   const log = join(fixture, 'stages.log')
@@ -68,7 +69,7 @@ describe('root verification gate configuration', () => {
 
 // This fixture exercises Linux /bin/sh semantics; Windows and other platforms skip it.
 describe.skipIf(process.platform !== 'linux')('root verification gate execution', () => {
-  it('executes all five gates in order when they succeed', () => {
+  it('executes all six gates in order when they succeed', () => {
     expect(runVerify()).toEqual({ status: 0, stages })
   })
 
