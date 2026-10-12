@@ -5,9 +5,10 @@ import path from 'node:path'
 import { getTransferSolInstruction } from '@solana-program/system'
 import { getSetComputeUnitLimitInstruction } from '@solana-program/compute-budget'
 import { appendTransactionMessageInstructions, compileTransaction, createKeyPairSignerFromPrivateKeyBytes,
-  createSolanaRpc, createTransactionMessage, getAddressEncoder, getBase64EncodedWireTransaction,
+  createDefaultRpcTransport, createSolanaRpcFromTransport, createTransactionMessage, getAddressEncoder, getBase64EncodedWireTransaction,
   getSignatureFromTransaction, isSignature, setTransactionMessageFeePayerSigner,
   isSolanaError, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR,
+  SolanaError,
   SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED,
   setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners,
   type Address, type Instruction, type KeyPairSigner, type Rpc, type Signature, type SolanaRpcApi } from '@solana/kit'
@@ -40,6 +41,24 @@ async function readWithRetry<T>(read: (signal: AbortSignal) => Promise<T>, timeo
     }
     throw fail()
   }, timeout)
+}
+
+/** Normalize only the public endpoint's nonstandard rate-limit code before SDK decoding. */
+export function createDevnetRpc(url: string): Rpc<SolanaRpcApi> {
+  validateDevnetEndpoints(url, 'wss://api.devnet.solana.com')
+  const transport = createDefaultRpcTransport({ url })
+  return createSolanaRpcFromTransport(async <TResponse>(config: Parameters<typeof transport>[0]) => {
+    const response = await transport<TResponse>(config)
+    if (response && typeof response === 'object' && 'error' in response) {
+      const error = response.error
+      if (error && typeof error === 'object' && 'code' in error &&
+        (error.code === 429 || error.code === 429n)) {
+        throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR,
+          { statusCode: 429, message: 'Devnet RPC rate limit', headers: new Headers() })
+      }
+    }
+    return response
+  })
 }
 
 export interface DevnetWalletRecord {
@@ -124,7 +143,7 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     validateDevnetEndpoints(options.rpcUrl, options.wsUrl)
     check(options.externalIssuerFunding === undefined || typeof options.externalIssuerFunding === 'boolean')
     const directory = validateDevnetDirectory(options.directory)
-    const rpc = dependencies?.rpc ?? createSolanaRpc(options.rpcUrl)
+    const rpc = dependencies?.rpc ?? createDevnetRpc(options.rpcUrl)
     // Fail before any private artifact, key generation, faucet request or signature.
     await verifyDevnetRuntimePrograms(rpc)
     const journal: { scope: string; status: string; operations: Record<string, unknown>[] } =
@@ -135,10 +154,13 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
     const wallets = new Map<string, KeyPairSigner>()
     let funder: KeyPairSigner | undefined
     let readFloor = 0n
+    let networkMismatchObserved = false
     let blocked = false, busy = false
     const persist = () => writeJournal(journal)
     const pin = async () => {
-      await bounded(async (signal) => { check(await rpc.getGenesisHash().send({ abortSignal: signal }) === DEVNET_GENESIS_HASH && !signal.aborted) }, 10_000)
+      const genesis = await readWithRetry((signal) => rpc.getGenesisHash().send({ abortSignal: signal }))
+      if (genesis !== DEVNET_GENESIS_HASH) networkMismatchObserved = true
+      check(genesis === DEVNET_GENESIS_HASH)
     }
     const exclusive = async <T>(operation: () => Promise<T>): Promise<T> => {
       check(!blocked && !busy && journal.status === 'preparing')
@@ -150,11 +172,12 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
         throw fail()
       } finally { busy = false }
     }
-    const confirmed = async (signature: Signature) => bounded(async (signal) => {
+    const confirmed = async (signature: Signature, onFailure?: () => void) => bounded(async (signal) => {
       while (!signal.aborted) {
         const { value } = await readWithRetry((readSignal) => rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send({ abortSignal: readSignal }), 10_000)
         check(!signal.aborted)
         const status = value[0]
+        if (status && status.err !== null) { onFailure?.(); throw fail() }
         if (status && ['confirmed', 'finalized'].includes(status.confirmationStatus ?? '')) {
           check(status.err === null && Number.isSafeInteger(Number(status.slot)) && Number(status.slot) > 0)
           return status.slot
@@ -172,6 +195,40 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
       await pin()
       const operation: Record<string, unknown> = { kind: 'transaction', phase: 'preparing', payer: payer.address }
       journal.operations.push(operation); persist()
+      let acknowledged: { signature: Signature; fingerprint: string } | undefined
+      const originalProof = (signature: Signature, fingerprint: string) => bounded(async (signal) => {
+        let observerOpen = true
+        // Even unsupported error metadata must latch a conservative stop, not disappear as missing proof.
+        const observingRpc = new Proxy(rpc, {
+          get(target, property, receiver) {
+            if (property !== 'getTransaction') return Reflect.get(target, property, receiver)
+            return (...args: Parameters<typeof rpc.getTransaction>) => {
+              const request = rpc.getTransaction(...args)
+              return { send: async (options: Parameters<typeof request.send>[0]) => {
+                const result = await request.send(options)
+                if (observerOpen && !signal.aborted && !options?.abortSignal?.aborted &&
+                  result?.meta && Object.hasOwn(result.meta, 'err') && result.meta.err !== null) {
+                  operation.chainFailureObserved = true
+                }
+                return result
+              } }
+            }
+          },
+        })
+        try { while (!signal.aborted) {
+          const observed = await verifySubmissionMessage({ commitment: 'confirmed', rpc: observingRpc } as ApiContext, signature, fingerprint)
+          check(!signal.aborted && !operation.chainFailureObserved)
+          if (observed) {
+            check(!signal.aborted)
+            if (observed.status === 'failed') operation.chainFailureObserved = true
+            check(observed.status === 'confirmed')
+            return observed
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+        }
+        throw fail()
+        } finally { observerOpen = false }
+      }, 30_000)
       try {
         const latest = await readWithRetry((signal) => rpc.getLatestBlockhash({ commitment: 'confirmed', minContextSlot: readFloor }).send({ abortSignal: signal }))
         check(latest.context.slot >= readFloor)
@@ -194,28 +251,38 @@ export async function createDevnetRuntime(options: { directory: string; rpcUrl: 
           persist()
         }
         check(simulation.value.err === null)
+        operation.phase = 'checking-network'; persist()
         await pin()
         operation.phase = 'submitting'; persist()
         const returned = await bounded((signal) => rpc.sendTransaction(wire,
           { encoding: 'base64', preflightCommitment: 'confirmed', skipPreflight: false, maxRetries: 0n }).send({ abortSignal: signal }), 15_000)
         check(returned === signature)
+        acknowledged = { signature, fingerprint }
         operation.phase = 'submitted'; persist()
-        await confirmed(signature)
+        await confirmed(signature, () => { operation.chainFailureObserved = true })
         operation.phase = 'verifying'; persist()
         // RPC transaction indexing can lag confirmation. Retry reads, never the submission.
-        const proof = await bounded(async (signal) => {
-          while (!signal.aborted) {
-            const observed = await verifySubmissionMessage({ commitment: 'confirmed', rpc } as ApiContext, signature, fingerprint)
-            if (observed) { check(!signal.aborted && observed.status === 'confirmed'); return observed }
-            await new Promise<void>((resolve) => setTimeout(resolve, 1000))
-          }
-          throw fail()
-        }, 30_000)
+        const proof = await originalProof(signature, fingerprint)
         await pin()
+        check(!operation.chainFailureObserved && !networkMismatchObserved)
         readFloor = BigInt(proof.slot) > readFloor ? BigInt(proof.slot) : readFloor
         operation.phase = 'confirmed'; operation.slot = proof.slot; persist()
         return signature
-      } catch { operation.phase = 'unknown'; persist(); throw fail() }
+      } catch {
+        // An acknowledged signature may be reconciled by exact-message reads, never recreated.
+        if (acknowledged && !networkMismatchObserved && !operation.chainFailureObserved) {
+          operation.phase = 'reconciling'; persist()
+          try {
+            const proof = await originalProof(acknowledged.signature, acknowledged.fingerprint)
+            await pin()
+            check(!operation.chainFailureObserved && !networkMismatchObserved)
+            readFloor = BigInt(proof.slot) > readFloor ? BigInt(proof.slot) : readFloor
+            operation.phase = 'confirmed'; operation.slot = proof.slot; persist()
+            return acknowledged.signature
+          } catch { /* Preserve the original signature and stop without a second broadcast. */ }
+        }
+        operation.phase = 'unknown'; persist(); throw fail()
+      }
     }
     return {
       rpc, rpcUrl: options.rpcUrl, wsUrl: options.wsUrl, directory,

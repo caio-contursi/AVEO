@@ -7,10 +7,10 @@ import { blockhash, getAddressDecoder, getBase64Encoder, getSignatureFromTransac
   type Instruction, type Rpc, type SolanaRpcApi } from '@solana/kit'
 import { AVEO_DEVNET_HOOK_PROGRAM_ID, SAS_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '../src/api/constants'
 import { DEVNET_GENESIS_HASH } from './devnet-preflight'
-import { createDevnetRuntime, validateDevnetDirectory, validateDevnetEndpoints } from './devnet-runtime'
+import { createDevnetRpc, createDevnetRuntime, validateDevnetDirectory, validateDevnetEndpoints } from './devnet-runtime'
 
 const dirs: string[] = []
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
 const addr = (n: number) => getAddressDecoder().decode(new Uint8Array(32).fill(n))
 function fixture() {
   const directory = mkdtempSync(path.join(tmpdir(), 'aveo-devnet-runtime-unit-'))
@@ -42,6 +42,132 @@ function fixture() {
 const instruction: Instruction = { programAddress: addr(8), data: new Uint8Array([1]) }
 
 describe('dedicated synthetic devnet runtime', () => {
+  it.each(['during-final-pin', 'after-completion'])('ignores timed-out lookup metadata %s', async (timing) => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    const read = f.methods.getTransaction.getMockImplementation()!
+    type Reply = Awaited<ReturnType<typeof read>>
+    let releaseLookup!: (value: Reply) => void
+    let lookupReady!: () => void
+    const firstLookup = new Promise<void>((resolve) => { lookupReady = resolve })
+    f.methods.getTransaction.mockImplementationOnce(() => new Promise<Reply>((resolve) => {
+      releaseLookup = resolve; lookupReady()
+    }))
+    let pins = 0, pinReady!: () => void, releasePin!: (value: string) => void
+    const finalPin = new Promise<void>((resolve) => { pinReady = resolve })
+    f.methods.getGenesisHash.mockImplementation(async () => {
+      if (++pins === 3) return new Promise<string>((resolve) => { releasePin = resolve; pinReady() })
+      return DEVNET_GENESIS_HASH
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const sent = runtime.send(signer, [instruction])
+    await firstLookup
+    const failedReply = { ...await read(), meta: { err: 'BlockhashNotFound' as never } }
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(1000)
+    await finalPin
+    if (timing === 'during-final-pin') releaseLookup(failedReply)
+    releasePin(DEVNET_GENESIS_HASH)
+    await sent
+    if (timing === 'after-completion') releaseLookup(failedReply)
+    await Promise.resolve()
+    // A new independent operation persists the old record, exposing any stale in-memory mutation.
+    await runtime.send(signer, [{ ...instruction, data: new Uint8Array([2]) }])
+    expect(f.journal().operations[0]).toMatchObject({ phase: 'confirmed', slot: 42 })
+    expect(f.journal().operations[0].chainFailureObserved).toBeUndefined()
+    expect(f.methods.sendTransaction).toHaveBeenCalledTimes(2)
+  })
+  it('latches processed transaction errors before attempting reconciliation', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getSignatureStatuses.mockResolvedValueOnce({ value: [{ confirmationStatus: 'processed', err: { InstructionError: [1, 'InvalidAccountData'] } as never, slot: 42n }] })
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.getTransaction).not.toHaveBeenCalled()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.journal().operations[0].chainFailureObserved).toBe(true)
+  })
+
+  it('does not ignore unsupported transaction error metadata in exact-message reads', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    const read = f.methods.getTransaction.getMockImplementation()!
+    f.methods.getTransaction.mockImplementationOnce(async () => ({ ...await read(), meta: { err: 'BlockhashNotFound' as never } }))
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.getTransaction).toHaveBeenCalledOnce()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.journal()).toMatchObject({ status: 'stopped', operations: [{ chainFailureObserved: true, phase: 'unknown' }] })
+  })
+  it('does not reconcile away a wrong genesis observed after submission', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    const read = f.methods.getTransaction.getMockImplementation()!
+    f.methods.getTransaction.mockImplementation(async () => {
+      f.methods.getGenesisHash.mockResolvedValue('wrong-network')
+      return read()
+    })
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.methods.getTransaction).toHaveBeenCalledOnce()
+    expect(f.journal().status).toBe('stopped')
+  })
+  it('reconciles acknowledged submissions through the exact original message after status-read failure', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getSignatureStatuses.mockRejectedValue(new Error('status query unavailable'))
+    const signature = await runtime.send(signer, [instruction])
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.methods.getTransaction).toHaveBeenCalledOnce()
+    expect(f.journal().operations[0]).toMatchObject({ phase: 'confirmed', signature, slot: 42 })
+  })
+
+  it('never reconciles away an observed on-chain transaction failure', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getSignatureStatuses.mockResolvedValue({ value: [{ confirmationStatus: 'confirmed', err: { InstructionError: [1, 'InvalidAccountData'] } as never, slot: 42n }] })
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.getTransaction).not.toHaveBeenCalled()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.journal().operations[0].chainFailureObserved).toBe(true)
+  })
+  it('does not normalize a string rate-limit code', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: '429', message: 'Not a numeric rate-limit response' } }), { status: 200 })))
+    await expect(createDevnetRpc('https://api.devnet.solana.com').getGenesisHash().send()).rejects.toMatchObject({ context: { __code: 10 } })
+  })
+
+  it('never retries a broadcast even when it fails with a classified rate limit', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.sendTransaction.mockRejectedValue(new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { statusCode: 429, message: 'Rate limit', headers: new Headers() }))
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    expect(f.journal()).toMatchObject({ status: 'stopped', operations: [{ phase: 'unknown', signature: expect.any(String) }] })
+  })
+  it('normalizes JSON-RPC 429 before the SDK error formatter without leaking server text', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: 429, message: 'private server detail' } }), { status: 200 })))
+    const rpc = createDevnetRpc('https://api.devnet.solana.com')
+    await expect(rpc.getGenesisHash().send()).rejects.toMatchObject({ name: 'SolanaError', context: { statusCode: 429 } })
+    try { await rpc.getGenesisHash().send() } catch (error) { expect(String(error)).not.toContain('private server detail') }
+  })
+
+  it('preserves a successful RPC response through the narrow normalizer', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: DEVNET_GENESIS_HASH }), { status: 200 })))
+    await expect(createDevnetRpc('https://api.devnet.solana.com').getGenesisHash().send()).resolves.toBe(DEVNET_GENESIS_HASH)
+  })
+
+  it('does not relabel semantic JSON-RPC errors as transient rate limits', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32602, message: 'Invalid parameters' } }), { status: 200 })))
+    await expect(createDevnetRpc('https://api.devnet.solana.com').getGenesisHash().send()).rejects.toMatchObject({ context: { __code: -32602 } })
+  })
+  it('retries a transient genesis read but never accepts a different network', async () => {
+    const f = fixture(), runtime = await f.create()
+    const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
+    f.methods.getGenesisHash.mockRejectedValueOnce(new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { statusCode: 429, message: 'Too Many Requests', headers: new Headers() }))
+    await runtime.send(signer, [instruction])
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+    f.methods.getGenesisHash.mockResolvedValue('wrong-network')
+    await expect(runtime.send(signer, [instruction])).rejects.toThrow()
+    expect(f.methods.sendTransaction).toHaveBeenCalledOnce()
+  })
   it('pins subsequent reads after faucet funding as well as external funding', async () => {
     const f = fixture(), runtime = await f.create()
     const { signer } = await runtime.newWallet('issuer', 'Issuer', 'issuer')
