@@ -338,3 +338,28 @@ verification cannot be established. A new regression covers delayed indexing.
 
 Deployment is now verified. Fixture completion, public image publication,
 extension-wallet acceptance and the six-scene walkthrough remain separate gates.
+
+### Bootstrap transport hardening
+
+Subsequent private runs also stopped before broadcast during simulation; they
+did not produce a manifest and remain retained separately. An independently
+prepared read-only simulation of the same funding transfer returned no error,
+but this does not establish the precise cause of the earlier failed observation.
+Do not describe a null history response as proof that a signed operation can be
+resent. No stopped run was resumed or promoted to accepted.
+
+The runtime retries only classified transient read failures (HTTP 429, 502,
+503, 504 and an RPC minimum-context-slot-not-reached error). Semantic and unknown
+RPC errors stop immediately; actual simulation and confirmed transaction errors
+still reject the operation. A reviewer identified overly broad rejection retry
+in the first helper; this was corrected with explicit classification and a
+regression proving a semantic rejection cannot turn into a later success.
+Latest-blockhash and simulation reads now carry minimum context slots derived
+from the last confirmed operation or external funding observation. Private
+journals record a sanitized simulation rejection category, never raw provider
+credentials or transaction logs. None of these read retries repeats a broadcast.
+
+The existing Compose project is `aveo-bruno`. Publication must explicitly use
+`docker compose -p aveo-bruno -f compose.web.yaml`; the folder-name default would
+create another project and collide with the current listener rather than update
+the intended service. Preserve the old image for rollback before replacement.
