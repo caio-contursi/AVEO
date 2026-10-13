@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aveo — Roteiro da demo sem carteira</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#222330;background:#f7f7fa;--accent:#7030c6}*{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:auto;padding:24px}h1{font-size:30px;margin-bottom:8px}h2{font-size:25px}p{line-height:1.6}a{color:var(--accent)}button,select{font:inherit;min-height:44px;padding:10px 14px;border:1px solid #dddfe7;border-radius:8px;background:white;color:#222330}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:sticky;top:0;padding:12px 0;background:#f7f7fa;z-index:1}.card{padding:24px;border:1px solid #dddfe7;border-radius:12px;background:white;margin:18px 0}.action{background:#f0eafa;border-radius:8px;padding:16px}.speech{font-size:27px;line-height:1.65;margin:24px 0}.muted{color:#606373}.warning{border-left:4px solid #875800;padding-left:16px}.reading .setup,.reading .action,.reading .hint,.reading h1,.reading .subtitle,.reading .links{display:none}.reading .card{border:0;background:transparent;padding:8px}.reading .speech{font-size:36px;line-height:1.75}.reading main{max-width:820px}[hidden]{display:none!important}@media(max-width:500px){main{padding:16px}.card{padding:16px}.speech{font-size:23px}.reading .speech{font-size:29px}}@media print{.toolbar{display:none}section[hidden]{display:block!important}.card{break-inside:avoid}.speech{font-size:18px}}
+</style>
+</head>
+<body><main>
+<h1>Aveo — roteiro da demo sem carteira</h1>
+<p class="subtitle muted">Instruções em português · fala em inglês · cerca de 2–3 minutos, conforme seu ritmo.</p>
+<details class="setup card"><summary>Preparação rápida antes de gravar</summary>
+<p>Abra o Desk em inglês. Carregue a matriz, os incidentes e a rede antes de começar. Escolha uma célula com diagnóstico disponível. Execute a consulta de incidentes e confira o resultado. Não exponha credenciais, documentos pessoais ou outras abas.</p>
+<p>Este roteiro demonstra leitura e diagnóstico, não assinatura ou recuperação executada. Não diga que uma transferência foi rejeitada se estiver mostrando apenas um diagnóstico. Resultados indisponíveis não são prova de inelegibilidade.</p>
+<p>Deixe este roteiro no celular ou fora da área capturada. Grave a janela do Desk, não este teleprompter. Setas avançam os trechos; T alterna o modo de leitura; Esc sai dele.</p>
+</details>
+<nav class="toolbar" aria-label="Controles do roteiro">
+<button id="prev" type="button">← Anterior</button><span id="counter" aria-live="polite"></span><button id="next" type="button">Próximo →</button>
+<button id="reading" type="button" aria-pressed="false">Modo de leitura</button>
+<label>Incidentes: <select id="incident"><option value="present">Há incidente agrupado visível</option><option value="empty">Consulta sem incidentes abertos</option><option value="unavailable">Consulta indisponível</option></select></label>
+</nav>
+<section class="card" data-step="1"><h2>1. Abertura e matriz</h2>
+<p class="action">Abra Carteiras / Assets. Mostre a matriz e o indicador devnet. Espere os resultados carregarem.</p>
+<p class="speech" lang="en">This is Aveo running on Solana devnet. I'll demonstrate the operator workflow using live blockchain reads, without connecting a wallet or submitting transactions. When a transfer is blocked, an operator needs to understand why, which other assets are affected, and what needs to change. Here, each wallet is evaluated against each asset's policy.</p>
+<p class="links"><a href="http://localhost:5173/#/carteiras" target="_blank" rel="noopener">Abrir local</a> · <a href="https://aveoprotocol.io/#/carteiras" target="_blank" rel="noopener">Abrir público</a></p>
+</section>
+<section class="card" data-step="2" hidden><h2>2. Diagnóstico de uma célula</h2>
+<p class="action">Clique numa célula com resultado disponível e mostre os motivos. Depois da fala, leia em inglês apenas um motivo que realmente apareça. Não improvise uma prova expirada se a tela mostrar outra causa.</p>
+<p class="speech" lang="en">Opening a result shows the eligibility assessment and the reasons behind it. Instead of stopping at a generic transaction failure, the operator can inspect the proof and policy involved. The important point is that the restriction becomes explainable.</p>
+</section>
+<section class="card" data-step="3" hidden><h2>3. Políticas e provas</h2>
+<p class="action">Abaixo da matriz, abra os detalhes técnicos. Mostre as políticas dos ativos e a tabela de provas. Só aponte reutilização de prova se os endereços e vínculos visíveis a demonstrarem.</p>
+<p class="speech" lang="en">Different assets can require different eligibility conditions and accept different verifiers. Aveo brings these policies and proofs into the same workspace, so the operator can understand why the same wallet may receive different results across assets.</p>
+</section>
+<section class="card" data-step="4" hidden><h2>4. Impacto nos incidentes</h2>
+<p class="action">Abra Incidents. Mostre o resultado da consulta. Escolha no controle acima a fala que corresponde ao estado real. Use a primeira apenas se um incidente agrupado estiver visível.</p>
+<p class="speech variant" data-variant="present" lang="en">Here, Aveo groups the affected assets around the same proof. This helps the operator understand the scope of the problem instead of investigating every asset separately.</p>
+<p class="speech variant" data-variant="empty" lang="en" hidden>This screen scans the configured wallets and assets for eligibility incidents. The current scan shows no open incidents; I'm not creating an artificial failure for this recording.</p>
+<p class="speech variant" data-variant="unavailable" lang="en" hidden>The incident scan is currently unavailable. Aveo reports that uncertainty rather than presenting an unverified result as success. I won't claim an incident or recovery that isn't visible.</p>
+<p class="links"><a href="http://localhost:5173/#/incidentes" target="_blank" rel="noopener">Abrir local</a> · <a href="https://aveoprotocol.io/#/incidentes" target="_blank" rel="noopener">Abrir público</a></p>
+</section>
+<section class="card" data-step="5" hidden><h2>5. Recuperação — explicar o limite</h2>
+<p class="action">Permaneça no incidente, se houver, e aponte as informações disponíveis. Não clique em assinatura. Não apresente preparação, simulação ou botão desabilitado como operação concluída.</p>
+<p class="speech" lang="en">Recovery requires a valid replacement proof from an accepted verifier and the affected wallet's signature on the binding update. The Desk prepares that operation and checks fresh blockchain state afterward. This recording demonstrates inspection and diagnosis, not a signed recovery.</p>
+</section>
+<section class="card" data-step="6" hidden><h2>6. Rede e encerramento</h2>
+<p class="action">Mostre Network: devnet e endereço do programa. Volte à matriz para encerrar. Não abra o histórico de recibos se estiver vazio nem afirme auditoria independente.</p>
+<p class="speech" lang="en">The application reads real devnet accounts, while eligibility data is synthetic—no real KYC is performed. Our current program enforces transfer rules through Token-2022 Transfer Hooks, beyond the interface. Aveo's goal is simple: make eligibility restrictions understandable, their impact visible, and recovery verifiable. Explore the public Desk and inspect the code yourself.</p>
+<p class="links"><a href="http://localhost:5173/#/rede" target="_blank" rel="noopener">Abrir local</a> · <a href="https://aveoprotocol.io/#/rede" target="_blank" rel="noopener">Abrir público</a></p>
+</section>
+<p class="hint muted">Sem rolagem automática: avance no seu ritmo. Números de uso, economia de tempo e recuperação concluída só devem ser citados com evidência. Este roteiro não é relatório de aceite.</p>
+</main>
+<script>
+const steps=[...document.querySelectorAll('[data-step]')];let index=0,reading=false;
+const byId=id=>document.getElementById(id);
+function update(){steps.forEach((step,i)=>step.hidden=i!==index);byId('counter').textContent=(index+1)+' / '+steps.length;byId('prev').disabled=index===0;byId('next').disabled=index===steps.length-1;document.body.classList.toggle('reading',reading);byId('reading').setAttribute('aria-pressed',String(reading));document.querySelectorAll('.variant').forEach(p=>p.hidden=p.dataset.variant!==byId('incident').value)}
+function move(delta){index=Math.max(0,Math.min(steps.length-1,index+delta));update();window.scrollTo(0,0)}
+byId('prev').onclick=()=>move(-1);byId('next').onclick=()=>move(1);byId('incident').onchange=update;byId('reading').onclick=()=>{reading=!reading;update()};
+addEventListener('keydown',event=>{if(event.ctrlKey||event.altKey||event.metaKey||['SELECT','INPUT','TEXTAREA'].includes(event.target.tagName))return;if(event.key==='ArrowRight'){event.preventDefault();move(1)}else if(event.key==='ArrowLeft'){event.preventDefault();move(-1)}else if(event.key.toLowerCase()==='t'){reading=!reading;update()}else if(event.key==='Escape'){reading=false;update()}});update();
+</script>
+</body></html>

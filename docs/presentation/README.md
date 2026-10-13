@@ -1,5 +1,13 @@
 # Presentation package
 
+## Read-only demo recording script
+
+[Demo script and reading mode](aveo-demo-script.en.html): six steps, Portuguese
+navigation instructions and English narration. Select the incident variant that
+matches the visible result. This recording does not demonstrate signed recovery.
+Preview: `http://localhost:8767/aveo-demo-script.en.html`; arrows navigate,
+T toggles reading mode and Esc exits it. Keep this script outside the captured area.
+
 ## Juror-focused pitch — v0.4
 
 - [Slides](aveo-pitch-v0.4.en.html), [six-page PDF](aveo-pitch-v0.4.en.pdf), [spoken script](aveo-pitch-v0.4.en.txt).

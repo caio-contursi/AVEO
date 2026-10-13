@@ -2,6 +2,7 @@
 
 ## Juror objection follow-ups
 
+- **DEMO-01:** Record a separate wallet-signed recovery clip with public transaction evidence once the end-to-end acceptance is complete; do not replace the read-only recording with an unverified claim.
 - **PITCH-07:** Capture one consented operator incident and manual workflow, then compare it with the Desk before asserting differentiated operational value.
 - **PITCH-08:** Confirm per-member technical contributions and the actual customer budget owner; turn assumptions into an accountable team/pilot brief without inventing expertise or prices.
 
