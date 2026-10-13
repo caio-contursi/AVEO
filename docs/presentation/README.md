@@ -1,5 +1,14 @@
 # Presentation package
 
+## Juror-focused pitch — v0.4
+
+- [Slides](aveo-pitch-v0.4.en.html), [six-page PDF](aveo-pitch-v0.4.en.pdf), [spoken script](aveo-pitch-v0.4.en.txt).
+- [Objection responses and remaining human/technical actions](judge-objections-v0.4.en.md).
+- Explicit Solana rationale, honest competitor/manual-workflow comparison, buyer
+  and budget-owner hypotheses, current demo boundaries and technical accountability.
+- Preserves v0.3; no user evidence, price validation, registration or wallet acceptance
+  is fabricated. Preview URL ends in `aveo-pitch-v0.4.en.html`; N/T/arrow controls are unchanged.
+
 ## Revised pitch — v0.3
 
 - [Warmer English slides](aveo-pitch-v0.3.en.html), [PDF](aveo-pitch-v0.3.en.pdf), and [spoken script](aveo-pitch-v0.3.en.txt).

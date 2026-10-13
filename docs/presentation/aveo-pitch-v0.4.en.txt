@@ -1,0 +1,26 @@
+AVEO PITCH v0.4 — 13 OCT 2026
+Speaker: Bruno. Ownership follows project instructions; confirm team roles before recording.
+
+SLIDE 1
+
+Hi, I'm Bruno. I joined my son and three other students to build Aveo around a simple question: when a transfer is blocked, can the operator explain why? My compliance experience shaped that question. We haven't yet documented a real operator case, so customer discovery is a gate, not a claim.
+
+SLIDE 2
+
+A script and an explorer can expose the same underlying data. Our bet is a repeatable workflow: explain the cause, group assets sharing a proof, and verify recovery from fresh state. We're not replacing Tokeny's broader tooling. We need to measure whether this Solana-focused workflow saves operators time and errors.
+
+SLIDE 3
+
+Why Solana? SAS provides reusable attestations, and Token-2022 lets the hook enforce rules during transfers, beyond the Desk. The idea could also work with ERC-3643. But this implementation would need new proof readers, transaction builders and verification adapters. We're not claiming effortless portability or an existing EVM integration.
+
+SLIDE 4
+
+Our initial customer hypothesis is a platform managing several permissioned assets on Solana. Operations and compliance teams would use it; a head of operations is one budget-owner hypothesis to test. We plan subscriptions and integration services. Price comes after workflow and budget validation, starting with a paid pilot proposal.
+
+SLIDE 5
+
+The program, test accounts and public Desk are deployed on devnet. You can inspect live eligibility without signing. But our full wallet and six-scene acceptance are not complete, and a visitor's wallet needs provisioning. We will not claim an unassisted two-minute recovery before a newcomer actually completes it.
+
+SLIDE 6
+
+I bring twenty years in compliance-related work and a Computer Science background. Our project assigns me program and product ownership; Caio owns the Desk, SAS and backend. Development is AI-assisted, and we are new to Rust. Open the matrix and inspect a result. Then help us test the operational advantage.

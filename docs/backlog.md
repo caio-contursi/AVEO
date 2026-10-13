@@ -1,5 +1,10 @@
 # Delivery backlog
 
+## Juror objection follow-ups
+
+- **PITCH-07:** Capture one consented operator incident and manual workflow, then compare it with the Desk before asserting differentiated operational value.
+- **PITCH-08:** Confirm per-member technical contributions and the actual customer budget owner; turn assumptions into an accountable team/pilot brief without inventing expertise or prices.
+
 ## Pitch follow-up proposals
 
 - **PITCH-05:** Validate the shared-proof leverage hypothesis with an operator benchmark before claiming time savings or production scale.
