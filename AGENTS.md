@@ -1,7 +1,6 @@
-<!-- PT: Este arquivo é lido automaticamente pelo Codex e serve de referência para o Cursor. Ele define stack, papéis (Arquiteto, Revisor, Ideador) e regras de trabalho do projeto Aveo. -->
-<!-- PT: Fica na raiz do repo. Qualquer mudança nele deve ser aprovada por um humano (Bruno ou Caio). -->
 
-# AGENTS.md - Aveo Compliance Desk
+
+Aveo Compliance Desk
 
 ## 1. Project vision
 
