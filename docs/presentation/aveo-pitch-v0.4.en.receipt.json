@@ -2,11 +2,11 @@
   "language": "en",
   "version": "0.4",
   "pages": 6,
-  "sourceRevision": "working-tree-based-on-6c02e04",
-  "generatedAt": "2026-10-13T04:56:06.158Z",
+  "sourceRevision": "working-tree-based-on-19a4398",
+  "generatedAt": "2026-10-13T05:54:05.186Z",
   "browser": "156.0.8078.4",
-  "sourceSha256": "7c0e48fb7a5f61cdeca4d027e0e21782475f1a30f3a1f420f4bdb82e9b7bcd8b",
-  "pdfSha256": "bf73d005d04150ba5b2207d2eff68309be4e91f18ea58d9ae9fd67310154840e",
+  "sourceSha256": "61283d7fb53ff14993c508bbbc2a5466e584a78cb1ea12486573ed7cc162fe4d",
+  "pdfSha256": "32e2155f5c5e77a66edc9b3ae853d3c231ffb987da639f84ac2ac771b5a92831",
   "layout": [
     {
       "slide": "1",

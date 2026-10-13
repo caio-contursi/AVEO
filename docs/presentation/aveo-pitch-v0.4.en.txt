@@ -1,5 +1,5 @@
 AVEO PITCH v0.4 — 13 OCT 2026
-Speaker: Bruno. Ownership follows project instructions; confirm team roles before recording.
+Speaker: Bruno. The closing slide presents the team's collective contribution.
 
 SLIDE 1
 
@@ -23,4 +23,4 @@ The program, test accounts and public Desk are deployed on devnet. You can inspe
 
 SLIDE 6
 
-I bring twenty years in compliance-related work and a Computer Science background. Our project assigns me program and product ownership; Caio owns the Desk, SAS and backend. Development is AI-assisted, and we are new to Rust. Open the matrix and inspect a result. Then help us test the operational advantage.
+We're a team combining twenty years of audit and compliance experience, a Computer Science background, and four Information Systems students. Together, we've built the program, integrations and Desk, using AI tools along the way. Building across generations gives this a personal purpose, too. Our ambition is simple: help teams understand restrictions, not just enforce them. Explore Aveo, inspect the evidence, and help us shape what comes next.

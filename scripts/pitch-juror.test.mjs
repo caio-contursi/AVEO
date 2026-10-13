@@ -11,8 +11,11 @@ test('juror-focused pitch answers objections without inventing validation', asyn
   for (const text of ['No named operator case', 'Scripts + an explorer', 'no superiority claim',
     'Different adapters', 'EVM and MPL-3643 integrations are not implemented',
     'Head of operations', 'Price and willingness to pay are unvalidated',
-    'six-scene signoff remain open', 'Ownership is not exclusive code authorship',
-    'AI-assisted development', 'registration must be verified']) assert(html.includes(text), text)
+    'six-scene signoff remain open', 'Our collective work',
+    'AI-assisted development', 'four Information Systems students']) assert(html.includes(text), text)
+  const closing = html.split('data-slide="6"')[1].split('</section>')[0]
+  assert(!/Bruno|Caio|project ownership|individual roles/.test(closing), 'Present collective work without individual attribution')
+  assert(closing.includes('EXPLORE AVEOPROTOCOL.IO'), 'Keep a clear closing invitation')
   const notes = [...html.matchAll(/<p class="notes">([^<]+)<\/p>/g)]
   assert.equal(notes.length, 6)
   for (const note of notes) assert(script.includes(note[1].replaceAll('&amp;', '&')))
