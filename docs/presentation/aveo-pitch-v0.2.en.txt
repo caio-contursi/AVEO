@@ -1,0 +1,26 @@
+AVEO PITCH — VERSION 0.2 — 12 OCTOBER 2026
+Working script. Rehearse and update acceptance statements only after validation.
+
+SLIDE 1
+
+Tokenizing an asset is only the beginning. Someone still needs to understand who can move it, why a transfer is blocked, and what happens when eligibility changes. Aveo addresses that operational challenge.
+
+SLIDE 2
+
+Our initial users are teams operating multiple permissioned assets on Solana. Different assets can have different rules. When a shared eligibility proof becomes invalid, an operator needs to identify the cause, understand the affected assets, and verify the resolution.
+
+SLIDE 3
+
+Aveo brings those steps into one workflow. The Desk explains eligibility, groups incidents by proof, and prepares recovery. Transfer rules are enforced on-chain, not just by the interface. We build on SAS attestations and Token-2022, turning existing primitives into an understandable operational process.
+
+SLIDE 4
+
+Our starting point is specific: platforms managing multiple permissioned assets on Solana. Our commercial hypothesis is that they would pay for operational tooling and integration support. We have not validated willingness to pay. Our next step is a limited operator pilot, measuring diagnosis time, manual actions, and recovery errors.
+
+SLIDE 5
+
+I work in compliance. I joined my son and three other university students to combine that experience with their different technical skills. What began as an opportunity to build together became a shared ambition: create a company around a real operational problem.
+
+SLIDE 6
+
+Today, our program and demonstration accounts are deployed on devnet, and the public Desk has been tested in a real browser. We use synthetic eligibility data, not real identity checks. Full wallet and security acceptance remain open. We are seeking ecosystem partners to validate the workflow with operators and help turn this prototype into dependable infrastructure.

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aveo — Pitch v0.2</title>
+<style>
+:root{--bg:#f7f7fa;--surface:#fff;--surface-2:#f2f3f6;--border:#dddfe7;--text:#222330;--muted:#606373;--accent:#7030c6;--accent-soft:#f0eafa;--ok:#17784c;--warn:#875800;--radius:12px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}button,a{font:inherit}button{cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;min-height:44px;color:var(--text)}button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}button:disabled{opacity:.45;cursor:default}a{color:var(--accent)}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 24px;max-width:1328px;margin:auto}.toolbar strong{color:var(--accent)}.buttons{display:flex;gap:8px;flex-wrap:wrap}.hint{font-size:13px;color:var(--muted)}
+#stage{margin:0 auto;position:relative;overflow:hidden}.slide{width:1280px;height:720px;padding:38px 64px 30px;position:relative;background:var(--bg);transform-origin:top left;overflow:hidden}.slide[hidden]{display:none}
+.brand{display:flex;align-items:center;justify-content:space-between;font-size:15px;line-height:1.3}.brand-name{display:flex;align-items:center;gap:12px;font-weight:650}.mark{display:grid;place-items:center;background:var(--accent);color:white;width:32px;height:36px;border-radius:10px;font-size:21px}.tag{border:1px solid var(--border);padding:7px 13px;border-radius:24px;color:var(--muted);font-size:12px}.eyebrow{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:650;margin:42px 0 15px}h1,h2{font-size:57px;line-height:1.1;letter-spacing:-2px;font-weight:600;margin:0;max-width:1100px}h1{font-size:76px;max-width:1040px}.lead{font-size:23px;line-height:1.45;color:var(--muted);max-width:950px;margin:24px 0}.purple{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:30px}.grid.two{grid-template-columns:1fr 1fr}.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px}.step{color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:1px}.card h3{font-size:26px;line-height:1.25;margin:15px 0 10px;font-weight:600}.card p{font-size:18px;line-height:1.45;color:var(--muted);margin:0}.strip{display:flex;align-items:center;gap:16px;background:var(--accent-soft);border-radius:var(--radius);padding:20px 24px;margin-top:26px;font-size:20px;line-height:1.4}.strip strong{color:var(--accent)}.footer{position:absolute;bottom:26px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:14px;font-size:12px;color:var(--muted)}.fine{font-size:15px;line-height:1.4;color:var(--muted);margin-top:20px}.numbers{display:flex;gap:42px;margin-top:30px}.numbers strong{display:block;font-size:44px;font-weight:600;color:var(--accent)}.numbers span{font-size:15px;color:var(--muted)}.pill{display:inline-block;background:#e4f3ea;color:var(--ok);padding:8px 14px;border-radius:20px;font-size:14px;margin-right:8px}.pill.pending{background:#fff3d1;color:var(--warn)}
+#speaker{max-width:1050px;margin:20px auto;padding:24px;background:white;border:1px solid var(--border);border-radius:12px;line-height:1.65;font-size:22px}#speaker[hidden]{display:none}#speaker h2{font-size:18px;letter-spacing:0;color:var(--muted)}#speech{white-space:pre-line}body.prompter #stage{display:none}body.prompter #speaker{max-width:760px;font-size:32px;line-height:1.7;border:0;background:var(--bg)}.notes{display:none}
+@media print{@page{size:1280px 720px;margin:0}body{background:var(--bg);print-color-adjust:exact;-webkit-print-color-adjust:exact}.toolbar,#speaker{display:none!important}#stage{display:block!important;width:1280px!important;height:auto!important;overflow:visible}.slide,.slide[hidden]{display:block!important;transform:none!important;break-after:page;page-break-after:always}.slide:last-child{break-after:auto;page-break-after:auto}}
+</style>
+</head>
+<body>
+<nav class="toolbar" aria-label="Presentation controls">
+<div><strong>Aveo / Pitch</strong> <span id="counter" aria-live="polite">1 / 6</span><div class="hint">Arrow keys: slides · N: notes · T: reading mode · Esc: exit reading mode</div></div>
+<div class="buttons"><button id="prev" type="button">Previous</button><button id="next" type="button">Next</button><button id="notes" type="button" aria-pressed="false">Speaker notes</button><button id="prompter" type="button" aria-pressed="false">Reading mode</button><button id="print" type="button">Print / PDF</button></div>
+</nav>
+<main id="stage" aria-label="Pitch slides">
+<section class="slide" data-slide="1" aria-label="1. Problem">
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">SOLANA / OPERATIONAL ELIGIBILITY</span></header>
+<div class="eyebrow">01 / The problem</div>
+<h1>Tokenization does not<br>end at <span class="purple">issuance.</span></h1>
+<p class="lead">Assets have rules. Proofs change.<br>Someone must understand what happens next.</p>
+<div class="strip"><strong>Our focus</strong> Make eligibility understandable — and recovery verifiable.</div>
+<footer class="footer"><span>AVEOPROTOCOL.IO</span><span>Pitch v0.2 · 12 Oct 2026 · 01 / 06</span></footer>
+<p class="notes">Tokenizing an asset is only the beginning. Someone still needs to understand who can move it, why a transfer is blocked, and what happens when eligibility changes. Aveo addresses that operational challenge.</p>
+</section>
+<section class="slide" data-slide="2" aria-label="2. User" hidden>
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">ONE OPERATOR / MULTIPLE ASSETS</span></header>
+<div class="eyebrow">02 / The operator</div><h2>Who can move this asset<br>— <span class="purple">and why?</span></h2>
+<p class="lead">For teams managing permissioned tokenized assets on Solana.</p>
+<div class="grid"><div class="card"><span class="step">Question 01</span><h3>What blocked it?</h3><p>Understand the proof and policy behind the decision.</p></div><div class="card"><span class="step">Question 02</span><h3>What else is affected?</h3><p>Find assets relying on the same eligibility proof.</p></div><div class="card"><span class="step">Question 03</span><h3>Is recovery complete?</h3><p>Verify the new state, not just a transaction submission.</p></div></div>
+<footer class="footer"><span>INITIAL CUSTOMER SEGMENT — HYPOTHESIS</span><span>02 / 06</span></footer>
+<p class="notes">Our initial users are teams operating multiple permissioned assets on Solana. Different assets can have different rules. When a shared eligibility proof becomes invalid, an operator needs to identify the cause, understand the affected assets, and verify the resolution.</p>
+</section>
+<section class="slide" data-slide="3" aria-label="3. Solution" hidden>
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">EXPLAIN IN THE DESK / ENFORCE ON-CHAIN</span></header>
+<div class="eyebrow">03 / One operational workflow</div><h2>Diagnose. Understand impact.<br><span class="purple">Verify recovery.</span></h2>
+<div class="grid"><div class="card"><span class="step">01 / Diagnose</span><h3>Make the rule visible</h3><p>Inspect eligibility, proofs and asset-specific policies.</p></div><div class="card"><span class="step">02 / Coordinate</span><h3>Group the impact</h3><p>Prepare remediation for assets sharing a proof.</p></div><div class="card"><span class="step">03 / Verify</span><h3>Close with evidence</h3><p>Confirm the operation and read fresh account state.</p></div></div>
+<div class="strip"><strong>SAS proofs</strong> → asset-specific policies → <strong>Token-2022 Transfer Hook</strong></div>
+<footer class="footer"><span>THE UI DOES NOT OVERRIDE TRANSFER RULES</span><span>03 / 06</span></footer>
+<p class="notes">Aveo brings those steps into one workflow. The Desk explains eligibility, groups incidents by proof, and prepares recovery. Transfer rules are enforced on-chain, not just by the interface. We build on SAS attestations and Token-2022, turning existing primitives into an understandable operational process.</p>
+</section>
+<section class="slide" data-slide="4" aria-label="4. Business" hidden>
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">FOCUSED ENTRY / MEASURABLE NEXT STEP</span></header>
+<div class="eyebrow">04 / The business hypothesis</div><h2>A broad opportunity.<br>A <span class="purple">specific first customer.</span></h2>
+<div class="grid two"><div class="card"><span class="step">Who could pay</span><h3>Multi-asset tokenization platforms</h3><p>Operational tooling and integration support.<br>Pricing and willingness to pay are unvalidated.</p></div><div class="card"><span class="step">How we test value</span><h3>A limited operator pilot</h3><p>Measure diagnosis time, manual actions<br>and errors during recovery.</p></div></div>
+<p class="fine">Tokenized asset value is not our software market size. Customer demand and financial savings have not been demonstrated.</p>
+<footer class="footer"><span>COMMERCIAL HYPOTHESIS — NOT CUSTOMER TRACTION</span><span>04 / 06</span></footer>
+<p class="notes">Our starting point is specific: platforms managing multiple permissioned assets on Solana. Our commercial hypothesis is that they would pay for operational tooling and integration support. We have not validated willingness to pay. Our next step is a limited operator pilot, measuring diagnosis time, manual actions, and recovery errors.</p>
+</section>
+<section class="slide" data-slide="5" aria-label="5. Team" hidden>
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">FIVE PEOPLE / A SHARED AMBITION</span></header>
+<div class="eyebrow">05 / Why this team</div><h2>Compliance experience meets<br>a <span class="purple">new generation of builders.</span></h2>
+<div class="grid two"><div class="card"><span class="step">Domain perspective</span><h3>A compliance professional</h3><p>Bringing an operational perspective<br>to eligibility and evidence.</p></div><div class="card"><span class="step">Technical collaboration</span><h3>Four university students</h3><p>Complementary skills, shared learning<br>and hands-on product development.</p></div></div>
+<div class="strip"><strong>A father and son, building with a team.</strong> An ambition to create a company together.</div>
+<footer class="footer"><span>INDIVIDUAL ROLES REQUIRE TEAM CONFIRMATION</span><span>05 / 06</span></footer>
+<p class="notes">I work in compliance. I joined my son and three other university students to combine that experience with their different technical skills. What began as an opportunity to build together became a shared ambition: create a company around a real operational problem.</p>
+</section>
+<section class="slide" data-slide="6" aria-label="6. Evidence" hidden>
+<header class="brand"><div class="brand-name"><span class="mark" aria-hidden="true">✓</span>Aveo Compliance Desk</div><span class="tag">OPEN THE PRODUCT / CHECK THE EVIDENCE</span></header>
+<div class="eyebrow">06 / Current candidate</div><h2>Live on devnet.<br>Built for <span class="purple">operator validation.</span></h2>
+<p class="lead">Public Desk · deployed program · genuine test accounts</p>
+<div><span class="pill">Read-only browser evidence</span><span class="pill pending">Wallet & full security acceptance pending</span></div>
+<div class="numbers"><div><strong>33</strong><span>confirmed fixture operations</span></div><div><strong>8</strong><span>desktop / mobile route checks</span></div><div><strong>55</strong><span>protected RPC reads in the passing run</span></div></div>
+<p class="fine">Synthetic eligibility data · no real KYC · no production audit · MPL-3643 not integrated<br>Next milestone: complete acceptance and validate the workflow with an operator.</p>
+<footer class="footer"><a href="https://aveoprotocol.io">aveoprotocol.io</a><span>EVIDENCE SNAPSHOT: 12 OCT 2026 · 06 / 06</span></footer>
+<p class="notes">Today, our program and demonstration accounts are deployed on devnet, and the public Desk has been tested in a real browser. We use synthetic eligibility data, not real identity checks. Full wallet and security acceptance remain open. We are seeking ecosystem partners to validate the workflow with operators and help turn this prototype into dependable infrastructure.</p>
+</section>
+</main>
+<aside id="speaker" aria-label="Speaker notes" hidden><h2>Speaker notes — not part of the slides</h2><p id="speech"></p><p class="hint">Use manual slide advances. Timing depends on your pace; rehearse before submitting.</p></aside>
+<script>
+const slides=[...document.querySelectorAll('.slide')];let index=0,notes=false,reading=false;
+const byId=id=>document.getElementById(id);
+function resize(){const scale=Math.min(1,Math.max(0.1,(innerWidth-32)/1280));byId('stage').style.width=1280*scale+'px';byId('stage').style.height=720*scale+'px';slides.forEach(s=>s.style.transform='scale('+scale+')')}
+function update(){slides.forEach((s,i)=>s.hidden=i!==index);byId('counter').textContent=(index+1)+' / '+slides.length;byId('prev').disabled=index===0;byId('next').disabled=index===slides.length-1;byId('speaker').hidden=!(notes||reading);byId('speech').textContent=slides[index].querySelector('.notes').textContent;document.body.classList.toggle('prompter',reading);byId('notes').setAttribute('aria-pressed',String(notes));byId('prompter').setAttribute('aria-pressed',String(reading));resize()}
+function move(delta){index=Math.max(0,Math.min(slides.length-1,index+delta));update()}
+byId('prev').onclick=()=>move(-1);byId('next').onclick=()=>move(1);byId('notes').onclick=()=>{notes=!notes;update()};byId('prompter').onclick=()=>{reading=!reading;update()};byId('print').onclick=()=>window.print();
+addEventListener('resize',resize);addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='ArrowRight'){e.preventDefault();move(1)}else if(e.key==='ArrowLeft'){e.preventDefault();move(-1)}else if(e.key.toLowerCase()==='n'){notes=!notes;update()}else if(e.key.toLowerCase()==='t'){reading=!reading;update()}else if(e.key==='Escape'){reading=false;update()}});update();
+</script>
+</body>
+</html>

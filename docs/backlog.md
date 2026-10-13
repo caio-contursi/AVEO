@@ -1,5 +1,10 @@
 # Delivery backlog
 
+## Presentation proposals
+
+- **PITCH-03:** Replace acceptance disclaimers with specific newly verified outcomes in a new deck snapshot, never silently rewriting distributed evidence.
+- **PITCH-04:** Run a timed rehearsal with a consenting first-time viewer to identify unclear language before recording; no automatic renderer can establish audience comprehension.
+
 ## Delivery documentation proposals
 
 - **DOCS-01:** Generate a compact evidence index from release reports and image/source hashes, reducing manual contradictions between README, demo and submission claims.
