@@ -1,0 +1,49 @@
+{
+  "language": "en",
+  "version": "0.3",
+  "pages": 6,
+  "sourceRevision": "working-tree-based-on-69731cc",
+  "generatedAt": "2026-10-13T03:57:05.317Z",
+  "browser": "156.0.8078.4",
+  "sourceSha256": "7c0730cac84daa9f61731a9965c4da981d5123ec1133a4a9c63f3713e1ee14f7",
+  "pdfSha256": "75736f28492e3af4ec0f221a9dbc80965282d7d1fcf5e8031485b724da95fc90",
+  "layout": [
+    {
+      "slide": "1",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    },
+    {
+      "slide": "2",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    },
+    {
+      "slide": "3",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    },
+    {
+      "slide": "4",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    },
+    {
+      "slide": "5",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    },
+    {
+      "slide": "6",
+      "width": 1280,
+      "height": 720,
+      "fits": true
+    }
+  ],
+  "scope": "Editorial rendering only; no wallet or blockchain acceptance."
+}

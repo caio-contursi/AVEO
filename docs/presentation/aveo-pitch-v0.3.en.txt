@@ -1,0 +1,26 @@
+AVEO PITCH v0.3 — 13 OCT 2026
+Speaker: Bruno. Working acceptance snapshot; rehearse to stay under three minutes.
+
+SLIDE 1
+
+I work in compliance. For this hackathon, I joined my son and three other university students. So yes, a compliance dad joined a blockchain team. But here's the question that brought us together: when a token transfer is blocked, can the operator actually explain why? That's where Aveo starts.
+
+SLIDE 2
+
+Now imagine one eligibility proof supporting ten assets. The proof expires. Do you investigate ten separate problems, or one shared cause? Our demo starts with two assets. The bigger opportunity is helping operators manage that shared impact as their portfolios grow.
+
+SLIDE 3
+
+Aveo connects diagnosis, impact and recovery. SAS supplies reusable eligibility facts. Each asset keeps its own policy, enforced through a Token-2022 Transfer Hook. The Desk explains the decision, prepares remediation and checks fresh state. It doesn't replace the rule. It helps operators act on it.
+
+SLIDE 4
+
+Why now? In 2024, McKinsey projected around two trillion dollars in tokenized financial assets by 2030, excluding crypto and stablecoins. That's not our software market. Our starting customer is a platform managing multiple permissioned assets on Solana. The hypothesis is paid operational tooling and integration support, starting with an operator pilot.
+
+SLIDE 5
+
+I bring twenty years in audit, controls, compliance, intelligence and investigations. The students bring different technical skills. The father-and-son story is personal, but the business ambition is shared: combine domain experience with builders who can turn a difficult workflow into something people can actually use.
+
+SLIDE 6
+
+Today the program, test accounts and public Desk are on devnet. The data is synthetic; wallet and full security acceptance are still open. Our ambition is clear: make eligibility operations a dependable layer for tokenized assets. Open the wallet–asset matrix, inspect a result, and ask why. Then follow the evidence.

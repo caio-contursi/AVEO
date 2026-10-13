@@ -8,6 +8,8 @@ import { pdfPageCount } from './render-presentation.mjs'
 export async function renderPitch(moduleFile, htmlFile) {
   assert(path.isAbsolute(moduleFile), 'Use the existing isolated Playwright module.')
   assert(htmlFile.endsWith('.en.html'), 'Use a versioned English HTML source.')
+  const version = path.basename(htmlFile).match(/-v(\d+\.\d+)\.en\.html$/)?.[1]
+  assert(version, 'The source filename must include its snapshot version.')
   const source = path.resolve(htmlFile); const stem = source.slice(0, -5)
   const pdfFile = stem + '.pdf'; const receiptFile = stem + '.receipt.json'
   const screenshots = Array.from({ length: 6 }, (_, i) => `${stem}.slide-${i + 1}.png`)
@@ -38,7 +40,7 @@ export async function renderPitch(moduleFile, htmlFile) {
     assert.equal(pdfPageCount(pdf), 6)
     const hash = value => createHash('sha256').update(value).digest('hex')
     await writeFile(pdfFile, pdf, { flag: 'wx' })
-    await writeFile(receiptFile, JSON.stringify({ language: 'en', version: '0.2', pages: 6,
+    await writeFile(receiptFile, JSON.stringify({ language: 'en', version, pages: 6,
       sourceRevision: process.env.AVEO_SOURCE_REVISION ?? 'working-tree', generatedAt: new Date().toISOString(),
       browser: browser.version(), sourceSha256: hash(html), pdfSha256: hash(pdf), layout,
       scope: 'Editorial rendering only; no wallet or blockchain acceptance.',

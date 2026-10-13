@@ -1,5 +1,10 @@
 # Delivery backlog
 
+## Pitch follow-up proposals
+
+- **PITCH-05:** Validate the shared-proof leverage hypothesis with an operator benchmark before claiming time savings or production scale.
+- **PITCH-06:** Replace founder placeholders with confirmed individual contributions and one genuine first-use observation in the next distributed pitch snapshot.
+
 ## Presentation proposals
 
 - **PITCH-03:** Replace acceptance disclaimers with specific newly verified outcomes in a new deck snapshot, never silently rewriting distributed evidence.

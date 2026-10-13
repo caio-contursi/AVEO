@@ -1,5 +1,14 @@
 # Presentation package
 
+## Revised pitch — v0.3
+
+- [Warmer English slides](aveo-pitch-v0.3.en.html), [PDF](aveo-pitch-v0.3.en.pdf), and [spoken script](aveo-pitch-v0.3.en.txt).
+- [Impact-focused demo plan and rehearsal instructions](demo-recording-v0.3.en.md).
+- v0.3 adds the founder opening, a clearly hypothetical scale scenario, sourced
+  market context and a direct invitation to inspect the product. It does not close
+  wallet/security/public-demo gates. v0.2 remains preserved below.
+- Use the same N/T/arrow controls. Preview URL ends in `aveo-pitch-v0.3.en.html`.
+
 ## Current English pitch — v0.2
 
 - [Interactive slides and reading mode](aveo-pitch-v0.2.en.html)
