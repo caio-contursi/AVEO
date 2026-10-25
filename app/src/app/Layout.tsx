@@ -82,6 +82,7 @@ export function Layout() {
   // On compact screens the sidebar is an in-flow panel below the header; closed, it leaves the tab order.
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
+  const header = useRef<HTMLElement>(null)
   const sidebar = useRef<HTMLElement>(null)
   // Browsers may drop focus to <body> before the breakpoint event fires, so remember the last focused control.
   const lastFocused = useRef<Element | null>(null)
@@ -96,6 +97,19 @@ export function Layout() {
     document.addEventListener('keydown', closeOnEscape)
     return () => document.removeEventListener('keydown', closeOnEscape)
   }, [menuOpen])
+
+  // Scroll padding and the wallet popup follow the header's rendered height, which grows when it wraps.
+  useEffect(() => {
+    const element = header.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const root = document.documentElement
+    const observer = new ResizeObserver(() => root.style.setProperty('--topbar-offset', `${Math.ceil(element.getBoundingClientRect().height)}px`))
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--topbar-offset')
+    }
+  }, [])
 
   useEffect(() => {
     const compact = window.matchMedia(COMPACT_SHELL_QUERY)
@@ -142,7 +156,7 @@ export function Layout() {
         </span>
       </div>
 
-      <header className="topbar">
+      <header ref={header} className="topbar">
         <button
           ref={menuButton}
           type="button"

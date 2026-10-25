@@ -189,10 +189,14 @@ describe('responsive and interaction stylesheet contracts', () => {
   })
 
   it('keeps focus targets, wallet choices and long wallet labels reachable around the sticky header', () => {
-    expect(rule('html')['scroll-padding-top']).toBe('calc(var(--topbar-height) + 16px)')
-    expect(rule('.topbar', desktop)['min-height']).toBe('var(--topbar-height)')
-    expect(rule('html', mobile)['--topbar-height']).toBe('56px')
-    expect(rule('.menu')).toMatchObject({ 'max-height': 'calc(100dvh - var(--topbar-height) - 96px)', 'overflow-y': 'auto' })
+    // Layout overwrites the fallback with the measured header height; the stylesheet only reserves it.
+    expect(light['--topbar-offset']).toBe('64px')
+    expect(rule('html')['scroll-padding-top']).toBe('calc(var(--topbar-offset) + 16px)')
+    expect(rule('.menu')).toMatchObject({ 'max-height': 'calc(100dvh - var(--topbar-offset) - 96px)', 'overflow-y': 'auto' })
+    // The measured variable must never feed the header's own size, or a wrapped header could not shrink back.
+    expect(rule('.topbar', desktop)['min-height']).toBe('64px')
+    expect(rule('.topbar', mobile)['min-height']).toBe('56px')
+    expect(css.match(/\.topbar\s*\{[^}]*\}/g)?.join('')).not.toContain('--topbar-offset')
     expect(rule('.topbar', mobile)['flex-wrap']).toBe('wrap')
     expect(rule('.topbar-actions', mobile)['flex-wrap']).toBe('wrap')
     expect(css).not.toMatch(/\.wallet-button\s*\{[^}]*white-space: nowrap/)
