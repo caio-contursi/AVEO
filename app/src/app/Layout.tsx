@@ -31,6 +31,24 @@ const HERO: Record<string, { title: MessageKey; description: MessageKey }> = {
 /** Must match the breakpoint in styles.css where the sidebar becomes an in-flow panel. */
 const COMPACT_SHELL_QUERY = '(max-width: 1023px)'
 
+/** display: none (on the element or an ancestor) leaves no layout box. */
+function isRendered(element: Element): element is HTMLElement {
+  return element instanceof HTMLElement && element.getClientRects().length > 0
+}
+
+/** The control that takes over a hidden control's role in the other layout. */
+function visibleCounterpart(hidden: Element, menuButton: HTMLElement | null, sidebar: HTMLElement | null): HTMLElement | null {
+  const menu = menuButton && isRendered(menuButton) ? menuButton : null
+  if (hidden === menuButton) {
+    const link = sidebar?.querySelector('.side-nav a.active') ?? sidebar?.querySelector('.side-nav a')
+    return link && isRendered(link) ? link : null
+  }
+  if (hidden.classList.contains('refresh')) {
+    return [...document.querySelectorAll('button.refresh')].find(isRendered) ?? menu
+  }
+  return sidebar?.contains(hidden) ? menu : null
+}
+
 function LanguageSwitch() {
   const { language, setLanguage, t } = useI18n()
   return (
@@ -65,8 +83,8 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const sidebar = useRef<HTMLElement>(null)
-  // Browsers may drop focus to <body> before the breakpoint event when the sidebar hides, so remember it.
-  const focusInSidebar = useRef(false)
+  // Browsers may drop focus to <body> before the breakpoint event fires, so remember the last focused control.
+  const lastFocused = useRef<Element | null>(null)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -82,10 +100,14 @@ export function Layout() {
   useEffect(() => {
     const compact = window.matchMedia(COMPACT_SHELL_QUERY)
     const onBreakpoint = () => {
-      // Never leave focus inside, or lost from, a region that the new layout hides.
-      const stranded = sidebar.current?.contains(document.activeElement) || document.activeElement === document.body
-      if (compact.matches && focusInSidebar.current && stranded) menuButton.current?.focus()
       setMenuOpen(false)
+      // Never leave focus on, or lost from, a control that the new layout hides.
+      const last = lastFocused.current
+      const lost = document.activeElement === document.body || document.activeElement === last
+      if (!last || !lost || isRendered(last)) return
+      const target = visibleCounterpart(last, menuButton.current, sidebar.current)
+      target?.focus()
+      lastFocused.current = target
     }
     compact.addEventListener('change', onBreakpoint)
     return () => compact.removeEventListener('change', onBreakpoint)
@@ -107,7 +129,7 @@ export function Layout() {
   }
 
   return (
-    <div className="shell" data-menu={menuOpen ? 'open' : 'closed'}>
+    <div className="shell" data-menu={menuOpen ? 'open' : 'closed'} onFocus={(event) => { lastFocused.current = event.target }}>
       <button type="button" className="skip-link" onClick={focusContent}>
         {t('ux.skipToContent')}
       </button>
@@ -147,15 +169,7 @@ export function Layout() {
         </div>
       </header>
 
-      <aside
-        id="desk-sidebar"
-        ref={sidebar}
-        className="sidebar"
-        onFocus={() => { focusInSidebar.current = true }}
-        onBlur={(event) => {
-          if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) focusInSidebar.current = false
-        }}
-      >
+      <aside id="desk-sidebar" ref={sidebar} className="sidebar">
         <div className="brand">
           <img src="/favicon.svg" alt="" width={28} height={28} />
           <div>

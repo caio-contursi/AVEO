@@ -188,6 +188,16 @@ describe('responsive and interaction stylesheet contracts', () => {
     expect(phone).not.toContain('.network-status')
   })
 
+  it('keeps focus targets, wallet choices and long wallet labels reachable around the sticky header', () => {
+    expect(rule('html')['scroll-padding-top']).toBe('calc(var(--topbar-height) + 16px)')
+    expect(rule('.topbar', desktop)['min-height']).toBe('var(--topbar-height)')
+    expect(rule('html', mobile)['--topbar-height']).toBe('56px')
+    expect(rule('.menu')).toMatchObject({ 'max-height': 'calc(100dvh - var(--topbar-height) - 96px)', 'overflow-y': 'auto' })
+    expect(rule('.topbar', mobile)['flex-wrap']).toBe('wrap')
+    expect(rule('.topbar-actions', mobile)['flex-wrap']).toBe('wrap')
+    expect(css).not.toMatch(/\.wallet-button\s*\{[^}]*white-space: nowrap/)
+  })
+
   it('scrolls the mobile matrix locally with readable columns and intact verdict words', () => {
     expect(rule('.table-wrap', desktop)).toMatchObject({
       'overflow-x': 'auto', 'max-width': '100%', 'min-width': '0',

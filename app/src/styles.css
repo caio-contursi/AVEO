@@ -30,6 +30,7 @@
   --space-6: 24px;
   --space-8: 32px;
   --sidebar-width: 248px;
+  --topbar-height: 64px;
   --gutter: clamp(16px, 3vw, 40px);
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -67,6 +68,11 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Focus and scrollIntoView keep targets clear of the sticky header. */
+html {
+  scroll-padding-top: calc(var(--topbar-height) + 16px);
 }
 
 body {
@@ -334,7 +340,7 @@ code,
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
+  min-height: var(--topbar-height);
   padding: 10px var(--gutter);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -1145,6 +1151,11 @@ input[type='checkbox'] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Stay within the viewport below the sticky header; long wallet lists scroll inside. */
+  max-height: calc(100vh - var(--topbar-height) - 96px);
+  max-height: calc(100dvh - var(--topbar-height) - 96px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-item {
@@ -1528,13 +1539,20 @@ summary:hover {
 }
 
 @media (max-width: 640px) {
+  html {
+    --topbar-height: 56px;
+  }
+
+  /* Long wallet labels and a blocked network wrap instead of overflowing the header. */
   .topbar {
+    flex-wrap: wrap;
     gap: 8px;
-    min-height: 56px;
     padding: 6px 16px;
   }
 
   .topbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
   }
 
@@ -1736,10 +1754,6 @@ summary:hover {
 @media (max-width: 480px) {
   .topbar-title {
     display: none;
-  }
-
-  .wallet-button {
-    white-space: nowrap;
   }
 }
 
