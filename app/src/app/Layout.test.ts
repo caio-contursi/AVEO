@@ -114,6 +114,18 @@ describe('accessible desk shell', () => {
     expect(html.match(/href="\/(demonstracao|carteiras|transferencia|incidentes|recibos|rede)"/g)).toHaveLength(6)
   })
 
+  it('binds one closed compact-menu control to the single sidebar', () => {
+    const html = render('/rede')
+    expect(html).toContain('data-menu="closed"')
+    expect(html).toContain('aria-expanded="false" aria-controls="desk-sidebar"')
+    expect(html).toContain(`<span class="sr-only">${messages.en['ux.menu']}</span>`)
+    expect(html.match(/id="desk-sidebar"/g)).toHaveLength(1)
+    expect(html.match(/Wallet control/g)).toHaveLength(1)
+    // Network state stays in the header beside the wallet, never only inside the collapsible panel.
+    expect(html.indexOf('network-status')).toBeLessThan(html.indexOf('Wallet control'))
+    expect(html.indexOf('network-status')).toBeLessThan(html.indexOf('id="desk-sidebar"'))
+  })
+
   it('focuses main content without mutating the hash route', () => {
     render('/transferencia')
     const focus = vi.fn()

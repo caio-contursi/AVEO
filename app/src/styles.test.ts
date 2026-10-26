@@ -105,6 +105,17 @@ describe.each([['light', light], ['dark', dark]] as const)('%s theme accessibili
     expectContrast('var(--text)', button.background, tokens, `${theme} default button`)
     const activeLanguage = rule('.lang button.active')
     expectContrast(activeLanguage.color, activeLanguage.background, tokens, `${theme} language button`)
+    expectContrast(rule('button.primary').color, rule('button.primary:hover:not(:disabled)').background, tokens, `${theme} primary hover`)
+  })
+
+  it('checks the shell surfaces introduced by the sidebar layout', () => {
+    for (const selector of ['.side-nav a.active', '.side-nav a:hover', '.banner', '.filters button.active', '.cell.selected']) {
+      const styles = rule(selector)
+      expectContrast(styles.color ?? 'var(--text)', styles.background, tokens, `${theme} ${selector}`)
+    }
+    // Idle navigation and the current network marker sit on the sidebar and header surfaces.
+    expectContrast(rule('.side-nav a').color, rule('.sidebar').background, tokens, `${theme} idle navigation`)
+    expectContrast(rule(".network-status[data-status='current']").color, rule('.pill').background, tokens, `${theme} current network`)
   })
 
   it.each(['ok', 'bad', 'warn', 'neutral', 'accent', 'unknown'])('checks the %s badge declarations at normal-text contrast', (tone) => {
@@ -125,33 +136,70 @@ describe.each([['light', light], ['dark', dark]] as const)('%s theme accessibili
 })
 
 describe('responsive and interaction stylesheet contracts', () => {
+  const compact = mediaRules('max-width: 1023px')
   const mobile = mediaRules('max-width: 640px')
-  const narrow = mediaRules('max-width: 520px')
-  const desktop = css.slice(0, css.indexOf('@media (max-width: 640px)'))
+  const phone = mediaRules('max-width: 480px')
+  const desktop = css.slice(0, css.indexOf('@media (max-width: 1023px)'))
 
   it('reduces mobile shell and flow spacing while preserving desktop sizing', () => {
-    expect(rule('.topbar', mobile).padding).toBe('12px 0')
-    expect(rule('.page-intro', mobile).padding).toBe('16px 0')
-    expect(rule('.tabs', mobile)['margin-top']).toBe('12px')
+    expect(rule('.topbar', mobile).padding).toBe('6px 16px')
+    expect(rule('.page-intro', mobile).padding).toBe('20px 0 16px')
     expect(rule('.workflow-steps', mobile)['grid-template-columns']).toBe('minmax(0, 1fr)')
     expect(rule('.workflow-step', mobile)).toMatchObject({
       'grid-template-columns': '24px minmax(0, 1fr) minmax(0, max-content)',
       padding: '6px 8px',
     })
     expect(rule('.workflow-status', mobile)['grid-column']).toBe('3')
-    expect(rule('.topbar', desktop).padding).toBe('24px 0')
-    expect(rule('.page-intro', desktop).padding).toBe('clamp(24px, 4vw, 40px) 0 var(--space-6)')
+    expect(rule('.topbar', desktop).padding).toBe('10px var(--gutter)')
+    expect(rule('.page-intro', desktop).padding).toBe('32px 0 var(--space-6)')
     expect(rule('.workflow-steps', desktop)['grid-template-columns']).toContain('repeat(auto-fit,')
     expect(rule('.workflow-status', desktop)['grid-column']).toBe('2')
   })
 
-  it('wraps whole navigation destinations and retains touch target height', () => {
-    expect(rule('.tabs', narrow)['overflow-x']).toBe('visible')
-    expect(rule('.tabs a', narrow)).toMatchObject({
-      flex: '1 0 auto', 'white-space': 'nowrap', 'overflow-wrap': 'normal',
-    })
-    expect(Number.parseFloat(rule('.tabs a', desktop)['min-height'])).toBeGreaterThanOrEqual(44)
-    expect(rule('.tabs a', narrow)).not.toHaveProperty('min-height')
+  it('turns the sidebar into an in-flow panel that leaves the tab order when closed', () => {
+    expect(rule('.shell', desktop)['grid-template-columns']).toBe('var(--sidebar-width) minmax(0, 1fr)')
+    expect(rule('.menu-toggle', desktop).display).toBe('none')
+    expect(rule('.menu-toggle', compact).display).toBe('inline-flex')
+    // display: none removes closed links from the tab order; no overlay, so no focus trap is needed.
+    expect(rule('.sidebar', compact)).toMatchObject({ display: 'none', position: 'static' })
+    expect(rule(".shell[data-menu='open'] .sidebar", compact).display).toBe('flex')
+    expect(rule('.shell', compact)['grid-template-areas']).toMatch(/'topbar'\s*'sidebar'\s*'main'/)
+  })
+
+  it('wraps all destinations without horizontal scrolling and keeps touch target height', () => {
+    expect(Number.parseFloat(rule('.side-nav a', desktop)['min-height'])).toBeGreaterThanOrEqual(44)
+    expect(rule('.side-nav', compact)['grid-template-columns']).toBe('repeat(auto-fit, minmax(min(100%, 200px), 1fr))')
+    for (const source of [desktop, compact]) {
+      for (const property of ['overflow-x', 'white-space']) expect(rule('.side-nav', source)).not.toHaveProperty(property)
+    }
+  })
+
+  it('shows exactly one refresh control per layout and keeps network state visible on phones', () => {
+    expect(rule('.sidebar-footer .refresh', desktop).display).toBe('none')
+    expect(rule('.topbar .refresh', compact).display).toBe('none')
+    expect(rule('.sidebar-footer .refresh', compact).display).toBe('inline-flex')
+    // Only routine detail is visually clipped; it remains announced, and a blocked network keeps its words.
+    const clipped = rule(".network-status[data-status='current'] .network-detail", mobile)
+    expect(clipped).toMatchObject({ position: 'absolute', clip: 'rect(0, 0, 0, 0)' })
+    expect(clipped).not.toHaveProperty('display')
+    expect(mobile).not.toContain("[data-status='blocked'] .network-detail")
+    expect(rule('.network-cluster')['white-space']).toBe('nowrap')
+    expect(rule('.topbar-title', phone).display).toBe('none')
+    expect(phone).not.toContain('.network-status')
+  })
+
+  it('keeps focus targets, wallet choices and long wallet labels reachable around the sticky header', () => {
+    // Layout overwrites the fallback with the measured header height; the stylesheet only reserves it.
+    expect(light['--topbar-offset']).toBe('64px')
+    expect(rule('html')['scroll-padding-top']).toBe('calc(var(--topbar-offset) + 16px)')
+    expect(rule('.menu')).toMatchObject({ 'max-height': 'calc(100dvh - var(--topbar-offset) - 96px)', 'overflow-y': 'auto' })
+    // The measured variable must never feed the header's own size, or a wrapped header could not shrink back.
+    expect(rule('.topbar', desktop)['min-height']).toBe('64px')
+    expect(rule('.topbar', mobile)['min-height']).toBe('56px')
+    expect(css.match(/\.topbar\s*\{[^}]*\}/g)?.join('')).not.toContain('--topbar-offset')
+    expect(rule('.topbar', mobile)['flex-wrap']).toBe('wrap')
+    expect(rule('.topbar-actions', mobile)['flex-wrap']).toBe('wrap')
+    expect(css).not.toMatch(/\.wallet-button\s*\{[^}]*white-space: nowrap/)
   })
 
   it('scrolls the mobile matrix locally with readable columns and intact verdict words', () => {
